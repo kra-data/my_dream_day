@@ -1,0 +1,58 @@
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Next.js
+.next/
+out/
+
+# Env files
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Logs
+logs/
+*.log
+logs/**/*.log
+
+# MacOS
+.DS_Store
+
+# VSCode
+.vscode/*
+!.vscode/settings.json
+!.vscode/launch.json
+!.vscode/tasks.json
+
+# Coverage
+coverage/
+
+# DB
+*.sqlite
+*.db
+*.db-journal
+
+# Docker
+*.pid
+*.sock
+docker-data/
+
+# Build output
+dist/
+build/
+
+# Others
+*.tgz
+*.swp
+*.swo
+*.bak
+
+# Optional: PostgreSQL dump
+*.sql
+*.dump
