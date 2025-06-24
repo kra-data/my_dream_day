@@ -1,0 +1,20 @@
+@accessToken=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJlbXBsb3llZUlkIjo0LCJzaG9wSWQiOjMsInJvbGUiOiJlbXBsb3llZSIsImlhdCI6MTc1MDc4MTMzMCwiZXhwIjoxNzUwNzgyMjMwfQ.VXhgp4CyXPUyX8Q9uD2TaKskDSSRxugP2rj6cX9Bg08
+### 출근 (QR 스캔 후)
+POST http://localhost:3001/api/attendance
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "shopId": 3,
+  "type": "IN"
+}
+
+### 퇴근
+POST http://localhost:3001/api/attendance
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "shopId": 3,
+  "type": "OUT"
+}
