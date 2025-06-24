@@ -7,8 +7,8 @@ Content-Type: application/json
   "phoneLast4": "1234"
 }
 
-@accessToken=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJlbXBsb3llZUlkIjoxLCJzaG9wSWQiOjEsInJvbGUiOiJhZG1pbiIsImlhdCI6MTc1MDc1NjEzNCwiZXhwIjoxNzUwNzU3MDM0fQ.2mgp9iEddH3ylXelJEEBPDijxQ9-9Q-Z0eGrf-gOSkU
-@refreshToken=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJlbXBsb3llZUlkIjoxLCJpYXQiOjE3NTA3NTYxMzQsImV4cCI6MTc1MTM2MDkzNH0.5G8YCVzFWjotgC72ZK24UJQsnXfUD2P7f-4cHoYDh1s
+@accessToken=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJlbXBsb3llZUlkIjoxLCJzaG9wSWQiOjEsInJvbGUiOiJhZG1pbiIsImlhdCI6MTc1MDc2OTYyMSwiZXhwIjoxNzUwNzcwNTIxfQ.23pic0Se8BNJcGQumgAz7tgurCvwQkz_o30Q_3hWg9g
+@refreshToken=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJlbXBsb3llZUlkIjoxLCJpYXQiOjE3NTA3Njk2MjEsImV4cCI6MTc1MTM3NDQyMX0.wM0vj8j_9c-3LnSKNTsLdXWdo3_OPGApxHX4ytVY1dk
 
 ### 2️⃣ Access Token 보호 API 요청 (토큰 복사해서 Bearer 넣기)
 GET http://localhost:3001/api/admin-only
