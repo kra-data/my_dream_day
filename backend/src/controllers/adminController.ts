@@ -51,27 +51,27 @@ export const getEmployees = async (req: Request, res: Response): Promise<void> =
   const shopId = Number(req.params.id);
   const employees = await prisma.employee.findMany({
     where: { shopId },
-    select: { id: true, name: true, nationalId: true, phone: true, schedule: true }
+    select: { id: true, name: true, bank: true, nationalId: true, phone: true, schedule: true }
   });
   res.json(employees);
 };
 
 export const createEmployee = async (req: Request, res: Response): Promise<void> => {
   const shopId = Number(req.params.id);
-  const { name, nationalId, accountNumber, phone, schedule } = req.body;
-  if (!name || !nationalId || !accountNumber || !phone || !schedule) {
+  const { name, nationalId, accountNumber,bank, phone, schedule } = req.body;
+  if (!name || !nationalId || !accountNumber  || !bank|| !phone || !schedule) {
     res.status(400).json({ error: 'All fields required' });
     return;
   }
   const emp = await prisma.employee.create({
-    data: { shopId, name, nationalId, accountNumber, phone, schedule }
+    data: { shopId, name, nationalId, accountNumber,bank, phone, schedule }
   });
   res.status(201).json(emp);
 };
 
 export const updateEmployee = async (req: Request, res: Response): Promise<void> => {
   const empId = Number(req.params.id);
-  const { name, accountNumber, phone, schedule } = req.body;
+  const { name, accountNumber, bank, phone, schedule } = req.body;
   const emp = await prisma.employee.findUnique({ where: { id: empId } });
   if (!emp) {
     res.status(404).json({ error: 'Employee not found' });
@@ -79,7 +79,7 @@ export const updateEmployee = async (req: Request, res: Response): Promise<void>
   }
   const updated = await prisma.employee.update({
     where: { id: empId },
-    data: { name, accountNumber, phone, schedule }
+    data: { name, accountNumber, bank, phone, schedule }
   });
   res.json(updated);
 };
