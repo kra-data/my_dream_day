@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { login, refresh, logout } from '../controllers/authController';
 import { authenticateJWT, AuthRequest } from '../middlewares/jwtMiddleware';
 import { healthCheck } from '../controllers/healthController';
+import adminRoutes from './adminRoutes';
 
 const router = Router();
 
@@ -29,5 +30,9 @@ router.get('/employee-only', authenticateJWT, (req: AuthRequest, res) => {
 router.get('/common', authenticateJWT, (req: AuthRequest, res) => {
   res.json({ message: `Hello, ${req.user.role}!`, user: req.user });
 });
+
+
+router.use('/admin', adminRoutes);
+
 
 export default router;
