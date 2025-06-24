@@ -56,3 +56,47 @@ build/
 # Optional: PostgreSQL dump
 *.sql
 *.dump
+
+# Next.js 빌드 출력물
+.next/
+out/
+
+# 의존성
+node_modules/
+
+# 로그
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# 환경파일
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# macOS
+.DS_Store
+
+# VSCode
+.vscode/*
+!.vscode/settings.json
+!.vscode/launch.json
+!.vscode/tasks.json
+
+# Tailwind JIT 캐시
+.tailwind-cache/
+
+# Coverage (테스트 시)
+coverage/
+
+# 기타 빌드 산출물
+dist/
+build/
+
+# lock 파일 (선택 - monorepo가 아닐 경우 유지)
+# package-lock.json
+# yarn.lock
+# pnpm-lock.yaml
