@@ -1,0 +1,31 @@
+### 1️⃣ 로그인 요청
+POST http://localhost:3001/api/auth/login
+Content-Type: application/json
+
+{
+  "name": "홍길동",
+  "phoneLast4": "1234"
+}
+
+@accessToken=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJlbXBsb3llZUlkIjoxLCJzaG9wSWQiOjEsInJvbGUiOiJhZG1pbiIsImlhdCI6MTc1MDc1NjEzNCwiZXhwIjoxNzUwNzU3MDM0fQ.2mgp9iEddH3ylXelJEEBPDijxQ9-9Q-Z0eGrf-gOSkU
+@refreshToken=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJlbXBsb3llZUlkIjoxLCJpYXQiOjE3NTA3NTYxMzQsImV4cCI6MTc1MTM2MDkzNH0.5G8YCVzFWjotgC72ZK24UJQsnXfUD2P7f-4cHoYDh1s
+
+### 2️⃣ Access Token 보호 API 요청 (토큰 복사해서 Bearer 넣기)
+GET http://localhost:3001/api/admin-only
+Authorization: Bearer {{accessToken}}
+
+### 3️⃣ Refresh Token으로 Access Token 재발급
+POST http://localhost:3001/api/auth/refresh
+Content-Type: application/json
+
+{
+  "token": "{{refreshToken}}"
+}
+
+### 4️⃣ 로그아웃
+POST http://localhost:3001/api/auth/logout
+Content-Type: application/json
+
+{
+  "token": "{{refreshToken}}"
+}
