@@ -1,5 +1,5 @@
 ### 🔑 변수 선언 (Access Token 복사해서 넣기)
-@accessToken = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJlbXBsb3llZUlkIjoxLCJzaG9wSWQiOjEsInJvbGUiOiJhZG1pbiIsImlhdCI6MTc1MDc2OTYyMSwiZXhwIjoxNzUwNzcwNTIxfQ.23pic0Se8BNJcGQumgAz7tgurCvwQkz_o30Q_3hWg9g
+@accessToken = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJlbXBsb3llZUlkIjozLCJzaG9wSWQiOjMsInJvbGUiOiJhZG1pbiIsImlhdCI6MTc1MDkxNzY1MSwiZXhwIjoxNzUwOTE4NTUxfQ.neT3YP9iHcx3fJXukbzKf6AOzLEzh8tJvbhKvh7fyfI
 
 ### 1️⃣ 가게 목록 조회
 GET http://localhost:3001/api/admin/shops
