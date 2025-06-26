@@ -6,8 +6,8 @@ POST http://localhost:3001/api/auth/login
 Content-Type: application/json
 
 {
-  "name": "김철수",
-  "phoneLast4": "5432"
+  "name": "홍길동",
+  "phoneLast4": "1234"
 }
 
 ### 2️⃣ Access Token 보호 API 요청 (토큰 복사해서 Bearer 넣기)

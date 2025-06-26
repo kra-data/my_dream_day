@@ -1,0 +1,11 @@
+### ─────────────  변수 설정  ─────────────
+@shopId = 2
+@token  = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJlbXBsb3llZUlkIjozLCJzaG9wSWQiOjMsInJvbGUiOiJhZG1pbiIsImlhdCI6MTc1MDkxNzY1MSwiZXhwIjoxNzUwOTE4NTUxfQ.neT3YP9iHcx3fJXukbzKf6AOzLEzh8tJvbhKvh7fyfI
+
+### 1) PNG 미리보기  (브라우저 탭에 바로 이미지 표시)
+GET http://localhost:3001/api/shops/{{shopId}}/qr
+Authorization: Bearer {{token}}
+
+### 2) PNG 파일 다운로드  (Content-Disposition: attachment)
+GET http://localhost:3001/api/shops/{{shopId}}/qr?download=1
+Authorization: Bearer {{token}}
