@@ -5,9 +5,9 @@ import { signToken, verifyToken } from '../utils/jwt';
 let refreshTokens: string[] = [];  // 메모리 저장 (운영에선 DB/Redis)
 
 export const login = async (req: Request, res: Response): Promise<void> => {
-  const { name, phoneLast4 } = req.body;
-  if (!name || !phoneLast4) {
-    res.status(400).json({ error: 'Name and phoneLast4 required' });
+  const { name, phoneLastFour } = req.body;
+  if (!name || !phoneLastFour) {
+    res.status(400).json({ error: 'Name and phoneLastFour required' });
     return;
   }
 
@@ -15,7 +15,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
     const user = await prisma.employee.findFirst({
       where: {
         name,
-        phone: { endsWith: phoneLast4 }
+        phone: { endsWith: phoneLastFour }
       }
     });
 
@@ -25,18 +25,20 @@ export const login = async (req: Request, res: Response): Promise<void> => {
     }
 
     const accessToken = signToken({
-      employeeId: user.id,
+      userId: user.id,
       shopId: user.shopId,
       role: user.role
     },  { expiresIn: '15m' });
 
     const refreshToken = signToken({
-      employeeId: user.id
+      userId: user.id
     }, { expiresIn: '7d' });
 
     refreshTokens.push(refreshToken);
 
-    res.json({ accessToken, refreshToken });
+    const role= user.role;
+
+    res.json({ accessToken, refreshToken});
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Server error' });
@@ -53,7 +55,7 @@ export const refresh = (req: Request, res: Response): void => {
   try {
     const decoded = verifyToken(token) as any;
     const accessToken = signToken({
-      employeeId: decoded.employeeId
+      userId: decoded.userId
     },  { expiresIn: '15m' });
     res.json({ accessToken });
   } catch (err) {
