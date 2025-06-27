@@ -1,7 +1,54 @@
 import { Request, Response } from 'express';
 import { prisma } from '../db/prisma';
 import { AuthRequest } from '../middlewares/jwtMiddleware';
+import { Prisma } from '@prisma/client';
+/**
+ * GET /api/admin/shops/:shopId/attendance
+ *    ?start=2025-06-01&end=2025-06-30&employeeId=7
+ */
+export const getAttendanceRecords = async (
+  req: AuthRequest,
+  res: Response
+): Promise<void> => {
+  const shopId = Number(req.params.shopId);
+  const { start, end, employeeId } = req.query;
 
+  /* 🔒 권한 체크 */
+  if (!['admin', 'owner'].includes(req.user.role)) {
+    res.status(403).json({ error: '관리자 권한이 필요합니다.' });
+    return;
+  }
+  if (req.user.shopId !== shopId) {
+    res.status(403).json({ error: '다른 가게는 조회할 수 없습니다.' });
+    return;
+  }
+
+  /* 📅 where 조건 동적 구성 */
+  const where: Prisma.AttendanceRecordWhereInput = { shopId };
+
+  if (employeeId) where.employeeId = Number(employeeId);
+
+  if (start || end) {
+    where.clockInAt = {};
+    if (start)
+      where.clockInAt.gte = new Date(start as string);            // 00:00
+    if (end) {
+      const till = new Date(end as string);
+      till.setHours(23, 59, 59, 999);                             // 23:59
+      where.clockInAt.lte = till;
+    }
+  }
+
+  const records = await prisma.attendanceRecord.findMany({
+    where,
+    orderBy: { clockInAt: 'desc' },
+    include: {
+      employee: { select: { name: true, position: true, section: true } }
+    }
+  });
+
+  res.json(records);
+};
 /**
  * POST /api/attendance
  * body: { shopId, type: "IN" | "OUT" }
@@ -90,3 +137,4 @@ export const recordAttendance = async (
 
   res.status(400).json({ error: 'type은 IN 또는 OUT 이어야 합니다.' });
 };
+

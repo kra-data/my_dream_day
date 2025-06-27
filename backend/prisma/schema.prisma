@@ -12,40 +12,67 @@ datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
+
+enum Position {
+  OWNER // 점주·사장
+  MANAGER // 매니저
+  STAFF // 직원
+  PART_TIME // 알바
+}
+
+enum Section {
+  HALL // 홀
+  KITCHEN // 주방
+}
+
+enum PayUnit {
+  MONTHLY // 월급제
+  HOURLY // 시급제
+}
+
 model Shop {
-  id          Int         @id @default(autoincrement())
-  name        String
-  hourlyWage  Int
-  payday      Int
-  qrSecret    String
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
-  employees   Employee[]
+  id         Int        @id @default(autoincrement())
+  name       String
+  hourlyWage Int
+  payday     Int
+  qrSecret   String
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+  employees  Employee[]
+  attendanceRecords AttendanceRecord[] @relation("ShopAttendance")
 }
 
 model Employee {
-  id            Int       @id @default(autoincrement())
-  shopId        Int
-  name          String
-  nationalId    String    @unique
-  accountNumber String
-  bank          String @default("")
-  phone         String
-  schedule      Json
-  role          String    @default("employee")
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-
-  shop          Shop      @relation(fields: [shopId], references: [id], onDelete: Cascade)
-}
-model AttendanceRecord {
   id            Int      @id @default(autoincrement())
   shopId        Int
+  name          String
+  nationalId    String   @unique
+  accountNumber String
+  bank          String   @default("")
+  phone         String
+  schedule      Json
+  position      Position @default(STAFF)
+  section       Section  @default(HALL)
+  pay           Int // 실제 금액(원 단위)
+  payUnit       PayUnit // MONTHLY 또는 HOURLY
+  role          String   @default("employee")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  attendanceRecords AttendanceRecord[] @relation("EmployeeAttendance")
+}
+
+model AttendanceRecord {
+  id            Int       @id @default(autoincrement())
+  shopId        Int
   employeeId    Int
-  type          String   // "IN" | "OUT"
-  clockInAt     DateTime?                // 🔹 출근 시각
-  clockOutAt    DateTime?                // 🔹 퇴근 시각
-  workedMinutes Int?     // OUT 시 계산
-  extraMinutes  Int?     // OUT 시 계산
-  paired        Boolean  @default(false) // IN ↔ OUT 짝지음 여부
+  type          String // "IN" | "OUT"
+  clockInAt     DateTime? // 🔹 출근 시각
+  clockOutAt    DateTime? // 🔹 퇴근 시각
+  workedMinutes Int? // OUT 시 계산
+  extraMinutes  Int? // OUT 시 계산
+  paired        Boolean   @default(false) // IN ↔ OUT 짝지음 여부
+  employee   Employee @relation("EmployeeAttendance", fields: [employeeId], references: [id], onDelete: Cascade)
+  shop       Shop     @relation("ShopAttendance",     fields: [shopId],    references: [id], onDelete: Cascade)
 }
