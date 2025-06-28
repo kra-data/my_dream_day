@@ -18,7 +18,7 @@ export const getShopQR = async (req: Request, res: Response): Promise<void> => {
   }
 
   /** 2. payload = base64(shopId) */
-  const payload = Buffer.from(String(shopId)).toString('base64');
+  const payload = String(shopId);
 
   /** 3. PNG 생성 */
   res.type('png');

@@ -1,11 +1,11 @@
-@accessToken=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJlbXBsb3llZUlkIjo0LCJzaG9wSWQiOjMsInJvbGUiOiJlbXBsb3llZSIsImlhdCI6MTc1MDc4MTMzMCwiZXhwIjoxNzUwNzgyMjMwfQ.VXhgp4CyXPUyX8Q9uD2TaKskDSSRxugP2rj6cX9Bg08
+@accessToken=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjIsInNob3BJZCI6Miwicm9sZSI6ImVtcGxveWVlIiwiaWF0IjoxNzUxMTExMDIwLCJleHAiOjE3NTExMTE5MjB9.R2olHbrntQuh6Fbac0pYQDcpjCgO4GyZS0Vp5vb9TaI
 ### 출근 (QR 스캔 후)
 POST http://localhost:3001/api/attendance
 Authorization: Bearer {{accessToken}}
 Content-Type: application/json
 
 {
-  "shopId": 3,
+  "shopId": 2,
   "type": "IN"
 }
 
@@ -15,6 +15,10 @@ Authorization: Bearer {{accessToken}}
 Content-Type: application/json
 
 {
-  "shopId": 3,
+  "shopId": 2,
   "type": "OUT"
 }
+
+### 내 출‧퇴근 조회 (이달)
+GET http://localhost:3001/api/attendance/me?start=2025-06-01&end=2025-06-30
+Authorization: Bearer {{accessToken}}

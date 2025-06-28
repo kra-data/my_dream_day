@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { login, refresh, logout } from '../controllers/authController';
+import { login, refresh, logout,validateAccessToken } from '../controllers/authController';
 import { authenticateJWT, AuthRequest } from '../middlewares/jwtMiddleware';
 import { healthCheck } from '../controllers/healthController';
 import adminRoutes from './adminRoutes';
@@ -11,6 +11,8 @@ router.get('/health', healthCheck);
 router.post('/auth/login', login);
 router.post('/auth/refresh', refresh);
 router.post('/auth/logout', logout);
+/* ✅ 새 엔드포인트 */
+router.get('/auth/validate',  validateAccessToken);
 
 router.get('/admin-only', authenticateJWT, (req: AuthRequest, res) => {
   if (req.user.role !== 'admin') {

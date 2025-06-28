@@ -2,6 +2,60 @@ import { Request, Response } from 'express';
 import { prisma } from '../db/prisma';
 import { AuthRequest } from '../middlewares/jwtMiddleware';
 import { Prisma } from '@prisma/client';
+// controllers/attendanceController.ts
+/**
+ * GET /api/attendance/me
+ *   ?start=YYYY-MM-DD&end=YYYY-MM-DD
+ * ▸ 로그인한 직원이 자신의 출‧퇴근 기록을 조회
+ */
+export const getMyAttendance = async (
+  req: AuthRequest,
+  res: Response
+): Promise<void> => {
+  const { start, end } = req.query;
+  const employeeId = req.user.userId;
+
+  /* where 조건 */
+  const where: Prisma.AttendanceRecordWhereInput = {
+    employeeId,
+    paired: true
+  };
+  if (start || end) {
+    where.clockInAt = {};
+    if (start) where.clockInAt.gte = new Date(start as string);
+    if (end) {
+      const till = new Date(end as string);
+      till.setHours(23, 59, 59, 999);
+      where.clockInAt.lte = till;
+    }
+  }
+
+  /* 레코드 조회 */
+  const logs = await prisma.attendanceRecord.findMany({
+    where,
+    orderBy: { clockInAt: 'desc' }
+  });
+
+  /* 총 근무·연장 시간 계산 */
+  const worked = logs.reduce((s, l) => s + (l.workedMinutes ?? 0), 0);
+  const extras = logs.reduce((s, l) => s + (l.extraMinutes  ?? 0), 0);
+
+  res.json({
+    employeeId,
+    totalWorkedMinutes: worked,
+    totalExtraMinutes:  extras,
+    records: logs.map(l => ({
+      id:            l.id,
+      date:          l.clockInAt ? l.clockInAt.toISOString().slice(0, 10) : null,
+      clockInAt:     l.clockInAt,
+      clockOutAt:    l.clockOutAt,
+      workedMinutes: l.workedMinutes,
+      extraMinutes:  l.extraMinutes
+    }))
+  });
+};
+
+
 /**
  * GET /api/admin/shops/:shopId/attendance
  *    ?start=2025-06-01&end=2025-06-30&employeeId=7
@@ -69,7 +123,7 @@ export const recordAttendance = async (
     return;
   }
 
-  const employeeId = req.user.employeeId;
+  const employeeId = req.user.userId;
   const now        = new Date();
 
   if (type === 'IN') {
@@ -83,7 +137,7 @@ export const recordAttendance = async (
     }
 
     /** ③ 출근 기록 생성 */
-    await prisma.attendanceRecord.create({
+    const newRecord = await prisma.attendanceRecord.create({
       data: {
         shopId,
         employeeId,
@@ -92,7 +146,7 @@ export const recordAttendance = async (
         paired: false
       }
     });
-    res.json({ ok: true, message: '출근 완료' });
+    res.json({ ok: true, message: '출근 완료',clockInAt: newRecord.clockInAt });
     return;
   }
 
@@ -129,6 +183,7 @@ export const recordAttendance = async (
     res.json({
       ok: true,
       message: '퇴근 완료',
+      clockOutAt: now,
       workedMinutes,
       extraMinutes
     });

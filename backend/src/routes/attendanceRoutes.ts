@@ -2,7 +2,8 @@ import { Router, RequestHandler } from 'express';
 import { authenticateJWT, AuthRequest } from '../middlewares/jwtMiddleware';
 import {
   recordAttendance,
-  getAttendanceRecords
+  getAttendanceRecords,
+  getMyAttendance
 } from '../controllers/attendanceController';
 
 const router = Router();
@@ -41,5 +42,11 @@ router.get(
   requireAdmin,
   getAttendanceRecords
 );
-
+/* 직원 전용 조회 */
+router.get(
+  '/me',
+  authenticateJWT,
+  requireEmployee,
+  getMyAttendance
+);
 export default router;
