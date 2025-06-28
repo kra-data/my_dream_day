@@ -28,7 +28,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
       userId: user.id,
       shopId: user.shopId,
       role: user.role
-    },  { expiresIn: '15m' });
+    },  { expiresIn: '1d' });
 
     const refreshToken = signToken({
       userId: user.id
@@ -67,4 +67,35 @@ export const logout = (req: Request, res: Response): void => {
   const { token } = req.body;
   refreshTokens = refreshTokens.filter(t => t !== token);
   res.json({ message: 'Logged out' });
+};
+
+export const validateAccessToken = (req: Request, res: Response): void => {
+  const auth = req.headers.authorization;
+
+  if (!auth?.startsWith('Bearer ')) {
+    res.status(401).json({ valid: false, error: 'No token provided' });
+    return;
+  }
+
+  const token = auth.split(' ')[1];
+
+  try {
+    const decoded = verifyToken(token) as {
+      userId: number;
+      shopId: number;
+      role: string;
+      exp: number; // 초 단위 Unix Time
+      iat: number;
+    };
+
+    res.json({
+      valid: true,
+      userId: decoded.userId,
+      shopId: decoded.shopId,
+      role: decoded.role,
+      exp: decoded.exp
+    });
+  } catch (err) {
+    res.status(401).json({ valid: false, error: 'Invalid or expired token' });
+  }
 };

@@ -1,6 +1,5 @@
 ### 🔑 변수 선언 ─ Access Token
-@accessToken = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjEsInNob3BJZCI6Miwicm9sZSI6ImFkbWluIiwiaWF0IjoxNzUxMDE3ODg0LCJleHAiOjE3NTEwMTg3ODR9.9rblMCFWq6M0O5l521YwL4xRZwwIA8fmDrByQOhKIsM
-
+@accessToken =eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjEsInNob3BJZCI6Miwicm9sZSI6ImFkbWluIiwiaWF0IjoxNzUxMTA2MzAwLCJleHAiOjE3NTExMDcyMDB9.wJwPLZCKVO-xgw_8hM3dzQNwcPy5ApyaEjXRdlyOyck
 ######################################################################
 # 1️⃣  가게 목록 조회
 ######################################################################
@@ -97,4 +96,11 @@ Authorization: Bearer {{accessToken}}
 # 8️⃣  직원 삭제  (🚩 2 → 실제 employeeId)
 ######################################################################
 DELETE http://localhost:3001/api/admin/employees/2
+Authorization: Bearer {{accessToken}}
+
+######################################################################
+# 🔟  급여 통계 Excel 다운로드 (1~30일)
+#     - 🚩 2  → 실제 shopId
+######################################################################
+GET http://localhost:3001/api/admin/shops/2/payroll/export?start=2025-06-01&end=2025-06-30
 Authorization: Bearer {{accessToken}}
