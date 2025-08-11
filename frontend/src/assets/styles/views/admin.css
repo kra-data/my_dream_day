@@ -1,0 +1,203 @@
+/* ==========================================
+   🛠️ AdminView 전용 스타일
+   ========================================== */
+
+/* 관리자 뷰 메인 컨테이너 */
+.admin-view {
+  min-height: 100vh;
+  background: var(--color-bg-secondary);
+}
+
+.admin-container {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: var(--space-5);
+}
+
+/* 헤더 섹션 */
+.admin-header {
+  text-align: center;
+  margin-bottom: var(--space-10);
+  padding: var(--space-8) var(--space-4);
+}
+
+.admin-header h1 {
+  font-size: var(--text-4xl);
+  font-weight: var(--font-bold);
+  color: var(--color-text-primary);
+  margin-bottom: var(--space-2);
+  background: linear-gradient(135deg, var(--primary-600), var(--primary-800));
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.admin-header p {
+  color: var(--color-text-secondary);
+  font-size: var(--text-lg);
+  font-weight: var(--font-medium);
+  margin: 0;
+}
+
+/* 로딩 및 에러 상태 스타일 */
+.loading-container, 
+.error-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 300px;
+  background: var(--color-bg-primary);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-sm);
+  margin-bottom: var(--space-8);
+  padding: var(--space-8);
+}
+
+.loading-spinner {
+  width: 2.5rem;
+  height: 2.5rem;
+  border: 3px solid var(--color-border-light);
+  border-top: 3px solid var(--primary-500);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: var(--space-4);
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.error-message {
+  text-align: center;
+}
+
+.error-message h3 {
+  color: var(--danger-600);
+  font-size: var(--text-xl);
+  font-weight: var(--font-semibold);
+  margin-bottom: var(--space-2);
+}
+
+.error-message p {
+  color: var(--color-text-secondary);
+  font-size: var(--text-base);
+  margin-bottom: var(--space-4);
+}
+
+/* 탭 네비게이션 */
+.tab-navigation {
+  display: flex;
+  background: var(--color-bg-primary);
+  border-radius: var(--radius-xl);
+  padding: var(--space-2);
+  margin-bottom: var(--space-8);
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--color-border-light);
+}
+
+.tab-button {
+  flex: 1;
+  padding: var(--space-3) var(--space-4);
+  border: none;
+  background: transparent;
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+  font-size: var(--text-base);
+  font-weight: var(--font-semibold);
+  color: var(--color-text-secondary);
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+}
+
+.tab-button:hover {
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-primary);
+}
+
+.tab-button.active {
+  background: var(--primary-500);
+  color: var(--color-text-inverse);
+  box-shadow: var(--shadow-sm);
+}
+
+.tab-button:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+
+/* 반응형 디자인 */
+@media (max-width: 1024px) {
+  .admin-container {
+    padding: var(--space-4);
+  }
+  
+  .admin-header {
+    margin-bottom: var(--space-8);
+    padding: var(--space-6) var(--space-2);
+  }
+  
+  .admin-header h1 {
+    font-size: var(--text-3xl);
+  }
+  
+  .admin-header p {
+    font-size: var(--text-base);
+  }
+}
+
+@media (max-width: 768px) {
+  .tab-navigation {
+    flex-direction: column;
+    gap: var(--space-1);
+  }
+  
+  .tab-button {
+    padding: var(--space-3);
+    text-align: center;
+  }
+  
+  .admin-header h1 {
+    font-size: var(--text-2xl);
+  }
+  
+  .loading-container,
+  .error-container {
+    padding: var(--space-6);
+    min-height: 200px;
+  }
+}
+
+@media (max-width: 480px) {
+  .admin-container {
+    padding: var(--space-3);
+  }
+  
+  .admin-header {
+    padding: var(--space-4) var(--space-2);
+    margin-bottom: var(--space-6);
+  }
+  
+  .tab-navigation {
+    margin-bottom: var(--space-6);
+  }
+}
+
+/* 다크 모드 지원 */
+@media (prefers-color-scheme: dark) {
+  .tab-button.active {
+    box-shadow: var(--shadow-md);
+  }
+}
+
+/* 애니메이션 비활성화 지원 */
+@media (prefers-reduced-motion: reduce) {
+  .loading-spinner {
+    animation: none;
+  }
+  
+  .tab-button {
+    transition: none;
+  }
+}
