@@ -1,0 +1,183 @@
+/* ==========================================
+   🔐 LoginView 전용 스타일
+   ========================================== */
+
+/* 🎨 모던 로그인 페이지 디자인 */
+.login-view {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, 
+    var(--primary-400) 0%, 
+    var(--primary-600) 50%, 
+    var(--primary-800) 100%);
+  padding: var(--space-5);
+  position: relative;
+}
+
+.login-view::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="grain" width="100" height="100" patternUnits="userSpaceOnUse"><circle cx="50" cy="50" r="0.5" fill="%23ffffff" opacity="0.1"/></pattern></defs><rect width="100" height="100" fill="url(%23grain)"/></svg>') repeat;
+  pointer-events: none;
+}
+
+.login-container {
+  width: 100%;
+  max-width: 28rem; /* 448px */
+  position: relative;
+  z-index: 1;
+}
+
+.login-card {
+  background: var(--color-bg-primary);
+  border-radius: var(--radius-2xl);
+  padding: var(--space-10) var(--space-8);
+  box-shadow: var(--shadow-2xl);
+  border: 1px solid var(--color-border-light);
+  backdrop-filter: blur(10px);
+}
+
+/* 헤더 스타일 */
+.login-header {
+  text-align: center;
+  margin-bottom: var(--space-8);
+}
+
+.login-header h1 {
+  font-size: var(--text-3xl);
+  font-weight: var(--font-bold);
+  color: var(--color-text-primary);
+  margin-bottom: var(--space-3);
+  background: linear-gradient(135deg, var(--primary-600), var(--primary-800));
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  text-shadow: none;
+}
+
+.login-header p {
+  color: var(--color-text-secondary);
+  font-size: var(--text-base);
+  font-weight: var(--font-medium);
+  margin: 0;
+}
+
+/* 폼 스타일 */
+.login-form {
+  margin-bottom: var(--space-6);
+}
+
+/* 테스트 계정 섹션 스타일링 */
+.demo-accounts {
+  border-top: 1px solid var(--color-border-light);
+  padding-top: var(--space-5);
+  margin-top: var(--space-6);
+}
+
+.demo-accounts h3 {
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  color: var(--color-text-secondary);
+  margin-bottom: var(--space-4);
+  text-align: center;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  justify-content: center;
+}
+
+.demo-accounts h3::before {
+  content: '📝';
+}
+
+.account-list {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.account-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: var(--space-3);
+  background: var(--color-bg-secondary);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border-light);
+  transition: all var(--transition-fast);
+  cursor: pointer;
+  gap: var(--space-1);
+}
+
+.account-item:hover {
+  background: var(--primary-50);
+  border-color: var(--primary-300);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+}
+
+.account-item strong {
+  color: var(--color-text-primary);
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+}
+
+.account-item span {
+  color: var(--color-text-tertiary);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: var(--font-medium);
+  background: var(--color-bg-primary);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border-medium);
+}
+
+.demo-note {
+  font-size: var(--text-xs);
+  color: var(--color-text-tertiary);
+  text-align: center;
+  margin: 0;
+  font-style: italic;
+  background: var(--color-bg-secondary);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-base);
+  border: 1px solid var(--color-border-light);
+}
+
+/* 반응형 디자인 */
+@media (max-width: 640px) {
+  .login-view {
+    padding: var(--space-4);
+  }
+  
+  .login-card {
+    padding: var(--space-8) var(--space-6);
+  }
+  
+  .login-header h1 {
+    font-size: var(--text-2xl);
+  }
+  
+  .account-list {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* 접근성 향상 */
+@media (prefers-reduced-motion: reduce) {
+  .account-item:hover {
+    transform: none;
+  }
+}
+
+/* 어두운 테마 지원 */
+@media (prefers-color-scheme: dark) {
+  .login-view::before {
+    opacity: 0.05;
+  }
+}
