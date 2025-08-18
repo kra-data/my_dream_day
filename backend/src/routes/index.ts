@@ -4,7 +4,6 @@ import { authenticateJWT, AuthRequest } from '../middlewares/jwtMiddleware';
 import { healthCheck } from '../controllers/healthController';
 import adminRoutes from './adminRoutes';
 import attendanceRoutes from './attendanceRoutes';
-import qrRoutes from './qrRoutes';
 const router = Router();
 
 router.get('/health', healthCheck);
@@ -38,5 +37,4 @@ router.get('/common', authenticateJWT, (req: AuthRequest, res) => {
 router.use('/admin', adminRoutes);
 
 router.use('/attendance', attendanceRoutes);
-router.use('/shops', qrRoutes);
 export default router;

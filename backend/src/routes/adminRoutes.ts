@@ -14,6 +14,7 @@ import {
   recentActivities
 } from '../controllers/dashboardController';
 import { employeePayrollSummary } from '../controllers/payrollSummaryController';
+import { getShopQR } from '../controllers/qrController';
 
 const router = Router();
 
@@ -33,7 +34,7 @@ const requireAdmin = (
 /* ───────── 공통 미들웨어 ───────── */
 router.use(authenticateJWT);
 router.use(requireAdmin);
-
+router.get('/shops/:id/qr', getShopQR);
 /* ───────── 매장 CRUD ───────── */
 router.get('/shops',            adminController.getShops);
 router.post('/shops',           adminController.createShop);
@@ -43,8 +44,8 @@ router.delete('/shops/:id',     adminController.deleteShop);
 /* ───────── 직원 CRUD ───────── */
 router.get('/shops/:id/employees',  adminController.getEmployees);
 router.post('/shops/:id/employees', adminController.createEmployee);
-router.put('/employees/:id',        adminController.updateEmployee);
-router.delete('/employees/:id',     adminController.deleteEmployee);
+router.put('/shops/:id/employees',        adminController.updateEmployee);
+router.delete('/shops/:id/employees',     adminController.deleteEmployee);
 
 /* ───────── 급여 엑셀 ───────── */
 router.get('/shops/:shopId/payroll/export', exportPayroll);

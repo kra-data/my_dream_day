@@ -2,24 +2,25 @@ import { Request, Response } from 'express';
 import { prisma } from '../db/prisma';
 import { AuthRequest } from '../middlewares/jwtMiddleware';
 import { Prisma } from '@prisma/client';
-// controllers/attendanceController.ts
 /**
  * GET /api/attendance/me
- *   ?start=YYYY-MM-DD&end=YYYY-MM-DD
- * ▸ 로그인한 직원이 자신의 출‧퇴근 기록을 조회
+ *   ?start=YYYY-MM-DD&end=YYYY-MM-DD&cursor=number&limit=number
+ * ▸ 로그인한 직원이 자신의 출‧퇴근 기록을 조회 (커서 기반)
  */
 export const getMyAttendance = async (
   req: AuthRequest,
   res: Response
 ): Promise<void> => {
-  const { start, end } = req.query;
+  const { start, end, cursor, limit = '10' } = req.query;
   const employeeId = req.user.userId;
+  const pageSize = Math.min(Number(limit), 50); // 최대 50개로 제한
 
   /* where 조건 */
   const where: Prisma.AttendanceRecordWhereInput = {
     employeeId,
-    paired: true
+    paired: true,
   };
+
   if (start || end) {
     where.clockInAt = {};
     if (start) where.clockInAt.gte = new Date(start as string);
@@ -30,42 +31,52 @@ export const getMyAttendance = async (
     }
   }
 
+  if (cursor) {
+    where.id = { lt: Number(cursor) }; // 커서 이후 데이터 조회
+  }
+
   /* 레코드 조회 */
   const logs = await prisma.attendanceRecord.findMany({
     where,
-    orderBy: { clockInAt: 'desc' }
+    orderBy: [{ clockInAt: 'desc' }, { id: 'desc' }], // clockInAt, id로 정렬
+    take: pageSize,
   });
 
   /* 총 근무·연장 시간 계산 */
   const worked = logs.reduce((s, l) => s + (l.workedMinutes ?? 0), 0);
-  const extras = logs.reduce((s, l) => s + (l.extraMinutes  ?? 0), 0);
+  const extras = logs.reduce((s, l) => s + (l.extraMinutes ?? 0), 0);
+
+  /* 다음 커서 결정 */
+  const nextCursor = logs.length === pageSize ? logs[logs.length - 1].id : null;
 
   res.json({
     employeeId,
     totalWorkedMinutes: worked,
-    totalExtraMinutes:  extras,
-    records: logs.map(l => ({
-      id:            l.id,
-      date:          l.clockInAt ? l.clockInAt.toISOString().slice(0, 10) : null,
-      clockInAt:     l.clockInAt,
-      clockOutAt:    l.clockOutAt,
+    totalExtraMinutes: extras,
+    records: logs.map((l) => ({
+      id: l.id,
+      date: l.clockInAt ? l.clockInAt.toISOString().slice(0, 10) : null,
+      clockInAt: l.clockInAt,
+      clockOutAt: l.clockOutAt,
       workedMinutes: l.workedMinutes,
-      extraMinutes:  l.extraMinutes
-    }))
+      extraMinutes: l.extraMinutes,
+    })),
+    nextCursor, // 다음 페이지 커서
   });
 };
 
-
 /**
  * GET /api/admin/shops/:shopId/attendance
- *    ?start=2025-06-01&end=2025-06-30&employeeId=7
+ *   ?start=YYYY-MM-DD&end=YYYY-MM-DD&employeeId=number&cursor=number&limit=number
+ * ▸ 관리자가 가게의 출퇴근 기록 조회 (커서 기반)
  */
 export const getAttendanceRecords = async (
   req: AuthRequest,
   res: Response
 ): Promise<void> => {
   const shopId = Number(req.params.shopId);
-  const { start, end, employeeId } = req.query;
+  const { start, end, employeeId, cursor, limit = '10' } = req.query;
+  const pageSize = Math.min(Number(limit), 50); // 최대 50개로 제한
 
   /* 🔒 권한 체크 */
   if (!['admin', 'owner'].includes(req.user.role)) {
@@ -84,24 +95,35 @@ export const getAttendanceRecords = async (
 
   if (start || end) {
     where.clockInAt = {};
-    if (start)
-      where.clockInAt.gte = new Date(start as string);            // 00:00
+    if (start) where.clockInAt.gte = new Date(start as string);
     if (end) {
       const till = new Date(end as string);
-      till.setHours(23, 59, 59, 999);                             // 23:59
+      till.setHours(23, 59, 59, 999);
       where.clockInAt.lte = till;
     }
   }
 
+  if (cursor) {
+    where.id = { lt: Number(cursor) }; // 커서 이후 데이터 조회
+  }
+
+  /* 레코드 조회 */
   const records = await prisma.attendanceRecord.findMany({
     where,
-    orderBy: { clockInAt: 'desc' },
+    orderBy: [{ clockInAt: 'desc' }, { id: 'desc' }], // clockInAt, id로 정렬
+    take: pageSize,
     include: {
-      employee: { select: { name: true, position: true, section: true } }
-    }
+      employee: { select: { name: true, position: true, section: true } },
+    },
   });
 
-  res.json(records);
+  /* 다음 커서 결정 */
+  const nextCursor = records.length === pageSize ? records[records.length - 1].id : null;
+
+  res.json({
+    records,
+    nextCursor, // 다음 페이지 커서
+  });
 };
 /**
  * POST /api/attendance
@@ -193,3 +215,34 @@ export const recordAttendance = async (
   res.status(400).json({ error: 'type은 IN 또는 OUT 이어야 합니다.' });
 };
 
+export const getMyCurrentStatus = async (
+  req: AuthRequest,
+  res: Response
+): Promise<void> => {
+  const employeeId = req.user.userId;
+  const now        = new Date();
+
+  /* 미‐짝지어진 IN 기록이 있으면 근무 중 */
+  const inRecord = await prisma.attendanceRecord.findFirst({
+    where: { employeeId, paired: false },
+    orderBy: { clockInAt: 'desc' }
+  });
+
+  if (!inRecord) {
+    res.json({ onDuty: false });
+    return;
+  }
+
+  const workedMinutes = Math.floor(
+    (now.getTime() - inRecord.clockInAt!.getTime()) / 60000
+  );
+  const extraMinutes  =
+    workedMinutes > 480 ? Math.floor((workedMinutes - 480) / 30) * 30 : 0;
+
+  res.json({
+    onDuty: true,
+    clockInAt:  inRecord.clockInAt,
+    workedMinutes,
+    extraMinutes
+  });
+};

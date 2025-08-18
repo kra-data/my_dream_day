@@ -1,0 +1,26 @@
+version: "3.9"
+services:
+  backend:
+    build: .
+    container_name: employee_backend
+    env_file:
+      - ./.env
+    environment:
+      PORT: 3001
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: employee_caddy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+
+
+
