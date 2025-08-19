@@ -1,20 +1,25 @@
-name: Deploy to Personal Server
+name: Backend Deploy → Tag → Release
 
 on:
   push:
-    branches: ['main'] # main에 push될 때 자동 배포
-  workflow_dispatch: # 수동 실행도 가능
+    branches: ['main']
+    paths:
+      - 'backend/**' # backend 변경시에만 실행
+      - '.github/workflows/backend-deploy-release.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write # 태그/릴리스 생성에 필요
 
 concurrency:
-  group: deploy-prod
-  cancel-in-progress: true # 중복 배포 방지
+  group: deploy-backend-prod
+  cancel-in-progress: true
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-
     steps:
-      - name: SSH into server and deploy
+      - name: Deploy via SSH (backend only)
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.SERVER_HOST }}
@@ -24,14 +29,67 @@ jobs:
           script_stop: true
           script: |
             set -e
-            cd ${{ secrets.PROJECT_PATH }}
+            # 서버에서 backend 작업 디렉터리로 이동
+            cd ${{ secrets.PROJECT_PATH_BACKEND }}
 
-            # 최신 코드 반영
-            if [ -d .git ]; then
-              git fetch origin main
-              git reset --hard origin/main
-            fi
+            # (선택) 헬스체크 URL 지정
+            export HEALTH_URL="${HEALTH_URL:-http://localhost:3001/api/health}"
 
-            # 배포 스크립트 실행
+            # 모노레포라도 서버 쪽은 backend만 체크아웃/배포
+            # deploy.sh가 GIT_REF를 인식하도록 했다면 주입 가능:
+            # export GIT_REF="${GITHUB_SHA}"
+
             chmod +x scripts/deploy.sh || true
             ./scripts/deploy.sh
+
+  tag_and_release:
+    needs: deploy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (full history for changelog)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Compute previous backend tag & generate changelog
+        id: changelog
+        run: |
+          set -e
+          # 'backend-' 프리픽스 태그 중 최신(작성일 기준)
+          LAST_TAG="$(git for-each-ref --sort=-creatordate --format='%(refname:short)' refs/tags | grep '^backend-' | head -n1 || true)"
+          if [ -z "$LAST_TAG" ]; then
+            RANGE="$(git rev-list --max-parents=0 HEAD)..HEAD"
+            NOTE="(first backend release)"
+          else
+            RANGE="$LAST_TAG..HEAD"
+            NOTE="since $LAST_TAG"
+          fi
+
+          {
+            echo "Backend deployment commit: ${GITHUB_SHA}"
+            echo
+            echo "Changelog ${NOTE} (backend/ only):"
+            git log --pretty=format:'- %s (%h)' $RANGE -- backend
+          } > CHANGELOG.md
+
+      - name: Compute tag (KST)
+        id: tag
+        run: |
+          TZ=Asia/Seoul NOW=$(date +'%Y%m%d-%H%M')
+          echo "tag=backend-${NOW}" >> $GITHUB_OUTPUT
+
+      - name: Create and push tag
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "${{ steps.tag.outputs.tag }}" -m "Backend deploy: $GITHUB_SHA"
+          git push origin "${{ steps.tag.outputs.tag }}"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.tag }}
+          name: 'Backend Release ${{ steps.tag.outputs.tag }}'
+          body_path: CHANGELOG.md
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
