@@ -1,6 +1,7 @@
 import { Response } from 'express';
 import { prisma } from '../db/prisma';
 import { AuthRequest } from '../middlewares/jwtMiddleware';
+import { z } from 'zod';
 
 /* 유틸 ─ 오늘(한국시간) 00:00:00 ~ 23:59:59 범위 반환 */
 const getTodayRange = (): { start: Date; end: Date } => {
@@ -104,9 +105,13 @@ export const activeEmployees = async (req: AuthRequest, res: Response) => {
  *  3) 최근 출‧퇴근 활동
  *     GET /api/admin/shops/:shopId/dashboard/recent?limit=30
  * ───────────────────────────────────────────*/
+const recentQuerySchema = z.object({ limit: z.coerce.number().int().min(1).max(100).optional() });
+
 export const recentActivities = async (req: AuthRequest, res: Response) => {
   const shopId = Number(req.params.shopId);
-  const take   = Math.min(Number(req.query.limit) || 30, 100);
+  const parsed = recentQuerySchema.safeParse(req.query);
+  if (!parsed.success) { res.status(400).json({ error: 'Invalid limit' }); return; }
+  const take   = Math.min(Number(parsed.data.limit ?? 30), 100);
 
   const logs = await prisma.attendanceRecord.findMany({
     where: { shopId },

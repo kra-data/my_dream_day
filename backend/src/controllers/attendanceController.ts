@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { prisma } from '../db/prisma';
 import { AuthRequest } from '../middlewares/jwtMiddleware';
 import { Prisma } from '@prisma/client';
+import { z } from 'zod';
 /**
  * GET /api/attendance/me
  *   ?start=YYYY-MM-DD&end=YYYY-MM-DD&cursor=number&limit=number
@@ -129,15 +130,18 @@ export const getAttendanceRecords = async (
  * POST /api/attendance
  * body: { shopId, type: "IN" | "OUT" }
  */
+const recordAttendanceSchema = z.object({
+  shopId: z.number().int().positive(),
+  type: z.enum(['IN','OUT'])
+});
+
 export const recordAttendance = async (
   req: AuthRequest,
   res: Response
 ): Promise<void> => {
-  const { shopId, type } = req.body;
-  if (!shopId || !type) {
-    res.status(400).json({ error: 'shopId, type(IN|OUT) 모두 필요합니다.' });
-    return;
-  }
+  const parsed = recordAttendanceSchema.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: 'Invalid payload' }); return; }
+  const { shopId, type } = parsed.data;
 
   /** ① 로그인 직원이 해당 가게 소속인지 검증 */
   if (shopId !== req.user.shopId) {

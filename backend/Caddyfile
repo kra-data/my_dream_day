@@ -2,10 +2,6 @@ mydreamday.shop {
   encode gzip
   @api path /api/*
   reverse_proxy @api backend:3001
-
-  route {
-    redir / /api/docs 302
-  }
 }
 
 

@@ -1,0 +1,58 @@
+name: Rollback Deployment
+
+on:
+  workflow_dispatch:
+    inputs:
+      commit_sha:
+        description: 'Commit SHA to rollback to (optional)'
+        required: false
+        default: 'HEAD~1'
+
+jobs:
+  rollback:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Rollback to previous version
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          port: ${{ secrets.SERVER_PORT }}
+          script: |
+            cd ${{ secrets.PROJECT_PATH }}
+
+            # Stash any uncommitted changes
+            git stash
+
+            # Reset to specified commit or previous commit
+            if [ "${{ github.event.inputs.commit_sha }}" != "HEAD~1" ]; then
+              git reset --hard ${{ github.event.inputs.commit_sha }}
+            else
+              git reset --hard HEAD~1
+            fi
+
+            # Clean untracked files
+            git clean -fd
+
+            # Rebuild and restart
+            docker compose down
+            docker compose up -d --build
+
+            # Wait for services
+            sleep 15
+
+            # Health check
+            if curl -f http://localhost:3001/api/health > /dev/null 2>&1; then
+              echo "✅ Rollback successful!"
+              docker compose ps
+            else
+              echo "❌ Rollback failed!"
+              docker compose logs backend
+              exit 1
+            fi
+
+      - name: Rollback notification
+        run: |
+          echo "🔄 Rollback completed to commit: ${{ github.event.inputs.commit_sha || 'HEAD~1' }}"

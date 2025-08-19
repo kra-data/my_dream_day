@@ -1,0 +1,37 @@
+name: Deploy to Personal Server
+
+on:
+  push:
+    branches: ['main'] # main에 push될 때 자동 배포
+  workflow_dispatch: # 수동 실행도 가능
+
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: true # 중복 배포 방지
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: SSH into server and deploy
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          port: ${{ secrets.SERVER_PORT }}
+          script_stop: true
+          script: |
+            set -e
+            cd ${{ secrets.PROJECT_PATH }}
+
+            # 최신 코드 반영
+            if [ -d .git ]; then
+              git fetch origin main
+              git reset --hard origin/main
+            fi
+
+            # 배포 스크립트 실행
+            chmod +x scripts/deploy.sh || true
+            ./scripts/deploy.sh

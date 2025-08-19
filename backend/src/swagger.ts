@@ -19,6 +19,44 @@ export const swaggerDocument: any = {
         scheme: 'bearer',
         bearerFormat: 'JWT'
       }
+    },
+    schemas: {
+      LoginRequest: {
+        type: 'object',
+        required: ['name','phoneLastFour'],
+        properties: {
+          name: { type: 'string', example: '홍길동' },
+          phoneLastFour: { type: 'string', example: '1234' }
+        }
+      },
+      TokenPair: {
+        type: 'object',
+        properties: {
+          accessToken: { type: 'string' },
+          refreshToken: { type: 'string' }
+        }
+      },
+      RefreshRequest: {
+        type: 'object',
+        required: ['token'],
+        properties: { token: { type: 'string' } }
+      },
+      LogoutRequest: {
+        type: 'object',
+        required: ['token'],
+        properties: { token: { type: 'string' } }
+      },
+      AttendanceRecord: {
+        type: 'object',
+        properties: {
+          id: { type: 'integer' },
+          date: { type: 'string', format: 'date' },
+          clockInAt: { type: 'string', format: 'date-time' },
+          clockOutAt: { type: 'string', format: 'date-time' },
+          workedMinutes: { type: 'integer' },
+          extraMinutes: { type: 'integer' }
+        }
+      }
     }
   },
   security: [{ bearerAuth: [] }],
@@ -41,22 +79,11 @@ export const swaggerDocument: any = {
         requestBody: {
           required: true,
           content: {
-            'application/json': {
-              schema: {
-                type: 'object',
-                properties: {
-                  name: { type: 'string' },
-                  phoneLastFour: { type: 'string' }
-                },
-                required: ['name', 'phoneLastFour']
-              }
-            }
+            'application/json': { schema: { $ref: '#/components/schemas/LoginRequest' } }
           }
         },
         responses: {
-          '200': {
-            description: 'Tokens returned'
-          },
+          '200': { description: 'Tokens returned', content: { 'application/json': { schema: { $ref: '#/components/schemas/TokenPair' } } } },
           '401': {
             description: 'Invalid credentials'
           }
@@ -70,15 +97,7 @@ export const swaggerDocument: any = {
         requestBody: {
           required: true,
           content: {
-            'application/json': {
-              schema: {
-                type: 'object',
-                properties: {
-                  token: { type: 'string' }
-                },
-                required: ['token']
-              }
-            }
+            'application/json': { schema: { $ref: '#/components/schemas/RefreshRequest' } }
           }
         },
         responses: {
@@ -94,15 +113,7 @@ export const swaggerDocument: any = {
         requestBody: {
           required: true,
           content: {
-            'application/json': {
-              schema: {
-                type: 'object',
-                properties: {
-                  token: { type: 'string' }
-                },
-                required: ['token']
-              }
-            }
+            'application/json': { schema: { $ref: '#/components/schemas/LogoutRequest' } }
           }
         },
         responses: { '200': { description: 'Logged out' } }
@@ -122,6 +133,97 @@ export const swaggerDocument: any = {
         ],
         responses: { '200': { description: 'Token info' }, '401': { description: 'Invalid' } }
       }
+    },
+    '/api/attendance': {
+      post: {
+        tags: ['Attendance'],
+        summary: '직원 출퇴근 기록 생성 (IN | OUT)',
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['shopId','type'],
+                properties: {
+                  shopId: { type: 'integer' },
+                  type: { type: 'string', enum: ['IN','OUT'] }
+                }
+              }
+            }
+          }
+        },
+        responses: { '200': { description: 'OK' }, '400': { description: 'Invalid payload' }, '403': { description: 'Forbidden' } }
+      }
+    },
+    '/api/attendance/me': {
+      get: {
+        tags: ['Attendance'],
+        summary: '내 출퇴근 기록(커서 기반) 조회',
+        parameters: [
+          { name: 'start', in: 'query', schema: { type: 'string', format: 'date' } },
+          { name: 'end',   in: 'query', schema: { type: 'string', format: 'date' } },
+          { name: 'cursor',in: 'query', schema: { type: 'integer' } },
+          { name: 'limit', in: 'query', schema: { type: 'integer', default: 10 } }
+        ],
+        responses: { '200': { description: 'OK', content: { 'application/json': { schema: { type: 'object', properties: { records: { type: 'array', items: { $ref: '#/components/schemas/AttendanceRecord' } }, nextCursor: { type: 'integer', nullable: true } } } } } } }
+      }
+    },
+    '/api/attendance/me/status': {
+      get: {
+        tags: ['Attendance'],
+        summary: '내 현재 출근 상태',
+        responses: { '200': { description: 'OK' } }
+      }
+    },
+    '/api/attendance/admin/shops/{shopId}/attendance': {
+      get: {
+        tags: ['Attendance (Admin)'],
+        summary: '가게 출퇴근 기록 조회(커서 기반)',
+        parameters: [
+          { name: 'shopId', in: 'path', required: true, schema: { type: 'integer' } },
+          { name: 'start', in: 'query', schema: { type: 'string', format: 'date' } },
+          { name: 'end',   in: 'query', schema: { type: 'string', format: 'date' } },
+          { name: 'employeeId', in: 'query', schema: { type: 'integer' } },
+          { name: 'cursor', in: 'query', schema: { type: 'integer' } },
+          { name: 'limit', in: 'query', schema: { type: 'integer', default: 10 } }
+        ],
+        responses: { '200': { description: 'OK' } }
+      }
+    },
+    '/api/admin/shops': {
+      get: { tags: ['Admin'], summary: '매장 목록', responses: { '200': { description: 'OK' } } },
+      post: { tags: ['Admin'], summary: '매장 생성', responses: { '201': { description: 'Created' }, '400': { description: 'Invalid payload' } } }
+    },
+    '/api/admin/shops/{id}': {
+      put:  { tags: ['Admin'], summary: '매장 수정', parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }], responses: { '200': { description: 'OK' }, '404': { description: 'Not Found' } } },
+      delete: { tags: ['Admin'], summary: '매장 삭제', parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }], responses: { '204': { description: 'No Content' } } }
+    },
+    '/api/admin/shops/{id}/employees': {
+      get: { tags: ['Admin'], summary: '직원 목록', parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }], responses: { '200': { description: 'OK' } } },
+      post: { tags: ['Admin'], summary: '직원 생성', parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }], responses: { '201': { description: 'Created' }, '400': { description: 'Invalid payload' } } }
+    },
+    '/api/admin/shops/{id}/employees/{employeeId}': {
+      put:  { tags: ['Admin'], summary: '직원 수정', parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }, { name: 'employeeId', in: 'path', required: true, schema: { type: 'integer' } }], responses: { '200': { description: 'OK' }, '404': { description: 'Not Found' } } },
+      delete:{ tags: ['Admin'], summary: '직원 삭제', parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }, { name: 'employeeId', in: 'path', required: true, schema: { type: 'integer' } }], responses: { '204': { description: 'No Content' } } }
+    },
+    '/api/admin/shops/{shopId}/payroll/export': {
+      get: { tags: ['Payroll'], summary: '급여 엑셀 다운로드', parameters: [ { name:'shopId',in:'path',required:true,schema:{type:'integer'} }, { name:'start',in:'query',required:true,schema:{type:'string',format:'date'} }, { name:'end',in:'query',required:true,schema:{type:'string',format:'date'} } ], responses: { '200': { description: 'Excel stream' } } }
+    },
+    '/api/admin/shops/{shopId}/payroll/dashboard': {
+      get: { tags: ['Payroll'], summary: '급여 대시보드', parameters: [ { name:'shopId',in:'path',required:true,schema:{type:'integer'} }, { name:'year',in:'query',schema:{type:'integer'} }, { name:'month',in:'query',schema:{type:'integer'} } ], responses: { '200': { description: 'OK' } } }
+    },
+    '/api/admin/shops/{shopId}/payroll/employees': {
+      get: { tags: ['Payroll'], summary: '직원별 급여 목록', parameters: [ { name:'shopId',in:'path',required:true,schema:{type:'integer'} }, { name:'year',in:'query',schema:{type:'integer'} }, { name:'month',in:'query',schema:{type:'integer'} } ], responses: { '200': { description: 'OK' } } }
+    },
+    '/api/admin/shops/{shopId}/payroll/employees/{employeeId}': {
+      get: { tags: ['Payroll'], summary: '직원 월별 급여 상세', parameters: [ { name:'shopId',in:'path',required:true,schema:{type:'integer'} }, { name:'employeeId',in:'path',required:true,schema:{type:'integer'} }, { name:'year',in:'query',schema:{type:'integer'} }, { name:'month',in:'query',schema:{type:'integer'} } ], responses: { '200': { description: 'OK' }, '404': { description: 'Not Found' } } }
+    },
+    '/api/admin/shops/{shopId}/payroll/employees/{employeeId}/summary': {
+      get: { tags: ['Payroll'], summary: '직원 월별 요약', parameters: [ { name:'shopId',in:'path',required:true,schema:{type:'integer'} }, { name:'employeeId',in:'path',required:true,schema:{type:'integer'} }, { name:'year',in:'query',schema:{type:'integer'} }, { name:'month',in:'query',schema:{type:'integer'} } ], responses: { '200': { description: 'OK' } } }
+    },
+    '/api/admin/shops/{id}/qr': {
+      get: { tags: ['QR'], summary: '매장 QR PNG 생성', parameters: [ { name:'id',in:'path',required:true,schema:{type:'integer'} }, { name:'download',in:'query',schema:{type:'integer'} } ], responses: { '200': { description: 'PNG' }, '404': { description: 'Not Found' } } }
     }
   }
 };
