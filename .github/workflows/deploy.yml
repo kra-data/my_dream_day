@@ -32,7 +32,7 @@ jobs:
             cd ${{ secrets.PROJECT_PATH }}
 
             # (선택) 헬스체크 URL 지정
-            export HEALTH_URL="${HEALTH_URL:-http://localhost:3001/api/health}"
+            export HEALTH_URL="${HEALTH_URL:-https://mydreamday.shop/api/health}"
 
             chmod +x scripts/deploy.sh || true
             ./scripts/deploy.sh
