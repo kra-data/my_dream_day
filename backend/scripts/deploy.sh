@@ -34,7 +34,7 @@ docker compose down --remove-orphans || true
 docker compose up -d --build
 
 # 헬스체크 (엔드포인트 명은 서비스에 맞게 변경)
-HEALTH_URL="${HEALTH_URL:-http://localhost:3001/api/health}"
+HEALTH_URL="${HEALTH_URL:-http://localhost/api/health}"
 echo "🩺 Health check: $HEALTH_URL"
 for i in {1..30}; do
   if curl -fsS "$HEALTH_URL" >/dev/null 2>&1; then
