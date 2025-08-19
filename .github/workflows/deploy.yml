@@ -5,7 +5,6 @@ on:
     branches: ['main']
     paths:
       - 'backend/**' # backend 변경시에만 실행
-      - '.github/workflows/backend-deploy-release.yml'
   workflow_dispatch:
 
 permissions:
@@ -30,14 +29,10 @@ jobs:
           script: |
             set -e
             # 서버에서 backend 작업 디렉터리로 이동
-            cd ${{ secrets.PROJECT_PATH_BACKEND }}
+            cd ${{ secrets.PROJECT_PATH }}
 
             # (선택) 헬스체크 URL 지정
             export HEALTH_URL="${HEALTH_URL:-http://localhost:3001/api/health}"
-
-            # 모노레포라도 서버 쪽은 backend만 체크아웃/배포
-            # deploy.sh가 GIT_REF를 인식하도록 했다면 주입 가능:
-            # export GIT_REF="${GITHUB_SHA}"
 
             chmod +x scripts/deploy.sh || true
             ./scripts/deploy.sh
@@ -81,7 +76,7 @@ jobs:
       - name: Create and push tag
         run: |
           git config user.name  "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config user.email "jifrozen0110@github.com"
           git tag -a "${{ steps.tag.outputs.tag }}" -m "Backend deploy: $GITHUB_SHA"
           git push origin "${{ steps.tag.outputs.tag }}"
 
