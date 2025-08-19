@@ -3,19 +3,22 @@ import { Response } from 'express';
 import { prisma } from '../db/prisma';
 import { AuthRequest } from '../middlewares/jwtMiddleware';
 import ExcelJS from 'exceljs';
+import { z } from 'zod';
 
 /**
  * GET /api/admin/shops/:shopId/payroll/export
  *  ?start=YYYY-MM-DD&end=YYYY-MM-DD
  */
+const exportQuerySchema = z.object({
+  start: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  end:   z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
+});
+
 export const exportPayroll = async (req: AuthRequest, res: Response) => {
   const shopId = Number(req.params.shopId);
-  const { start, end } = req.query as { start: string; end: string };
-
-  if (!start || !end) {
-    res.status(400).json({ error: 'start, end 쿼리 파라미터가 필요합니다.' });
-    return;
-  }
+  const parsed = exportQuerySchema.safeParse(req.query);
+  if (!parsed.success) { res.status(400).json({ error: 'Invalid start/end' }); return; }
+  const { start, end } = parsed.data as { start: string; end: string };
   const from = new Date(`${start}T00:00:00`);
   const to   = new Date(`${end}T23:59:59`);
 

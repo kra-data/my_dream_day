@@ -1,6 +1,7 @@
 import { Response } from 'express';
 import { prisma } from '../db/prisma';
 import { AuthRequest } from '../middlewares/jwtMiddleware';
+import { z } from 'zod';
 
 /* ───────── 유틸: KST 기준 월 시작·끝 반환 ───────── */
 const getMonthRange = (year: number, month: number) => {
@@ -15,13 +16,20 @@ const getMonthRange = (year: number, month: number) => {
  *     GET /api/admin/shops/:shopId/payroll/dashboard
  *     ?year=2025&month=6   (없으면 이번 달)
  * ────────────────────────────────────────────────*/
+const ymQuerySchema = z.object({
+  year: z.coerce.number().int().min(1970).max(2100).optional(),
+  month: z.coerce.number().int().min(1).max(12).optional()
+});
+
 export const payrollDashboard = async (req: AuthRequest, res: Response) => {
   const shopId = Number(req.params.shopId);
 
   /* 오늘 날짜 */
   const today   = new Date();
-  const yy      = Number(req.query.year  ?? today.getFullYear());
-  const mm      = Number(req.query.month ?? today.getMonth() + 1);
+  const parsed  = ymQuerySchema.safeParse(req.query);
+  if (!parsed.success) { res.status(400).json({ error: 'Invalid year/month' }); return; }
+  const yy      = Number(parsed.data.year  ?? today.getFullYear());
+  const mm      = Number(parsed.data.month ?? today.getMonth() + 1);
 
   const { start, end }          = getMonthRange(yy, mm);
   const { start: lmStart, end: lmEnd } = getMonthRange(
@@ -77,8 +85,10 @@ export const payrollDashboard = async (req: AuthRequest, res: Response) => {
 export const payrollByEmployee = async (req: AuthRequest, res: Response) => {
   const shopId = Number(req.params.shopId);
   const today  = new Date();
-  const yy     = Number(req.query.year  ?? today.getFullYear());
-  const mm     = Number(req.query.month ?? today.getMonth() + 1);
+  const parsed = ymQuerySchema.safeParse(req.query);
+  if (!parsed.success) { res.status(400).json({ error: 'Invalid year/month' }); return; }
+  const yy     = Number(parsed.data.year  ?? today.getFullYear());
+  const mm     = Number(parsed.data.month ?? today.getMonth() + 1);
   const { start, end } = getMonthRange(yy, mm);
 
   /* 근무시간 집계 */
@@ -126,8 +136,10 @@ export const payrollEmployeeDetail = async (req: AuthRequest, res: Response) => 
   const shopId     = Number(req.params.shopId);
   const employeeId = Number(req.params.employeeId);
   const today      = new Date();
-  const yy         = Number(req.query.year  ?? today.getFullYear());
-  const mm         = Number(req.query.month ?? today.getMonth() + 1);
+  const parsed     = ymQuerySchema.safeParse(req.query);
+  if (!parsed.success) { res.status(400).json({ error: 'Invalid year/month' }); return; }
+  const yy         = Number(parsed.data.year  ?? today.getFullYear());
+  const mm         = Number(parsed.data.month ?? today.getMonth() + 1);
   const { start, end } = getMonthRange(yy, mm);
 
   /* 직원 */

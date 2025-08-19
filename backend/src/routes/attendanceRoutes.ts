@@ -11,7 +11,7 @@ const router = Router();
 
 /* 직원 권한 체크 미들웨어 */
 const requireEmployee: RequestHandler = (req: AuthRequest, res, next): void => {
-  if (!req.user || !['staff', 'part_time', 'employee'].includes(req.user.role)) {
+  if (!req.user || req.user.role !== 'employee') {
     res.status(403).json({ error: '직원 권한이 필요합니다.' });
     return;
   }
@@ -20,7 +20,7 @@ const requireEmployee: RequestHandler = (req: AuthRequest, res, next): void => {
 
 /* 관리자 권한 체크 미들웨어 */
 const requireAdmin: RequestHandler = (req: AuthRequest, res, next): void => {
-  if (!req.user || !['admin', 'owner', 'manager'].includes(req.user.role)) {
+  if (!req.user || req.user.role !== 'admin') {
     res.status(403).json({ error: '관리자 권한이 필요합니다.' });
     return;
   }

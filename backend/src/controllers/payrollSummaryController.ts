@@ -1,6 +1,7 @@
 import { Response } from 'express';
 import { prisma } from '../db/prisma';
 import { AuthRequest } from '../middlewares/jwtMiddleware';
+import { z } from 'zod';
 
 /* ── 월 범위 (KST) ── */
 const getMonthRange = (y: number, m: number) => {
@@ -15,14 +16,21 @@ const weekday = ['sun','mon','tue','wed','thu','fri','sat'] as const;
  * GET /api/admin/shops/:shopId/payroll/employees/:employeeId/summary
  *   ?year=2025&month=6
  */
+const ymQuerySchema = z.object({
+  year: z.coerce.number().int().min(1970).max(2100).optional(),
+  month: z.coerce.number().int().min(1).max(12).optional()
+});
+
 export const employeePayrollSummary = async (req: AuthRequest, res: Response) :Promise<void>=> {
   const shopId     = Number(req.params.shopId);
   const employeeId = Number(req.params.employeeId);
 
   /* ── 파라미터(년·월) ── */
   const today  = new Date();
-  const yy     = Number(req.query.year  ?? today.getFullYear());
-  const mm     = Number(req.query.month ?? today.getMonth() + 1);
+  const parsed = ymQuerySchema.safeParse(req.query);
+  if (!parsed.success) { res.status(400).json({ error: 'Invalid year/month' }); return; }
+  const yy     = Number(parsed.data.year  ?? today.getFullYear());
+  const mm     = Number(parsed.data.month ?? today.getMonth() + 1);
   const { start, end } = getMonthRange(yy, mm);
 
   /* ── 직원 정보 ── */

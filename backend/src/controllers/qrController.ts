@@ -1,14 +1,19 @@
 import { Request, Response } from 'express';
 import { prisma } from '../db/prisma';
 import QRCode   from 'qrcode';
+import { z } from 'zod';
 
 /**
  * GET /api/shops/:id/qr
  *    ?download=1  →  attachment 다운로드 (filename: shop_<id>.png)
  *    기본         →  dataURL 또는 PNG 스트림
  */
+const qrQuerySchema = z.object({ download: z.coerce.number().int().min(0).max(1).optional() });
+
 export const getShopQR = async (req: Request, res: Response): Promise<void> => {
   const shopId = Number(req.params.id);
+  const parsed = qrQuerySchema.safeParse(req.query);
+  if (!parsed.success) { res.status(400).json({ error: 'Invalid query' }); return; }
 
   /** 1. 가게 존재 확인 */
   const shop = await prisma.shop.findUnique({ where: { id: shopId } });

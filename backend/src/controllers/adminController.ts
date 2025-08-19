@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import { z } from 'zod';
 import { prisma } from '../db/prisma';
 import crypto from 'crypto';
 import { isValidSchedule } from '../utils/scheduleValidator';
@@ -26,21 +27,33 @@ export const getShops = async (req: Request, res: Response) => {
   res.json(shops);
 };
 
+const createShopSchema = z.object({
+  name: z.string().min(1),
+  hourlyWage: z.number().int().positive(),
+  payday: z.number().int().min(1).max(31)
+});
+
 export const createShop = async (req: Request, res: Response) => {
-  const { name, hourlyWage, payday } = req.body;
-  if (!name || !hourlyWage || !payday) {
-    res.status(400).json({ error: 'name, hourlyWage, payday required' });
-    return;
-  }
+  const parsed = createShopSchema.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: 'Invalid payload' }); return; }
+  const { name, hourlyWage, payday } = parsed.data;
   const shop = await prisma.shop.create({
     data: { name, hourlyWage, payday, qrSecret: crypto.randomUUID() }
   });
   res.status(201).json(shop);
 };
 
+const updateShopSchema = z.object({
+  name: z.string().min(1).optional(),
+  hourlyWage: z.number().int().positive().optional(),
+  payday: z.number().int().min(1).max(31).optional()
+});
+
 export const updateShop = async (req: Request, res: Response) => {
   const shopId = Number(req.params.id);
-  const { name, hourlyWage, payday } = req.body;
+  const parsed = updateShopSchema.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: 'Invalid payload' }); return; }
+  const { name, hourlyWage, payday } = parsed.data;
   const shop = await prisma.shop.findUnique({ where: { id: shopId } });
   if (!shop) {
     res.status(404).json({ error: 'Shop not found' });
@@ -93,8 +106,23 @@ export const getEmployees = async (req: Request, res: Response) => {
  *  (1) 필수 값 검증
  *  (2) pay / payUnit   - position에 맞게 자동 추론 or 검증
  * ------------------------------------------------------------------*/
+const createEmployeeSchema = z.object({
+  name: z.string().min(1),
+  nationalId: z.string().min(1),
+  accountNumber: z.string().min(1),
+  bank: z.string().min(1),
+  phone: z.string().min(1),
+  schedule: z.any(),
+  position: z.enum(['OWNER','MANAGER','STAFF','PART_TIME']).optional(),
+  section: z.enum(['HALL','KITCHEN']).optional(),
+  pay: z.number().positive().optional(),
+  payUnit: z.enum(['MONTHLY','HOURLY']).optional()
+});
+
 export const createEmployee = async (req: Request, res: Response) => {
   const shopId = Number(req.params.id);
+  const parsed = createEmployeeSchema.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: 'Invalid payload' }); return; }
   const {
     name,
     nationalId,
@@ -106,7 +134,7 @@ export const createEmployee = async (req: Request, res: Response) => {
     section  = 'HALL',
     pay,
     payUnit
-  } = req.body as {
+  } = parsed.data as unknown as {
     name: string; nationalId: string; accountNumber: string; bank: string;
     phone: string; schedule: Json; position?: Position; section?: Section;
     pay?: number; payUnit?: PayUnit;
@@ -160,8 +188,20 @@ export const createEmployee = async (req: Request, res: Response) => {
 /** ------------------------------------------------------------------
  *  UPDATE EMPLOYEE (부분 업데이트 허용)
  * ------------------------------------------------------------------*/
+const updateEmployeeSchema = z.object({
+  name: z.string().min(1).optional(),
+  accountNumber: z.string().min(1).optional(),
+  bank: z.string().min(1).optional(),
+  phone: z.string().min(1).optional(),
+  schedule: z.any().optional(),
+  position: z.enum(['OWNER','MANAGER','STAFF','PART_TIME']).optional(),
+  section: z.enum(['HALL','KITCHEN']).optional(),
+  pay: z.number().positive().optional(),
+  payUnit: z.enum(['MONTHLY','HOURLY']).optional()
+});
+
 export const updateEmployee = async (req: Request, res: Response) => {
-  const empId = Number(req.params.id);
+  const empId = Number(req.params.employeeId);
   const {
     name,
     accountNumber,
@@ -172,11 +212,11 @@ export const updateEmployee = async (req: Request, res: Response) => {
     section,
     pay,
     payUnit
-  } = req.body as Partial<{
+  } = (updateEmployeeSchema.parse(req.body) as Partial<{
     name: string; accountNumber: string; bank: string; phone: string;
     schedule: Json; position: Position; section: Section;
     pay: number; payUnit: PayUnit;
-  }>;
+  }>);
 
   const emp = await prisma.employee.findUnique({ where: { id: empId } });
   if (!emp) {
@@ -219,7 +259,7 @@ export const updateEmployee = async (req: Request, res: Response) => {
 };
 
 export const deleteEmployee = async (req: Request, res: Response) => {
-  const empId = Number(req.params.id);
+  const empId = Number(req.params.employeeId);
   const emp = await prisma.employee.findUnique({ where: { id: empId } });
   if (!emp) {
     res.status(404).json({ error: 'Employee not found' });
