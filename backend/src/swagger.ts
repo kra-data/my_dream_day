@@ -1,6 +1,6 @@
 import { RequestHandler } from 'express';
 import swaggerUi from 'swagger-ui-express';
-const SWAGGER_BASE = process.env.SWAGGER_BASE_URL || '/api';
+const SWAGGER_BASE = process.env.SWAGGER_BASE_URL || '/';
 // Minimal OpenAPI spec for current endpoints
 export const swaggerDocument: any = {
   openapi: '3.0.0',
