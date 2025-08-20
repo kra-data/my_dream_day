@@ -1,180 +1,49 @@
-# Employee Project Backend API
+# Employee Project Backend (한국어 README)
 
-A comprehensive employee management system with attendance tracking, payroll management, and admin controls.
+직원/알바 출퇴근 관리와 급여 정산을 위한 백엔드 서버입니다. Express + Prisma + PostgreSQL 기반이며, Swagger 문서와 Docker 배포, GitHub Actions 자동 배포를 지원합니다.
 
-## Features
+## 주요 기능
+- 인증/인가: JWT 기반 로그인, 리프레시 토큰, 권한(관리자/직원)
+- 출퇴근: QR 기반 출근/퇴근 기록, 현재 상태 조회, 커서 기반 페이징 조회
+- 관리자: 매장/직원 CRUD, QR 이미지 생성
+- 급여: 월별 집계/직원별 상세/엑셀 다운로드
+- 대시보드: 오늘 현황, 실시간 근무자, 최근 활동
+- 문서화: Swagger UI(`/api/docs`)
 
-- **Authentication**: JWT-based login with refresh tokens
-- **Employee Management**: CRUD operations for shops and employees
-- **Attendance Tracking**: QR-based clock in/out with validation
-- **Payroll System**: Excel export, monthly summaries, and calculations
-- **Dashboard**: Real-time employee status and activity monitoring
-- **QR Generation**: Shop-specific QR codes for attendance
-- **Role-based Access**: Admin and employee permissions
-- **API Documentation**: Swagger UI at `/api/docs`
+## 기술 스택
+- 런타임: Node.js 20 + TypeScript
+- 서버: Express 5
+- ORM: Prisma + PostgreSQL
+- 보안: Helmet, Rate limit, CORS, JWT
+- 검증: Zod
+- 테스트: Jest + Supertest
+- 배포: Docker Compose + (옵션) Caddy 리버스 프록시/TLS
 
-## Tech Stack
-
-- **Runtime**: Node.js 20 + TypeScript
-- **Framework**: Express.js 5
-- **Database**: PostgreSQL + Prisma ORM
-- **Security**: Helmet, CORS, Rate Limiting
-- **Validation**: Zod schema validation
-- **Testing**: Jest + Supertest
-- **Deployment**: Docker + Caddy (TLS)
-
-## API Endpoints
-
-### Authentication
-- `POST /api/auth/login` - Employee login
-- `POST /api/auth/refresh` - Refresh access token
-- `POST /api/auth/logout` - Logout and invalidate token
-- `GET /api/auth/validate` - Validate current token
-
-### Health & Documentation
-- `GET /api/health` - Server health check
-- `GET /api/docs` - Swagger API documentation
-
-### Attendance (Employee)
-- `POST /api/attendance` - Record clock in/out
-- `GET /api/attendance/me` - Personal attendance history
-- `GET /api/attendance/me/status` - Current work status
-
-### Admin Routes
-- `GET /api/admin/shops` - List all shops
-- `POST /api/admin/shops` - Create new shop
-- `PUT /api/admin/shops/:id` - Update shop
-- `DELETE /api/admin/shops/:id` - Delete shop
-- `GET /api/admin/shops/:id/employees` - List shop employees
-- `POST /api/admin/shops/:id/employees` - Add employee
-- `PUT /api/admin/shops/:id/employees/:employeeId` - Update employee
-- `DELETE /api/admin/shops/:id/employees/:employeeId` - Remove employee
-
-### Payroll & Dashboard
-- `GET /api/admin/shops/:shopId/payroll/export` - Export payroll Excel
-- `GET /api/admin/shops/:shopId/payroll/dashboard` - Payroll overview
-- `GET /api/admin/shops/:shopId/payroll/employees` - Employee payroll list
-- `GET /api/admin/shops/:shopId/payroll/employees/:employeeId` - Employee detail
-- `GET /api/admin/shops/:shopId/dashboard/today` - Today's summary
-- `GET /api/admin/shops/:shopId/dashboard/active` - Active employees
-- `GET /api/admin/shops/:shopId/dashboard/recent` - Recent activities
-
-### QR & Utilities
-- `GET /api/admin/shops/:id/qr` - Generate shop QR code
-
-## Development
-
-### Prerequisites
-- Node.js 20+
-- PostgreSQL
-- Docker (optional)
-
-### Setup
-```bash
-# Install dependencies
-npm install
-
-# Environment setup
-cp .env.example .env
-# Edit .env with your database and JWT settings
-
-# Database setup
-npx prisma generate
-npx prisma migrate dev
-
-# Development
-npm run dev
-
-# Build
-npm run build
-
-# Production start
-npm start
+## 프로젝트 구조 (백엔드)
 ```
-
-### Testing
-```bash
-# Run all tests
-npm test
-
-# Run with coverage
-npm run test:coverage
-
-# Run specific test file
-npx jest __tests__/app.test.ts
+backend/
+├─ src/
+│  ├─ app.ts                 # 앱 초기화, 미들웨어, 라우팅, 에러 핸들링
+│  ├─ routes/                # 라우트 모듈 (/api 하위)
+│  ├─ controllers/           # 컨트롤러 (비즈니스 로직)
+│  ├─ middlewares/           # 인증/에러 등 미들웨어
+│  ├─ db/prisma.ts           # Prisma 클라이언트
+│  ├─ swagger.ts             # OpenAPI 스펙 + Swagger UI 설정
+│  └─ utils/                 # 유틸리티(예: JWT)
+├─ prisma/
+│  ├─ schema.prisma          # DB 스키마
+│  └─ migrations/            # 마이그레이션
+├─ __tests__/                # 테스트 스위트(Jest + Supertest)
+├─ Dockerfile
+├─ docker-compose.yml        # backend (+ caddy) 스택
+├─ Caddyfile                 # 도메인 리버스 프록시 (선택)
+├─ scripts/
+│  ├─ setup-server.sh        # 서버 초기 세팅 스크립트
+│  └─ deploy.sh              # 서버 배포 스크립트
+├─ docs/
+│  └─ DEPLOYMENT.md          # 자동 배포 상세 가이드
+├─ QUICK_DEPLOY.md           # 1분 배포 요약
+├─ jest.config.js
+├─ package.json
+└─ tsconfig.json
 ```
-
-## Test Coverage
-
-The test suite covers:
-
-- **Authentication & Authorization**: Token validation, role checks
-- **Input Validation**: Zod schema validation for all endpoints
-- **Error Handling**: Centralized error handling and 404 responses
-- **Security**: Rate limiting, CORS, security headers
-- **Middleware**: Request size limits, validation order
-- **API Endpoints**: All CRUD operations and business logic
-
-### Test Files
-- `__tests__/app.test.ts` - Core app functionality and auth
-- `__tests__/attendance.test.ts` - Attendance system tests
-- `__tests__/admin.test.ts` - Admin CRUD operations
-- `__tests__/payroll.test.ts` - Payroll and dashboard tests
-- `__tests__/qr.test.ts` - QR generation tests
-- `__tests__/integration.test.ts` - Middleware and integration tests
-
-## Deployment
-
-### Docker Deployment
-```bash
-# Build and run with Docker Compose
-docker compose up -d --build
-
-# View logs
-docker compose logs -f backend
-```
-
-### Environment Variables
-```env
-NODE_ENV=production
-PORT=3001
-DATABASE_URL=postgresql://user:pass@host:5432/db
-JWT_SECRET=your-secure-secret
-SWAGGER_SERVER_URL=https://yourdomain.com
-```
-
-### Production Considerations
-- Set strong `JWT_SECRET`
-- Configure database connection pooling
-- Set up monitoring and logging
-- Configure rate limiting for production traffic
-- Set up SSL/TLS termination
-
-## Security Features
-
-- **Helmet**: Security headers and protections
-- **Rate Limiting**: 120 requests per minute per IP
-- **CORS**: Configurable cross-origin policies
-- **Input Validation**: Zod schema validation
-- **JWT Security**: Secure token handling with expiration
-- **Request Limits**: 1MB JSON payload limit
-
-## Database Schema
-
-The system uses PostgreSQL with Prisma ORM:
-
-- **Shop**: Store information and settings
-- **Employee**: Staff details, schedules, and pay
-- **AttendanceRecord**: Clock in/out tracking with calculations
-
-## Contributing
-
-1. Follow TypeScript best practices
-2. Add tests for new features
-3. Update Swagger documentation
-4. Validate all inputs with Zod schemas
-5. Maintain consistent error handling
-
-## License
-
-ISC License

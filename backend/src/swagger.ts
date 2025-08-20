@@ -1,6 +1,6 @@
 import { RequestHandler } from 'express';
 import swaggerUi from 'swagger-ui-express';
-
+const SWAGGER_BASE = process.env.SWAGGER_BASE_URL || '/api';
 // Minimal OpenAPI spec for current endpoints
 export const swaggerDocument: any = {
   openapi: '3.0.0',
@@ -10,7 +10,7 @@ export const swaggerDocument: any = {
     description: 'API documentation for the Employee Project backend'
   },
   servers: [
-    { url: process.env.SWAGGER_SERVER_URL || 'http://localhost:3001', description: 'Server' }
+    { url: SWAGGER_BASE, description: 'Same-origin via reverse proxy' }
   ],
   components: {
     securitySchemes: {
@@ -223,13 +223,18 @@ export const swaggerDocument: any = {
       get: { tags: ['Payroll'], summary: '직원 월별 요약', parameters: [ { name:'shopId',in:'path',required:true,schema:{type:'integer'} }, { name:'employeeId',in:'path',required:true,schema:{type:'integer'} }, { name:'year',in:'query',schema:{type:'integer'} }, { name:'month',in:'query',schema:{type:'integer'} } ], responses: { '200': { description: 'OK' } } }
     },
     '/api/admin/shops/{id}/qr': {
-      get: { tags: ['QR'], summary: '매장 QR PNG 생성', parameters: [ { name:'id',in:'path',required:true,schema:{type:'integer'} }, { name:'download',in:'query',schema:{type:'integer'} } ], responses: { '200': { description: 'PNG' }, '404': { description: 'Not Found' } } }
+      get: { tags: ['QR'], summary: '매장 QR PNG 생성', parameters: [ { name:'id',in:'path',required:true,schema:{type:'integer'} }, { name:'download',in:'query',schema:{type:'integer', minimum:0, maximum:1} }, { name:'format', in:'query', schema:{ type:'string', enum:['raw','base64','json'] }, description:'QR 페이로드 포맷 (기본 raw)' } ], responses: { '200': { description: 'PNG' }, '404': { description: 'Not Found' } } }
     }
   }
 };
 
 export const swaggerServe: RequestHandler[] = swaggerUi.serve;
-export const swaggerSetup = swaggerUi.setup(swaggerDocument);
+
+export const swaggerSetup = swaggerUi.setup(swaggerDocument, {
+  swaggerOptions: {
+    persistAuthorization: true, // 🔐 브라우저 새로고침해도 Authorization 유지
+  },
+});
 
 
 

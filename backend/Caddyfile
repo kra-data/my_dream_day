@@ -1,7 +1,19 @@
-mydreamday.shop {
-  encode gzip
-  @api path /api/*
-  reverse_proxy @api backend:3001
+# HTTP: 전부 HTTPS로 리다이렉트
+http://mydreamday.shop {
+  redir https://{host}{uri}
 }
 
+# HTTPS: 실제 서비스
+https://mydreamday.shop {
+  encode gzip
 
+  @api path /api/*
+  reverse_proxy @api backend:3001
+
+  # (선택) 보안 헤더
+  header {
+    Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+    X-Content-Type-Options "nosniff"
+    Referrer-Policy "no-referrer-when-downgrade"
+  }
+}

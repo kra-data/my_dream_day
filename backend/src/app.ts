@@ -9,7 +9,15 @@ import { errorHandler, notFound } from './middlewares/errorHandler';
 import { prisma } from './db/prisma';
 const app = express();
 app.use(helmet());
-app.use(cors());
+app.use(cors({
+  origin: ['https://mydreamday.shop'],
+  methods: ['GET','POST','PUT','PATCH','DELETE','OPTIONS'],
+  allowedHeaders: ['Content-Type','Authorization'],
+  credentials: true,
+}));
+// 프록시 뒤에서 HTTPS 인식
+app.set('trust proxy', 1);
+
 app.use(express.json({ limit: '1mb' }));
 app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 
@@ -17,7 +25,7 @@ app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 app.use(rateLimit({ windowMs: 60_000, max: 120 }));
 app.use('/api', routes);
 // Swagger UI at /api/docs
-app.use('/api/docs', ...swaggerServe, swaggerSetup);
+app.use('/api/docs', swaggerServe, swaggerSetup);
 
 // 404 and error handling
 app.use(notFound);

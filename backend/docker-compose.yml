@@ -1,5 +1,21 @@
 version: "3.9"
 services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: employee_postgres
+    environment:
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASS}
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+    restart: unless-stopped
   backend:
     build: .
     container_name: employee_backend
@@ -8,6 +24,10 @@ services:
     environment:
       PORT: 3001
     restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+
 
   caddy:
     image: caddy:2-alpine
@@ -25,5 +45,6 @@ services:
 
 
 volumes:
+  pg_data:
   caddy_data:
   caddy_config:
