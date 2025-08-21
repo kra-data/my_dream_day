@@ -5,6 +5,7 @@ import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import morgan from 'morgan';
 import { swaggerServe, swaggerSetup } from './swagger';
+import { registerSchedulers } from './scheduler';
 import { errorHandler, notFound } from './middlewares/errorHandler';
 import { prisma } from './db/prisma';
 const app = express();
@@ -29,6 +30,12 @@ if (process.env.NODE_ENV !== 'test') {
   server = app.listen(PORT, () => {
     console.log(`🚀 Server is running on port ${PORT}`);
   });
+  // register cron jobs in non-test environments
+  try {
+    registerSchedulers();
+  } catch (e) {
+    console.error('Failed to register schedulers', e);
+  }
 }
 
 // Graceful shutdown for Prisma and HTTP server

@@ -1,14 +1,11 @@
-name: Backend Deploy → Tag → Release
+name: Backend Deploy (main)
 
 on:
   push:
     branches: ['main']
     paths:
-      - 'backend/**' # backend 변경시에만 실행
+      - 'backend/**'
   workflow_dispatch:
-
-permissions:
-  contents: write # 태그/릴리스 생성에 필요
 
 concurrency:
   group: deploy-backend-prod
@@ -28,63 +25,7 @@ jobs:
           script_stop: true
           script: |
             set -e
-            # 서버에서 backend 작업 디렉터리로 이동
             cd ${{ secrets.PROJECT_PATH }}
-
-            # (선택) 헬스체크 URL 지정
-            export HEALTH_URL="${HEALTH_URL:-http://localhost/api/health}"
-
+            export HEALTH_URL="${HEALTH_URL:-https://mydreamday.shop/api/health}"
             chmod +x scripts/deploy.sh || true
             ./scripts/deploy.sh
-
-  tag_and_release:
-    needs: deploy
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout (full history for changelog)
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Compute previous backend tag & generate changelog
-        id: changelog
-        run: |
-          set -e
-          # 'backend-' 프리픽스 태그 중 최신(작성일 기준)
-          LAST_TAG="$(git for-each-ref --sort=-creatordate --format='%(refname:short)' refs/tags | grep '^backend-' | head -n1 || true)"
-          if [ -z "$LAST_TAG" ]; then
-            RANGE="$(git rev-list --max-parents=0 HEAD)..HEAD"
-            NOTE="(first backend release)"
-          else
-            RANGE="$LAST_TAG..HEAD"
-            NOTE="since $LAST_TAG"
-          fi
-
-          {
-            echo "Backend deployment commit: ${GITHUB_SHA}"
-            echo
-            echo "Changelog ${NOTE} (backend/ only):"
-            git log --pretty=format:'- %s (%h)' $RANGE -- backend
-          } > CHANGELOG.md
-
-      - name: Compute tag (KST)
-        id: tag
-        run: |
-          TZ=Asia/Seoul NOW=$(date +'%Y%m%d-%H%M')
-          echo "tag=backend-${NOW}" >> $GITHUB_OUTPUT
-
-      - name: Create and push tag
-        run: |
-          git config user.name  "github-actions[bot]"
-          git config user.email "jifrozen0110@github.com"
-          git tag -a "${{ steps.tag.outputs.tag }}" -m "Backend deploy: $GITHUB_SHA"
-          git push origin "${{ steps.tag.outputs.tag }}"
-
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ steps.tag.outputs.tag }}
-          name: 'Backend Release ${{ steps.tag.outputs.tag }}'
-          body_path: CHANGELOG.md
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

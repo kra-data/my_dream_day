@@ -50,7 +50,7 @@ const updateShopSchema = z.object({
 });
 
 export const updateShop = async (req: Request, res: Response) => {
-  const shopId = Number(req.params.id);
+  const shopId = Number(req.params.shopId);
   const parsed = updateShopSchema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: 'Invalid payload' }); return; }
   const { name, hourlyWage, payday } = parsed.data;
@@ -67,7 +67,7 @@ export const updateShop = async (req: Request, res: Response) => {
 };
 
 export const deleteShop = async (req: Request, res: Response) => {
-  const shopId = Number(req.params.id);
+  const shopId = Number(req.params.shopId);
   const shop = await prisma.shop.findUnique({ where: { id: shopId } });
   if (!shop) {
     res.status(404).json({ error: 'Shop not found' });
@@ -81,7 +81,7 @@ export const deleteShop = async (req: Request, res: Response) => {
  *  EMPLOYEE CRUD
  *───────────────────────────*/
 export const getEmployees = async (req: Request, res: Response) => {
-  const shopId = Number(req.params.id);
+  const shopId = Number(req.params.shopId);
   const employees = await prisma.employee.findMany({
     where: { shopId },
     select: {
@@ -120,7 +120,7 @@ const createEmployeeSchema = z.object({
 });
 
 export const createEmployee = async (req: Request, res: Response) => {
-  const shopId = Number(req.params.id);
+  const shopId = Number(req.params.shopId);
   const parsed = createEmployeeSchema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: 'Invalid payload' }); return; }
   const {

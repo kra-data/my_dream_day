@@ -4,7 +4,7 @@ import QRCode   from 'qrcode';
 import { z } from 'zod';
 
 /**
- * GET /api/admin/shops/:id/qr
+ * GET /api/admin/shops/:shopId/qr
  *    ?download=1  →  attachment 다운로드 (filename: shop_<id>.png)
  *    ?format=raw|base64|json  → QR 페이로드 포맷 선택 (기본 raw)
  *    기본         → PNG 스트림
@@ -17,7 +17,7 @@ const qrQuerySchema = z.object({
 });
 
 export const getShopQR = async (req: Request, res: Response): Promise<void> => {
-  const shopId = Number(req.params.id);
+  const shopId = Number(req.params.shopId);
   const parsed = qrQuerySchema.safeParse(req.query);
   if (!parsed.success) { res.status(400).json({ error: 'Invalid query' }); return; }
 

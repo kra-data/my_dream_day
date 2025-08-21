@@ -5,6 +5,8 @@ import {
   getAttendanceRecords,
   getMyAttendance,
   getMyCurrentStatus,
+  adminCreateOrCloseAttendance,
+  adminUpdateAttendance,
 } from '../controllers/attendanceController';
 
 const router = Router();
@@ -42,6 +44,20 @@ router.get(
   authenticateJWT,
   requireAdmin,
   getAttendanceRecords
+);
+
+router.post(
+  '/admin/shops/:shopId/attendance/employees/:employeeId',
+  authenticateJWT,
+  requireAdmin,
+  adminCreateOrCloseAttendance
+);
+
+router.put(
+  '/admin/shops/:shopId/attendance/records/:id',
+  authenticateJWT,
+  requireAdmin,
+  adminUpdateAttendance
 );
 
 export default router;

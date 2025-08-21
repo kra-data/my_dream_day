@@ -1,6 +1,6 @@
 import { RequestHandler } from 'express';
 import swaggerUi from 'swagger-ui-express';
-const SWAGGER_BASE = process.env.SWAGGER_BASE_URL || '/api';
+const SWAGGER_BASE = process.env.SWAGGER_BASE_URL || '/';
 // Minimal OpenAPI spec for current endpoints
 export const swaggerDocument: any = {
   openapi: '3.0.0',
@@ -191,21 +191,81 @@ export const swaggerDocument: any = {
         responses: { '200': { description: 'OK' } }
       }
     },
+    '/api/attendance/admin/shops/{shopId}/attendance/employees/{employeeId}': {
+      post: {
+        tags: ['Attendance (Admin)'],
+        summary: '관리자 출퇴근 생성/마감',
+        parameters: [
+          { name: 'shopId', in: 'path', required: true, schema: { type: 'integer' } },
+          { name: 'employeeId', in: 'path', required: true, schema: { type: 'integer' } }
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  clockInAt: { type: 'string', format: 'date-time' },
+                  clockOutAt: { type: 'string', format: 'date-time' }
+                }
+              }
+            }
+          }
+        },
+        responses: {
+          '201': { description: 'Created or closed' },
+          '400': { description: 'Invalid payload' },
+          '403': { description: 'Forbidden' },
+          '404': { description: 'Not Found' }
+        }
+      }
+    },
+    '/api/attendance/admin/shops/{shopId}/attendance/records/{id}': {
+      put: {
+        tags: ['Attendance (Admin)'],
+        summary: '관리자 출퇴근 기록 수정',
+        parameters: [
+          { name: 'shopId', in: 'path', required: true, schema: { type: 'integer' } },
+          { name: 'id', in: 'path', required: true, schema: { type: 'integer' } }
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  clockInAt: { type: 'string', format: 'date-time' },
+                  clockOutAt: { type: 'string', format: 'date-time' }
+                }
+              }
+            }
+          }
+        },
+        responses: {
+          '200': { description: 'Updated' },
+          '400': { description: 'Invalid payload' },
+          '403': { description: 'Forbidden' },
+          '404': { description: 'Not Found' }
+        }
+      }
+    },
     '/api/admin/shops': {
       get: { tags: ['Admin'], summary: '매장 목록', responses: { '200': { description: 'OK' } } },
       post: { tags: ['Admin'], summary: '매장 생성', responses: { '201': { description: 'Created' }, '400': { description: 'Invalid payload' } } }
     },
-    '/api/admin/shops/{id}': {
-      put:  { tags: ['Admin'], summary: '매장 수정', parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }], responses: { '200': { description: 'OK' }, '404': { description: 'Not Found' } } },
-      delete: { tags: ['Admin'], summary: '매장 삭제', parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }], responses: { '204': { description: 'No Content' } } }
+    '/api/admin/shops/{shopId}': {
+      put:  { tags: ['Admin'], summary: '매장 수정', parameters: [{ name: 'shopId', in: 'path', required: true, schema: { type: 'integer' } }], responses: { '200': { description: 'OK' }, '404': { description: 'Not Found' } } },
+      delete: { tags: ['Admin'], summary: '매장 삭제', parameters: [{ name: 'shopId', in: 'path', required: true, schema: { type: 'integer' } }], responses: { '204': { description: 'No Content' } } }
     },
-    '/api/admin/shops/{id}/employees': {
-      get: { tags: ['Admin'], summary: '직원 목록', parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }], responses: { '200': { description: 'OK' } } },
-      post: { tags: ['Admin'], summary: '직원 생성', parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }], responses: { '201': { description: 'Created' }, '400': { description: 'Invalid payload' } } }
+    '/api/admin/shops/{shopId}/employees': {
+      get: { tags: ['Admin'], summary: '직원 목록', parameters: [{ name: 'shopId', in: 'path', required: true, schema: { type: 'integer' } }], responses: { '200': { description: 'OK' } } },
+      post: { tags: ['Admin'], summary: '직원 생성', parameters: [{ name: 'shopId', in: 'path', required: true, schema: { type: 'integer' } }], responses: { '201': { description: 'Created' }, '400': { description: 'Invalid payload' } } }
     },
-    '/api/admin/shops/{id}/employees/{employeeId}': {
-      put:  { tags: ['Admin'], summary: '직원 수정', parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }, { name: 'employeeId', in: 'path', required: true, schema: { type: 'integer' } }], responses: { '200': { description: 'OK' }, '404': { description: 'Not Found' } } },
-      delete:{ tags: ['Admin'], summary: '직원 삭제', parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }, { name: 'employeeId', in: 'path', required: true, schema: { type: 'integer' } }], responses: { '204': { description: 'No Content' } } }
+    '/api/admin/shops/{shopId}/employees/{employeeId}': {
+      put:  { tags: ['Admin'], summary: '직원 수정', parameters: [{ name: 'shopId', in: 'path', required: true, schema: { type: 'integer' } }, { name: 'employeeId', in: 'path', required: true, schema: { type: 'integer' } }], responses: { '200': { description: 'OK' }, '404': { description: 'Not Found' } } },
+      delete:{ tags: ['Admin'], summary: '직원 삭제', parameters: [{ name: 'shopId', in: 'path', required: true, schema: { type: 'integer' } }, { name: 'employeeId', in: 'path', required: true, schema: { type: 'integer' } }], responses: { '204': { description: 'No Content' } } }
     },
     '/api/admin/shops/{shopId}/payroll/export': {
       get: { tags: ['Payroll'], summary: '급여 엑셀 다운로드', parameters: [ { name:'shopId',in:'path',required:true,schema:{type:'integer'} }, { name:'start',in:'query',required:true,schema:{type:'string',format:'date'} }, { name:'end',in:'query',required:true,schema:{type:'string',format:'date'} } ], responses: { '200': { description: 'Excel stream' } } }
@@ -222,8 +282,8 @@ export const swaggerDocument: any = {
     '/api/admin/shops/{shopId}/payroll/employees/{employeeId}/summary': {
       get: { tags: ['Payroll'], summary: '직원 월별 요약', parameters: [ { name:'shopId',in:'path',required:true,schema:{type:'integer'} }, { name:'employeeId',in:'path',required:true,schema:{type:'integer'} }, { name:'year',in:'query',schema:{type:'integer'} }, { name:'month',in:'query',schema:{type:'integer'} } ], responses: { '200': { description: 'OK' } } }
     },
-    '/api/admin/shops/{id}/qr': {
-      get: { tags: ['QR'], summary: '매장 QR PNG 생성', parameters: [ { name:'id',in:'path',required:true,schema:{type:'integer'} }, { name:'download',in:'query',schema:{type:'integer', minimum:0, maximum:1} }, { name:'format', in:'query', schema:{ type:'string', enum:['raw','base64','json'] }, description:'QR 페이로드 포맷 (기본 raw)' } ], responses: { '200': { description: 'PNG' }, '404': { description: 'Not Found' } } }
+    '/api/admin/shops/{shopId}/qr': {
+      get: { tags: ['QR'], summary: '매장 QR PNG 생성', parameters: [ { name:'shopId',in:'path',required:true,schema:{type:'integer'} }, { name:'download',in:'query',schema:{type:'integer', minimum:0, maximum:1} }, { name:'format', in:'query', schema:{ type:'string', enum:['raw','base64','json'] }, description:'QR 페이로드 포맷 (기본 raw)' } ], responses: { '200': { description: 'PNG' }, '404': { description: 'Not Found' } } }
     }
   }
 };

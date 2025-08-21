@@ -15,7 +15,7 @@ import {
 } from '../controllers/dashboardController';
 import { employeePayrollSummary } from '../controllers/payrollSummaryController';
 import { getShopQR } from '../controllers/qrController';
-import { getAttendanceRecords } from '../controllers/attendanceController';
+import { getAttendanceRecords, adminCreateOrCloseAttendance, adminUpdateAttendance } from '../controllers/attendanceController';
 
 const router = Router();
 
@@ -35,18 +35,18 @@ const requireAdmin = (
 /* ───────── 공통 미들웨어 ───────── */
 router.use(authenticateJWT);
 router.use(requireAdmin);
-router.get('/shops/:id/qr', getShopQR);
+router.get('/shops/:shopId/qr', getShopQR);
 /* ───────── 매장 CRUD ───────── */
-router.get('/shops',            adminController.getShops);
-router.post('/shops',           adminController.createShop);
-router.put('/shops/:id',        adminController.updateShop);
-router.delete('/shops/:id',     adminController.deleteShop);
+router.get('/shops',                 adminController.getShops);
+router.post('/shops',                adminController.createShop);
+router.put('/shops/:shopId',        adminController.updateShop);
+router.delete('/shops/:shopId',     adminController.deleteShop);
 
 /* ───────── 직원 CRUD ───────── */
-router.get('/shops/:id/employees',  adminController.getEmployees);
-router.post('/shops/:id/employees', adminController.createEmployee);
-router.put('/shops/:id/employees/:employeeId',        adminController.updateEmployee);
-router.delete('/shops/:id/employees/:employeeId',     adminController.deleteEmployee);
+router.get('/shops/:shopId/employees',  adminController.getEmployees);
+router.post('/shops/:shopId/employees', adminController.createEmployee);
+router.put('/shops/:shopId/employees/:employeeId',        adminController.updateEmployee);
+router.delete('/shops/:shopId/employees/:employeeId',     adminController.deleteEmployee);
 
 /* ───────── 급여 엑셀 ───────── */
 router.get('/shops/:shopId/payroll/export', exportPayroll);
@@ -56,6 +56,8 @@ router.get(
 );
 /* ───────── 출퇴근 기록 (관리자 alias) ───────── */
 router.get('/shops/:shopId/attendance', getAttendanceRecords);
+router.post('/shops/:shopId/attendance/employees/:employeeId', adminCreateOrCloseAttendance);
+router.put('/shops/:shopId/attendance/records/:id', adminUpdateAttendance);
 /* ───────── 🆕 대시보드 ───────── */
 router.get('/shops/:shopId/dashboard/today',   todaySummary);      // 오늘 현황
 router.get('/shops/:shopId/dashboard/active',  activeEmployees);   // 실시간 근무자

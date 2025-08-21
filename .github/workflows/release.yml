@@ -1,0 +1,67 @@
+name: Backend Tag & Release (releases)
+
+on:
+  push:
+    branches: ['releases'] # 🔔 releases 브랜치에 올릴 때만 동작
+    paths:
+      - 'backend/**'
+  workflow_dispatch:
+
+permissions:
+  contents: write # 태그/릴리스 생성에 필요
+
+concurrency:
+  group: release-backend
+  cancel-in-progress: true
+
+jobs:
+  tag_and_release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (full history)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Compute previous backend tag & generate changelog
+        id: changelog
+        run: |
+          set -e
+          LAST_TAG="$(git for-each-ref --sort=-creatordate --format='%(refname:short)' refs/tags | grep '^backend-' | head -n1 || true)"
+          if [ -z "$LAST_TAG" ]; then
+            RANGE="$(git rev-list --max-parents=0 HEAD)..HEAD"
+            NOTE="(first backend release)"
+          else
+            RANGE="$LAST_TAG..HEAD"
+            NOTE="since $LAST_TAG"
+          fi
+
+          {
+            echo "Backend release commit: ${GITHUB_SHA}"
+            echo
+            echo "Changelog ${NOTE} (backend/ only):"
+            git log --pretty=format:'- %s (%h)' $RANGE -- backend
+          } > CHANGELOG.md
+
+      - name: Compute tag (KST)
+        id: tag
+        run: |
+          TZ=Asia/Seoul NOW=$(date +'%Y%m%d-%H%M%S')
+          SHORT=${GITHUB_SHA::7}
+          echo "tag=backend-${NOW}-${SHORT}" >> $GITHUB_OUTPUT
+
+      - name: Create and push tag
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "${{ steps.tag.outputs.tag }}" -m "Backend release: $GITHUB_SHA"
+          git push origin "${{ steps.tag.outputs.tag }}"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.tag }}
+          name: 'Backend Release ${{ steps.tag.outputs.tag }}'
+          body_path: CHANGELOG.md
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
