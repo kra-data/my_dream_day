@@ -32,7 +32,7 @@ app.use(cors({
 }));
 
 // ✅ 프리플라이트(OPTIONS) 빠른 응답
-app.options('*', cors());                     // CORS 모듈이 Allow 헤더 세팅
+
 app.use((req, res, next) => {
   if (req.method === 'OPTIONS') {
     res.sendStatus(204);
@@ -40,6 +40,9 @@ app.use((req, res, next) => {
   }
   next();
 });
+
+app.options(['/api', '/api/*'], cors());
+
 
 app.use(express.json({ limit: '1mb' }));
 app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
