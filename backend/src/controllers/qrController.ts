@@ -1,57 +1,82 @@
 import { Request, Response } from 'express';
-import { prisma } from '../db/prisma';
-import QRCode   from 'qrcode';
-import { z } from 'zod';
+import QRCode from 'qrcode';
+import { signQrToken, verifyQrToken } from '../utils/qrToken';
+import { AuthRequest, UserRole } from '../middlewares/jwtMiddleware';
 
-/**
- * GET /api/admin/shops/:shopId/qr
- *    ?download=1  →  attachment 다운로드 (filename: shop_<id>.png)
- *    ?format=raw|base64|json  → QR 페이로드 포맷 선택 (기본 raw)
- *    기본         → PNG 스트림
- *
- * 현재 기본 페이로드는 String(shopId) 이며, 가게 단위로 QR이 생성됩니다.
- */
-const qrQuerySchema = z.object({
-  download: z.coerce.number().int().min(0).max(1).optional(),
-  format: z.enum(['raw', 'base64', 'json']).optional()
-});
+const FRONTEND = process.env.FRONTEND_BASE_URL;
+const API_BASE = process.env.API_BASE_URL;
 
-export const getShopQR = async (req: Request, res: Response): Promise<void> => {
-  const shopId = Number(req.params.shopId);
-  const parsed = qrQuerySchema.safeParse(req.query);
-  if (!parsed.success) { res.status(400).json({ error: 'Invalid query' }); return; }
-
-  /** 1. 가게 존재 확인 */
-  const shop = await prisma.shop.findUnique({ where: { id: shopId } });
-  if (!shop) {
-    res.status(404).json({ error: 'Shop not found' });
+/** 관리자/점주만 QR PNG 발급 (출력해서 매장 비치) */
+export const getShopQrPng = async (req: AuthRequest, res: Response) => {
+  const role: UserRole | undefined = req.user?.role;
+  if (!role || (role !== 'admin' && role !== 'owner')) {
+    res.status(403).json({ error: '관리자/점주 전용' });
     return;
   }
 
-  /** 2. payload 생성 (shop 기반) */
-  const format = parsed.data.format ?? 'raw';
-  let payload: string;
-  if (format === 'raw') {
-    payload = String(shopId);
-  } else if (format === 'base64') {
-    payload = Buffer.from(String(shopId)).toString('base64url');
-  } else {
-    // json
-    payload = JSON.stringify({ shopId });
+  const shopIdParam = req.params.shopId;
+  const shopId = Number(shopIdParam);
+  if (!Number.isFinite(shopId)) {
+    res.status(400).json({ error: 'invalid shopId' });
+    return;
   }
 
-  /** 3. PNG 생성 */
-  res.type('png');
+  // 영구 토큰(만료 없음). 로테이션 원하면 ?ttl=300 같은 옵션을 route에 추가하세요.
+  const ttl = req.query.ttl ? Number(req.query.ttl) : undefined; // 초 단위
+  const token = signQrToken(shopId, 'attendance', ttl);
 
-  // 다운로드 옵션
-  if (req.query.download) {
-    res.setHeader('Content-Disposition', `attachment; filename=shop_${shopId}.png`);
+  // 스캔시 열릴 URL (프론트가 있으면 프론트 경로, 없으면 API 직접)
+  const base = FRONTEND || API_BASE || '';
+  const url  = `${base.replace(/\/$/, '')}/qr/scan?token=${encodeURIComponent(token)}`;
+
+  // PNG 생성
+  res.setHeader('Content-Type', 'image/png');
+  QRCode.toFileStream(res, url, { width: 512, margin: 1, errorCorrectionLevel: 'M' });
+};
+
+/**
+ * QR 스캔 진입점
+ * - 미로그인: 401 + loginUrl (로그인 후 redirect로 다시 이 URL로 복귀)
+ * - 로그인: 200 + { ok: true, shopId }  (클라가 이 토큰을 들고 출근 버튼 → clock-in 호출)
+ */
+export const scanQr = async (req: AuthRequest, res: Response) => {
+  const token = String(req.query.token || '');
+  if (!token) {
+    res.status(400).json({ error: 'token required' });
+    return;
   }
 
-  // QRCode.toFileStream: 스트림으로 바로 응답
-  await QRCode.toFileStream(res, payload, {
-    errorCorrectionLevel: 'M',
-    margin: 2,
-    width: 256
+  let claims;
+  try {
+    claims = verifyQrToken(token);
+  } catch (e) {
+    res.status(400).json({ error: 'invalid_or_expired_token' });
+    return;
+  }
+
+  if (claims.purpose !== 'attendance' || !Number.isFinite(claims.shopId)) {
+    res.status(400).json({ error: 'invalid_claims' });
+    return;
+  }
+
+  // 미로그인 사용자 → 로그인 URL 제공
+  if (!req.user) {
+    const base = FRONTEND || API_BASE || '';
+    const redirect = `${base.replace(/\/$/, '')}/qr/scan?token=${encodeURIComponent(token)}`;
+    const loginUrl = `${base.replace(/\/$/, '')}/login?shopId=${claims.shopId}&redirect=${encodeURIComponent(redirect)}`;
+    res.status(401).json({ needLogin: true, loginUrl, shopId: claims.shopId });
+    return;
+  }
+
+  // 로그인 사용자인데, 소속 매장이 다르면 막기(원하면 제거)
+  if (req.user.shopId !== claims.shopId) {
+    res.status(403).json({ error: 'shop_mismatch', expected: claims.shopId, actual: req.user.shopId });
+    return;
+  }
+
+  res.json({
+    ok: true,
+    shopId: claims.shopId,
+    qrToken: token, // 클라가 그대로 clock-in 호출 시 첨부
   });
 };

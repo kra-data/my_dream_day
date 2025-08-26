@@ -14,7 +14,7 @@ import {
   recentActivities
 } from '../controllers/dashboardController';
 import { employeePayrollSummary } from '../controllers/payrollSummaryController';
-import { getShopQR } from '../controllers/qrController';
+import { getShopQrPng } from '../controllers/qrController';
 import { getAttendanceRecords, adminCreateOrCloseAttendance, adminUpdateAttendance } from '../controllers/attendanceController';
 
 const router = Router();
@@ -35,7 +35,7 @@ const requireAdmin = (
 /* ───────── 공통 미들웨어 ───────── */
 router.use(authenticateJWT);
 router.use(requireAdmin);
-router.get('/shops/:shopId/qr', getShopQR);
+router.get('/shops/:shopId/qr', getShopQrPng);
 /* ───────── 매장 CRUD ───────── */
 router.get('/shops',                 adminController.getShops);
 router.post('/shops',                adminController.createShop);
@@ -54,10 +54,7 @@ router.get(
   '/shops/:shopId/payroll/employees/:employeeId/summary',
   employeePayrollSummary
 );
-/* ───────── 출퇴근 기록 (관리자 alias) ───────── */
-router.get('/shops/:shopId/attendance', getAttendanceRecords);
-router.post('/shops/:shopId/attendance/employees/:employeeId', adminCreateOrCloseAttendance);
-router.put('/shops/:shopId/attendance/records/:id', adminUpdateAttendance);
+
 /* ───────── 🆕 대시보드 ───────── */
 router.get('/shops/:shopId/dashboard/today',   todaySummary);      // 오늘 현황
 router.get('/shops/:shopId/dashboard/active',  activeEmployees);   // 실시간 근무자

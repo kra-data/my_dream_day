@@ -1,19 +1,25 @@
-# HTTP: 전부 HTTPS로 리다이렉트
-http://mydreamday.shop {
+# HTTP → HTTPS
+http://api.mydreamday.shop {
   redir https://{host}{uri}
 }
 
-# HTTPS: 실제 서비스
-https://mydreamday.shop {
+# API 오리진
+https://api.mydreamday.shop {
   encode gzip
 
   @api path /api/*
-  reverse_proxy @api backend:3001
+  # 로컬 프로세스면 localhost:3001, Docker-Compose 서비스명이면 backend:3001
+  reverse_proxy @api localhost:3001
 
-  # (선택) 보안 헤더
+  # (선택) 사전검사(OPTIONS) 빠르게 응답
+  @options method OPTIONS
+  respond @options 204
+
+  # 보안 헤더
   header {
     Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
     X-Content-Type-Options "nosniff"
     Referrer-Policy "no-referrer-when-downgrade"
   }
+
 }
