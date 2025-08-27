@@ -56,7 +56,46 @@ export const swaggerDocument: any = {
           workedMinutes: { type: 'integer' },
           extraMinutes: { type: 'integer' }
         }
+      },
+      // ... 기존 components.schemas 아래에 이어서 추가
+      DashboardTodaySummary: {
+        type: 'object',
+        properties: {
+          totalEmployees: { type: 'integer', example: 17 },
+          checkedIn:      { type: 'integer', example: 9 },
+          late:           { type: 'integer', example: 2 },
+          absent:         { type: 'integer', example: 1 }
+        }
+      },
+      AttendanceType: {
+        type: 'string',
+        enum: ['IN','OUT']
+      },
+      ActiveEmployee: {
+        type: 'object',
+        properties: {
+          employeeId: { type: 'integer', example: 42 },
+          name:       { type: 'string', example: '김직원' },
+          position:   { type: 'string', nullable: true, example: '파트타이머' },
+          section:    { type: 'string', nullable: true, example: '홀' },
+          clockInAt:  { type: 'string', format: 'date-time', example: '2025-08-27T09:03:12.000Z' }
+        }
+      },
+      RecentActivity: {
+        type: 'object',
+        properties: {
+          id:            { type: 'integer', example: 1234 },
+          type:          { $ref: '#/components/schemas/AttendanceType' },
+          employeeId:    { type: 'integer', example: 42 },
+          name:          { type: 'string', example: '김직원' },
+          position:      { type: 'string', nullable: true, example: '파트타이머' },
+          section:       { type: 'string', nullable: true, example: '주방' },
+          clockInAt:     { type: 'string', format: 'date-time', nullable: true },
+          clockOutAt:    { type: 'string', format: 'date-time', nullable: true },
+          workedMinutes: { type: 'integer', nullable: true, example: 285 }
+        }
       }
+
     }
   },
   security: [{ bearerAuth: [] }],
@@ -284,7 +323,78 @@ export const swaggerDocument: any = {
     },
     '/api/admin/shops/{shopId}/qr': {
       get: { tags: ['QR'], summary: '매장 QR PNG 생성', parameters: [ { name:'shopId',in:'path',required:true,schema:{type:'integer'} }, { name:'download',in:'query',schema:{type:'integer', minimum:0, maximum:1} }, { name:'format', in:'query', schema:{ type:'string', enum:['raw','base64','json'] }, description:'QR 페이로드 포맷 (기본 raw)' } ], responses: { '200': { description: 'PNG' }, '404': { description: 'Not Found' } } }
+    },
+    // ... 기존 paths 아래에 이어서 추가
+    '/api/admin/shops/{shopId}/dashboard/today': {
+      get: {
+        tags: ['Dashboard'],
+        summary: '오늘 현황(전체 · 출근 · 지각 · 결근)',
+        parameters: [
+          { name: 'shopId', in: 'path', required: true, schema: { type: 'integer' } }
+        ],
+        responses: {
+          '200': {
+            description: 'OK',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/DashboardTodaySummary' }
+              }
+            }
+          }
+        }
+      }
+    },
+    '/api/admin/shops/{shopId}/dashboard/active': {
+      get: {
+        tags: ['Dashboard'],
+        summary: '실시간 근무자 목록(OUT 미기록)',
+        parameters: [
+          { name: 'shopId', in: 'path', required: true, schema: { type: 'integer' } }
+        ],
+        responses: {
+          '200': {
+            description: 'OK',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'array',
+                  items: { $ref: '#/components/schemas/ActiveEmployee' }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    '/api/admin/shops/{shopId}/dashboard/recent': {
+      get: {
+        tags: ['Dashboard'],
+        summary: '최근 출‧퇴근 활동',
+        parameters: [
+          { name: 'shopId', in: 'path', required: true, schema: { type: 'integer' } },
+          {
+            name: 'limit', in: 'query',
+            description: '최대 100 (기본 30)',
+            schema: { type: 'integer', minimum: 1, maximum: 100, default: 30 }
+          }
+        ],
+        responses: {
+          '200': {
+            description: 'OK',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'array',
+                  items: { $ref: '#/components/schemas/RecentActivity' }
+                }
+              }
+            }
+          },
+          '400': { description: 'Invalid limit' }
+        }
+      }
     }
+
   }
 };
 

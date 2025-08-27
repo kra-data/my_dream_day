@@ -52,23 +52,51 @@ export const todaySummary = async (req: AuthRequest, res: Response) => {
   let late = 0;
   let absent = 0;
 
-  employees.forEach(emp => {
-    const todaySchedule = (emp.schedule as any)?.[weekday];
-    if (!todaySchedule) return;                     // 당직 아님
-    if (checkedSet.has(emp.id)) return;             // 이미 출근
+    employees.forEach((emp) => {
+    const raw = (emp.schedule as any)?.[weekday];
 
-    /* 아직 출근 안 한 경우 → 지각 vs 결근(퇴근시간도 지남) */
-    const [h, m] = todaySchedule.start.split(':').map(Number);
-    const startTime = new Date(nowKst);
-    startTime.setHours(h, m, 0, 0);
+    // todaySchedule → 항상 [{start, end}, ...] 형태로 정규화
+    const shifts: Array<{ start: string; end: string }> = Array.isArray(raw)
+      ? raw
+      : raw && typeof raw === 'object'
+        ? [raw]
+        : [];
 
-    if (nowKst < startTime) return;                // 아직 근무前
-    const [eh, em] = todaySchedule.end.split(':').map(Number);
-    const endTime = new Date(nowKst);
-    endTime.setHours(eh, em, 0, 0);
+    // 유효한 타임만 남기기
+    const valid = shifts.filter(
+      (s) => s && typeof s.start === 'string' && typeof s.end === 'string'
+    );
 
-    if (nowKst <= endTime) late++;                 // 근무 중인데 미출근 = 지각
-    else absent++;                                 // 근무시간 종료 = 결근
+    // 근무 없음 or 이미 출근
+    if (valid.length === 0) return;
+    if (checkedSet.has(emp.id)) return;
+
+    // "HH:mm" → 오늘 날짜의 Date 로 변환 (서버 로컬타임 기준)
+    const toToday = (hm: string) => {
+      const [hStr, mStr] = hm.split(':');
+      const h = Number(hStr);
+      const m = Number(mStr);
+      if (!Number.isFinite(h) || !Number.isFinite(m)) return null;
+      const d = new Date(nowKst);
+      d.setHours(h, m, 0, 0);
+      return d;
+    };
+
+    const starts = valid.map((s) => toToday(s.start)).filter(Boolean) as Date[];
+    const ends   = valid.map((s) => toToday(s.end)).filter(Boolean) as Date[];
+
+    if (starts.length === 0 || ends.length === 0) return;
+
+    // 하루 여러 타임을 고려: 가장 이른 시작/가장 늦은 종료
+    const firstStart = new Date(Math.min(...starts.map((d) => +d)));
+    const lastEnd    = new Date(Math.max(...ends.map((d) => +d)));
+
+    // 아직 근무 전
+    if (nowKst < firstStart) return;
+
+    // 근무시간 중인데 미출근 → 지각, 모두 지난 뒤까지 미출근 → 결근
+    if (nowKst <= lastEnd) late++;
+    else absent++;
   });
 
   res.json({
