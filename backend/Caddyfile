@@ -8,8 +8,8 @@ https://api.mydreamday.shop {
   encode gzip
 
   @api path /api/*
-  # 로컬 프로세스면 localhost:3001, Docker-Compose 서비스명이면 backend:3001
-  reverse_proxy @api localhost:3001
+  # 로컬 프로세스면 employee_backend:3001, Docker-Compose 서비스명이면 backend:3001
+  reverse_proxy @api employee_backend:3001
 
   # (선택) 사전검사(OPTIONS) 빠르게 응답
   @options method OPTIONS
