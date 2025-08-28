@@ -3,8 +3,9 @@ import QRCode from 'qrcode';
 import { signQrToken, verifyQrToken } from '../utils/qrToken';
 import { AuthRequest, UserRole } from '../middlewares/jwtMiddleware';
 
-const FRONTEND = process.env.FRONTEND_BASE_URL;
-const API_BASE = process.env.API_BASE_URL;
+/** 프런트 기본 URL은 mydreamday.shop, 없으면 .env 로 대체 */
+const FRONTEND = process.env.FRONTEND_BASE_URL || 'https://mydreamday.shop';
+const API_BASE = process.env.API_BASE_URL || ''; // 필요 시 후순위 fallback
 
 /** 관리자/점주만 QR PNG 발급 (출력해서 매장 비치) */
 export const getShopQrPng = async (req: AuthRequest, res: Response) => {
@@ -14,30 +15,28 @@ export const getShopQrPng = async (req: AuthRequest, res: Response) => {
     return;
   }
 
-  const shopIdParam = req.params.shopId;
-  const shopId = Number(shopIdParam);
+  const shopId = Number(req.params.shopId);
   if (!Number.isFinite(shopId)) {
     res.status(400).json({ error: 'invalid shopId' });
     return;
   }
 
-  // 영구 토큰(만료 없음). 로테이션 원하면 ?ttl=300 같은 옵션을 route에 추가하세요.
-  const ttl = req.query.ttl ? Number(req.query.ttl) : undefined; // 초 단위
+  // 영구 또는 TTL 설정 가능(?ttl=초)
+  const ttl = req.query.ttl ? Number(req.query.ttl) : undefined;
   const token = signQrToken(shopId, 'attendance', ttl);
 
-  // 스캔시 열릴 URL (프론트가 있으면 프론트 경로, 없으면 API 직접)
-  const base = FRONTEND || API_BASE || '';
-  const url  = `${base.replace(/\/$/, '')}/qr/scan?token=${encodeURIComponent(token)}`;
+  // 스캔시 열릴 URL (프런트 경로로 고정)
+  const base = (FRONTEND || API_BASE).replace(/\/$/, '');
+  const url  = `${base}/qr/scan?token=${encodeURIComponent(token)}`;
 
-  // PNG 생성
   res.setHeader('Content-Type', 'image/png');
   QRCode.toFileStream(res, url, { width: 512, margin: 1, errorCorrectionLevel: 'M' });
 };
 
 /**
  * QR 스캔 진입점
- * - 미로그인: 401 + loginUrl (로그인 후 redirect로 다시 이 URL로 복귀)
- * - 로그인: 200 + { ok: true, shopId }  (클라가 이 토큰을 들고 출근 버튼 → clock-in 호출)
+ * - 미로그인: 401 + loginUrl (공용 로그인 페이지로, shopId 파라미터 없이 redirect만 부여)
+ * - 로그인: 200 + { ok: true, shopId, qrToken }
  */
 export const scanQr = async (req: AuthRequest, res: Response) => {
   const token = String(req.query.token || '');
@@ -49,7 +48,7 @@ export const scanQr = async (req: AuthRequest, res: Response) => {
   let claims;
   try {
     claims = verifyQrToken(token);
-  } catch (e) {
+  } catch {
     res.status(400).json({ error: 'invalid_or_expired_token' });
     return;
   }
@@ -59,16 +58,16 @@ export const scanQr = async (req: AuthRequest, res: Response) => {
     return;
   }
 
-  // 미로그인 사용자 → 로그인 URL 제공
+  // 미로그인 → 공용 로그인 페이지로. shopId는 안 넘기고 redirect만 전달
   if (!req.user) {
-    const base = FRONTEND || API_BASE || '';
-    const redirect = `${base.replace(/\/$/, '')}/qr/scan?token=${encodeURIComponent(token)}`;
-    const loginUrl = `${base.replace(/\/$/, '')}/login?shopId=${claims.shopId}&redirect=${encodeURIComponent(redirect)}`;
+    const base = (FRONTEND || API_BASE).replace(/\/$/, '');
+    const redirect = `${base}/qr/scan?token=${encodeURIComponent(token)}`;
+    const loginUrl = `${base}/login?redirect=${encodeURIComponent(redirect)}`;
     res.status(401).json({ needLogin: true, loginUrl, shopId: claims.shopId });
     return;
   }
 
-  // 로그인 사용자인데, 소속 매장이 다르면 막기(원하면 제거)
+  // 로그인 사용자인데 소속 매장이 다르면 차단(정책 유지)
   if (req.user.shopId !== claims.shopId) {
     res.status(403).json({ error: 'shop_mismatch', expected: claims.shopId, actual: req.user.shopId });
     return;
@@ -77,6 +76,6 @@ export const scanQr = async (req: AuthRequest, res: Response) => {
   res.json({
     ok: true,
     shopId: claims.shopId,
-    qrToken: token, // 클라가 그대로 clock-in 호출 시 첨부
+    qrToken: token, // 프론트가 그대로 /api/attendance 호출 시 첨부할 수 있음(선택)
   });
 };
