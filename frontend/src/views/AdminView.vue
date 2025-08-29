@@ -30,7 +30,7 @@
             v-for="tab in tabs" 
             :key="tab.id"
             :class="['tab-button', { active: activeTab === tab.id }]"
-            @click="activeTab = tab.id"
+            @click="handleTabClick(tab.id)"
           >
             {{ tab.icon }} {{ tab.name }}
           </button>
@@ -50,7 +50,7 @@
 import { onMounted, computed, ref } from 'vue'
 import { useEmployeesStore } from '@/stores/employees'
 import { useAttendanceStore } from '@/stores/attendance'
-import { useSalaryStore } from '@/stores/salary'
+import { usePayrollStore } from '@/stores/payroll'
 import { useAuthStore } from '@/stores/auth'
 
 // 탭 컴포넌트들 import
@@ -72,43 +72,78 @@ export default {
   setup() {
     const employeesStore = useEmployeesStore()
     const attendanceStore = useAttendanceStore()
-    const salaryStore = useSalaryStore()
+    const payrollStore = usePayrollStore()
     const authStore = useAuthStore()
     
     // 로딩 및 에러 상태 관리
     const isLoading = computed(() => 
-      employeesStore.loading || attendanceStore.loading || salaryStore.loading
+      employeesStore.loading || attendanceStore.loading || payrollStore.loading
     )
     const hasError = computed(() => 
-      !!employeesStore.error || !!attendanceStore.error || !!salaryStore.error
+      !!employeesStore.error || !!attendanceStore.error || !!payrollStore.error
     )
     const errorMessage = computed(() => 
-      employeesStore.error || attendanceStore.error || salaryStore.error
+      employeesStore.error || attendanceStore.error || payrollStore.error
     )
     
     // 데이터 초기화
+    // 기본 데이터 초기화 (공통 데이터만)
     const initializeData = async () => {
       try {
         if (authStore.isAuthenticated && authStore.user?.role === 'admin') {
-          // 직원 목록 조회
+          // 직원 목록 조회 (모든 탭에서 사용)
           await employeesStore.fetchEmployees()
           
-          // 대시보드 데이터 조회
+          // 기본 대시보드 데이터만 로드
           await attendanceStore.fetchDashboardData()
-          
-          // 출퇴근 기록 조회
-          // await attendanceStore.fetchRecords()
-          
-          // 급여 데이터 조회
-          const currentDate = new Date()
-          await Promise.all([
-            salaryStore.fetchPayrollDashboard(currentDate.getFullYear(), currentDate.getMonth() + 1),
-            salaryStore.fetchEmployeePayrolls(currentDate.getFullYear(), currentDate.getMonth() + 1)
-          ])
         }
       } catch (error) {
-        console.error('데이터 초기화 실패:', error)
+        console.error('기본 데이터 초기화 실패:', error)
         attendanceStore.error = error.message || '데이터를 불러오는데 실패했습니다'
+      }
+    }
+    
+    // 탭별 데이터 로딩 (지연 로딩)
+    const loadTabData = async (tabId) => {
+      try {
+        console.log(`Loading data for tab: ${tabId}`)
+        
+        switch (tabId) {
+          case 'dashboard':
+            // 대시보드 데이터는 이미 로드됨
+            break
+            
+          case 'records':
+            // 출근 기록 데이터만 로드
+            await attendanceStore.fetchRecords()
+            break
+            
+          case 'payroll':
+            // 급여 데이터 로드 (rate limit 방지를 위한 순차 실행)
+            const currentDate = new Date()
+            const year = currentDate.getFullYear()
+            const month = currentDate.getMonth() + 1
+            
+            console.log(`🔄 AdminView: 급여 데이터 로딩 시작 (${year}년 ${month}월)`)
+            
+            // 순차 실행으로 서버 부하 감소
+            await payrollStore.fetchPayrollDashboard(year, month)
+            await new Promise(resolve => setTimeout(resolve, 200)) // 200ms 간격
+            await payrollStore.fetchEmployeePayrolls(year, month)
+            
+            console.log('✅ AdminView: 급여 데이터 로딩 완료')
+            break
+            
+          case 'analytics':
+            // 통계 데이터 로드 (필요시)
+            break
+            
+          default:
+            // 다른 탭에 대해서는 추가 처리 없음
+            break
+        }
+      } catch (error) {
+        console.error(`Tab ${tabId} data loading failed:`, error)
       }
     }
     
@@ -125,18 +160,20 @@ export default {
     return {
       employeesStore,
       attendanceStore,
-      salaryStore,
+      payrollStore,
       authStore,
       isLoading,
       hasError,
       errorMessage,
       retryFetchData,
-      initializeData
+      initializeData,
+      loadTabData
     }
   },
   data() {
     return {
       activeTab: 'dashboard',
+      loadedTabs: new Set(['dashboard']), // 이미 로드된 탭 추적
       tabs: [
         { id: 'dashboard', name: '대시보드', icon: '📊', component: 'AdminDashboardView' },
         { id: 'employees', name: '직원 관리', icon: '👥', component: 'AdminEmployeeView' },
@@ -150,6 +187,44 @@ export default {
     currentTabComponent() {
       const tab = this.tabs.find(t => t.id === this.activeTab)
       return tab ? tab.component : 'AdminDashboardView'
+    }
+  },
+  methods: {
+    async handleTabClick(tabId) {
+      console.log(`🔍 Tab clicked: ${tabId}`)
+      
+      // 탭 변경
+      this.activeTab = tabId
+      
+      // payroll 탭 디버깅
+      if (tabId === 'payroll') {
+        console.log('💰 급여관리 탭 선택됨')
+        console.log('현재 payrollStore 상태:', {
+          dashboard: this.payrollStore.payrollDashboard,
+          employees: this.payrollStore.employeePayrolls,
+          loading: this.payrollStore.loading,
+          error: this.payrollStore.error
+        })
+      }
+      
+      // 해당 탭의 데이터가 아직 로드되지 않았으면 로드
+      if (!this.loadedTabs.has(tabId)) {
+        console.log(`⬇️ Loading data for new tab: ${tabId}`)
+        await this.loadTabData(tabId)
+        this.loadedTabs.add(tabId)
+        
+        // payroll 탭 로드 후 상태 확인
+        if (tabId === 'payroll') {
+          console.log('🔍 급여관리 탭 로드 후 상태:', {
+            dashboard: this.payrollStore.payrollDashboard,
+            employees: this.payrollStore.employeePayrolls,
+            loading: this.payrollStore.loading,
+            error: this.payrollStore.error
+          })
+        }
+      } else {
+        console.log(`💾 Tab ${tabId} data already loaded, skipping`)
+      }
     }
   }
 }

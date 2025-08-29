@@ -12,7 +12,23 @@ const router = createRouter({
     },
     {
       path: '/',
-      redirect: '/login'
+      name: 'home',
+      beforeEnter: (to, from, next) => {
+        const authStore = useAuthStore()
+        authStore.checkAuth()
+        
+        if (authStore.isAuthenticated && !authStore.isTokenExpired()) {
+          // 인증된 사용자는 역할에 따라 리다이렉트
+          if (authStore.user?.role === 'admin') {
+            next('/admin')
+          } else {
+            next('/employee')
+          }
+        } else {
+          // 인증되지 않았거나 토큰이 만료된 경우 로그인으로
+          next('/login')
+        }
+      }
     },
     {
       path: '/employee',
@@ -40,9 +56,14 @@ const router = createRouter({
 router.beforeEach((to, from, next) => {
   const authStore = useAuthStore()
   
-  // 인증 상태 확인
+  // 인증 상태 확인 (토큰 만료 시 자동 로그아웃 포함)
   if (!authStore.isAuthenticated) {
     authStore.checkAuth()
+  } else {
+    // 이미 인증된 상태에서도 토큰 만료 확인
+    if (authStore.isTokenExpired()) {
+      authStore.logout()
+    }
   }
   
   const requiresAuth = to.meta.requiresAuth

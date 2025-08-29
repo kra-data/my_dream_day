@@ -288,6 +288,25 @@ body {
 }
 
 /* ==========================================
+   🎨 Force Light Mode Only
+   ========================================== */
+
+/* Force light mode regardless of system preference */
+:root {
+  color-scheme: light !important;
+}
+
+html, body {
+  background-color: #ffffff !important;
+  color: #1f2937 !important;
+}
+
+/* Ensure all elements use light mode colors */
+* {
+  color-scheme: light !important;
+}
+
+/* ==========================================
    🎨 Responsive Design
    ========================================== */
 

@@ -3,7 +3,7 @@
     <div class="login-container">
       <div class="login-card">
         <div class="login-header">
-          <h1>🏢 샤브올데이 출퇴근 관리</h1>
+          <h1>🏢 마이드림데이 출퇴근 관리</h1>
           <p>로그인하여 서비스를 이용하세요</p>
         </div>
 
@@ -61,27 +61,8 @@
 
         <!-- 테스트 계정 안내 -->
         <div class="demo-accounts">
-          <h3>테스트 계정</h3>
-          <div class="account-list">
-            <div class="account-item">
-              <strong>홍길동</strong>
-              <span>1234</span>
-            </div>
-            <div class="account-item">
-              <strong>김철수</strong>
-              <span>5432</span>
-            </div>
-            <div class="account-item">
-              <strong>이영희</strong>
-              <span>9876</span>
-            </div>
-            <div class="account-item">
-              <strong>박민수</strong>
-              <span>1111</span>
-            </div>
-          </div>
           <p class="demo-note">
-            * 실제 직원 정보는 관리자에게 문의하세요
+            * 회원가입은 관리자에게 문의하세요
           </p>
         </div>
       </div>

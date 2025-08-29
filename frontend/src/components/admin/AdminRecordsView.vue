@@ -1,15 +1,35 @@
 <template>
   <div class="tab-content">
-    <div class="records-section">
+    <!-- Loading State -->
+    <div v-if="attendanceStore.loading && !attendanceStore.records.length" class="loading-container">
+      <div class="loading-spinner"></div>
+      <p>출퇴근 기록을 불러오는 중...</p>
+    </div>
+
+    <!-- Error State -->
+    <div v-else-if="attendanceStore.error" class="error-container">
+      <div class="error-message">
+        <h3>⚠️ 오류가 발생했습니다</h3>
+        <p>{{ attendanceStore.error }}</p>
+        <button @click="retryFetchRecords" class="btn btn-primary">다시 시도</button>
+      </div>
+    </div>
+
+    <!-- Main Content -->
+    <div v-else class="records-section">
       <div class="section-header">
-        <h2>📋 출퇴근 기록</h2>
+        <div class="header-info">
+          <h2>📋 출퇴근 기록</h2>
+          <p class="records-count">총 {{ attendanceStore.records.length }}건의 기록</p>
+        </div>
         <div class="filters">
           <input 
             type="date" 
             v-model="selectedDate"
+            @change="applyFilters"
             class="date-input"
           >
-          <select v-model="selectedEmployee" class="employee-filter">
+          <select v-model="selectedEmployee" @change="applyFilters" class="employee-filter">
             <option value="">전체 직원</option>
             <option 
               v-for="employee in employeesStore.employees" 
@@ -19,49 +39,123 @@
               {{ employee.name }}
             </option>
           </select>
+          <select v-model="selectedSection" @change="applyFilters" class="section-filter">
+            <option value="">전체 구역</option>
+            <option value="KITCHEN">주방</option>
+            <option value="HALL">홀</option>
+          </select>
+          <select v-model="selectedStatus" @change="applyFilters" class="status-filter">
+            <option value="">전체 상태</option>
+            <option value="completed">완료</option>
+            <option value="incomplete">미완료</option>
+          </select>
           <button @click="exportRecords" class="btn btn-success">
             📄 엑셀 내보내기
           </button>
         </div>
       </div>
 
-      <div class="records-table">
-        <table>
-          <thead>
-            <tr>
-              <th>날짜</th>
-              <th>직원명</th>
-              <th>구역</th>
-              <th>출근시간</th>
-              <th>퇴근시간</th>
-              <th>근무시간</th>
-              <th>상태</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-if="filteredRecords.length === 0">
-              <td colspan="7" class="no-data">출퇴근 기록이 없습니다</td>
-            </tr>
-            <tr v-else v-for="record in filteredRecords" :key="record.id">
-              <td>{{ formatDate(record.clockInAt || record.date) }}</td>
-              <td>{{ getEmployeeName(record.employeeId) }}</td>
-              <td>{{ formatSection(getEmployeeSection(record.employeeId)) }}</td>
-              <td>{{ record.clockInAt ? formatTime(record.clockInAt) : '-' }}</td>
-              <td>{{ record.clockOutAt ? formatTime(record.clockOutAt) : '-' }}</td>
-              <td>{{ formatWorkDuration(record.workedMinutes) }}</td>
-              <td>
+      <!-- Records Table -->
+      <div class="records-table-container">
+        <!-- Empty State -->
+        <div v-if="attendanceStore.isEmpty" class="empty-state">
+          <div class="empty-icon">📋</div>
+          <h3>출퇴근 기록이 없습니다</h3>
+          <p>아직 등록된 출퇴근 기록이 없습니다.</p>
+        </div>
+
+        <!-- Records Table -->
+        <div v-else class="records-table">
+          <div class="table-header">
+            <div class="table-row header-row">
+              <div class="table-cell">날짜</div>
+              <div class="table-cell">직원명</div>
+              <div class="table-cell">직급</div>
+              <div class="table-cell">구역</div>
+              <div class="table-cell">출근시간</div>
+              <div class="table-cell">퇴근시간</div>
+              <div class="table-cell">근무시간</div>
+              <div class="table-cell">상태</div>
+            </div>
+          </div>
+          
+          <div class="table-body">
+            <div v-if="filteredRecords.length === 0" class="no-filtered-data">
+              <p>선택한 조건에 해당하는 기록이 없습니다.</p>
+            </div>
+            <div 
+              v-else 
+              v-for="record in filteredRecords" 
+              :key="record.id"
+              class="table-row data-row"
+            >
+              <div class="table-cell date-cell">
+                <div class="date-display">
+                  <span class="date-main">{{ formatDate(record.clockInAt || record.date) }}</span>
+                  <span class="date-sub">{{ formatWeekday(record.clockInAt || record.date) }}</span>
+                </div>
+              </div>
+              <div class="table-cell employee-cell">
+                <div class="employee-info">
+                  <span class="employee-name">{{ record.employeeName }}</span>
+                  <span class="employee-id">#{{ record.employeeId }}</span>
+                </div>
+              </div>
+              <div class="table-cell position-cell">
+                <span class="position-badge" :class="getPositionClass(record.employeePosition)">
+                  {{ formatPosition(record.employeePosition) }}
+                </span>
+              </div>
+              <div class="table-cell section-cell">
+                <span class="section-badge" :class="getSectionClass(record.employeeSection)">
+                  {{ formatSection(record.employeeSection) }}
+                </span>
+              </div>
+              <div class="table-cell time-cell">
+                <span v-if="record.clockInAt" class="time-in">
+                  {{ formatTime(record.clockInAt) }}
+                </span>
+                <span v-else class="time-empty">-</span>
+              </div>
+              <div class="table-cell time-cell">
+                <span v-if="record.clockOutAt" class="time-out">
+                  {{ formatTime(record.clockOutAt) }}
+                </span>
+                <span v-else class="time-empty">-</span>
+              </div>
+              <div class="table-cell duration-cell">
+                <span class="work-duration">
+                  {{ formatWorkDuration(record.workedMinutes) }}
+                </span>
+                <span v-if="record.extraMinutes > 0" class="extra-time">
+                  +{{ formatWorkDuration(record.extraMinutes) }}
+                </span>
+              </div>
+              <div class="table-cell status-cell">
                 <StatusBadge :status="getRecordStatus(record)" />
-              </td>
-            </tr>
-          </tbody>
-        </table>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Load More Button -->
+        <div v-if="attendanceStore.hasMore" class="load-more-container">
+          <button 
+            @click="loadMore" 
+            :disabled="attendanceStore.loading"
+            class="btn btn-outline load-more-btn"
+          >
+            <span v-if="attendanceStore.loading">로딩 중...</span>
+            <span v-else>더 보기 ({{ attendanceStore.hasMore ? '더 있음' : '끝' }})</span>
+          </button>
+        </div>
       </div>
     </div>
   </div>
 </template>
 
 <script>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import StatusBadge from '@/components/StatusBadge.vue'
 import { useEmployeesStore } from '@/stores/employees'
 import { useAttendanceStore } from '@/stores/attendance'
@@ -76,13 +170,16 @@ export default {
     const attendanceStore = useAttendanceStore()
     
     // 필터 상태
-    const selectedDate = ref(new Date().toISOString().split('T')[0])
+    const selectedDate = ref('')
     const selectedEmployee = ref('')
+    const selectedSection = ref('')
+    const selectedStatus = ref('')
     
     // 필터링된 기록
     const filteredRecords = computed(() => {
       let records = attendanceStore.records
       
+      // 날짜 필터
       if (selectedDate.value) {
         const targetDate = new Date(selectedDate.value).toDateString()
         records = records.filter(record => 
@@ -90,13 +187,66 @@ export default {
         )
       }
       
+      // 직원 필터
       if (selectedEmployee.value) {
         records = records.filter(record => 
           record.employeeId === parseInt(selectedEmployee.value)
         )
       }
       
+      // 구역 필터
+      if (selectedSection.value) {
+        records = records.filter(record => 
+          record.employeeSection === selectedSection.value
+        )
+      }
+      
+      // 상태 필터
+      if (selectedStatus.value) {
+        records = records.filter(record => {
+          if (selectedStatus.value === 'completed') {
+            return record.paired || (record.clockInAt && record.clockOutAt)
+          } else if (selectedStatus.value === 'incomplete') {
+            return !record.paired || !record.clockOutAt
+          }
+          return true
+        })
+      }
+      
       return records.sort((a, b) => new Date(b.clockInAt || b.date) - new Date(a.clockInAt || a.date))
+    })
+    
+    // 필터 적용 함수
+    const applyFilters = () => {
+      console.log('필터 적용:', {
+        date: selectedDate.value,
+        employee: selectedEmployee.value,
+        section: selectedSection.value,
+        status: selectedStatus.value
+      })
+    }
+    
+    // 데이터 재시도
+    const retryFetchRecords = async () => {
+      try {
+        attendanceStore.resetRecords()
+        await attendanceStore.fetchRecords()
+      } catch (error) {
+        console.error('기록 재시도 실패:', error)
+      }
+    }
+    
+    // 더 보기
+    const loadMore = async () => {
+      try {
+        await attendanceStore.loadMoreRecords(selectedDate.value)
+      } catch (error) {
+        console.error('추가 데이터 로딩 실패:', error)
+      }
+    }
+    
+    onMounted(() => {
+      console.log('AdminRecordsView: 마운트됨')
     })
     
     return {
@@ -104,29 +254,47 @@ export default {
       attendanceStore,
       selectedDate,
       selectedEmployee,
-      filteredRecords
+      selectedSection,
+      selectedStatus,
+      filteredRecords,
+      applyFilters,
+      retryFetchRecords,
+      loadMore
     }
   },
   methods: {
     formatSection(section) {
       const sections = {
         'HALL': '홀',
-        'KITCHEN': '주방'
+        'KITCHEN': '주방',
+        'UNKNOWN': '미지정'
       }
       return sections[section] || section
     },
     
-    getEmployeeName(employeeId) {
-      const employee = this.employeesStore.getEmployeeById(employeeId)
-      return employee ? employee.name : '알 수 없음'
+    formatPosition(position) {
+      const positions = {
+        'MANAGER': '매니저',
+        'STAFF': '직원',
+        'PART_TIME': '파트타임'
+      }
+      return positions[position] || position
     },
     
-    getEmployeeSection(employeeId) {
-      const employee = this.employeesStore.getEmployeeById(employeeId)
-      return employee ? employee.section : '알 수 없음'
+    getPositionClass(position) {
+      return `position-${position?.toLowerCase() || 'unknown'}`
+    },
+    
+    getSectionClass(section) {
+      return `section-${section?.toLowerCase() || 'unknown'}`
     },
     
     getRecordStatus(record) {
+      // Use new paired field if available
+      if ('paired' in record) {
+        return record.paired ? 'completed' : 'incomplete'
+      }
+      // Fallback to old logic
       if (!record.clockInAt) return 'not-checked-in'
       if (record.clockOutAt) return 'completed'
       return 'working'
@@ -135,43 +303,69 @@ export default {
     formatTime(timestamp) {
       return new Date(timestamp).toLocaleTimeString('ko-KR', {
         hour: '2-digit',
-        minute: '2-digit'
+        minute: '2-digit',
+        second: '2-digit'
       })
     },
     
     formatDate(timestamp) {
-      return new Date(timestamp).toLocaleDateString('ko-KR')
+      return new Date(timestamp).toLocaleDateString('ko-KR', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+      })
+    },
+    
+    formatWeekday(timestamp) {
+      return new Date(timestamp).toLocaleDateString('ko-KR', {
+        weekday: 'short'
+      })
     },
     
     formatWorkDuration(workedMinutes) {
-      if (workedMinutes === null || workedMinutes === undefined) return '-'
+      if (workedMinutes === null || workedMinutes === undefined || workedMinutes === 0) return '-'
       
       const hours = Math.floor(workedMinutes / 60)
       const minutes = workedMinutes % 60
       
-      return `${hours}시간 ${minutes}분`
+      if (hours === 0) {
+        return `${minutes}분`
+      } else if (minutes === 0) {
+        return `${hours}시간`
+      } else {
+        return `${hours}시간 ${minutes}분`
+      }
     },
     
     exportRecords() {
-      const headers = ['날짜', '직원명', '구역', '출근시간', '퇴근시간', '근무시간']
+      const headers = ['날짜', '요일', '직원명', '직원ID', '직급', '구역', '출근시간', '퇴근시간', '근무시간', '연장시간', '상태']
       const csvData = [headers]
       
       this.filteredRecords.forEach(record => {
         csvData.push([
           this.formatDate(record.clockInAt || record.date),
-          this.getEmployeeName(record.employeeId),
-          this.formatSection(this.getEmployeeSection(record.employeeId)),
+          this.formatWeekday(record.clockInAt || record.date),
+          record.employeeName,
+          record.employeeId,
+          this.formatPosition(record.employeePosition),
+          this.formatSection(record.employeeSection),
           record.clockInAt ? this.formatTime(record.clockInAt) : '-',
           record.clockOutAt ? this.formatTime(record.clockOutAt) : '-',
-          this.formatWorkDuration(record.workedMinutes)
+          this.formatWorkDuration(record.workedMinutes),
+          this.formatWorkDuration(record.extraMinutes),
+          record.paired ? '완료' : '미완료'
         ])
       })
       
-      const csvContent = csvData.map(row => row.join(',')).join('\n')
+      const csvContent = csvData.map(row => row.map(cell => 
+        typeof cell === 'string' && cell.includes(',') ? `"${cell}"` : cell
+      ).join(',')).join('\n')
+      
       const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' })
       const link = document.createElement('a')
       link.href = URL.createObjectURL(blob)
-      link.download = `출퇴근기록_${this.selectedDate || '전체'}.csv`
+      const dateStr = this.selectedDate || new Date().toISOString().split('T')[0]
+      link.download = `출퇴근기록_${dateStr}.csv`
       link.click()
     }
   }
@@ -179,8 +373,11 @@ export default {
 </script>
 
 <style scoped>
+@import '@/assets/design-system.css';
+
 .tab-content {
   animation: fadeIn 0.3s ease-in;
+  padding: var(--space-6);
 }
 
 @keyframes fadeIn {
@@ -188,91 +385,420 @@ export default {
   to { opacity: 1; transform: translateY(0); }
 }
 
+/* Loading & Error States */
+.loading-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+  gap: var(--space-4);
+}
+
+.loading-spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid var(--color-border-light);
+  border-top: 3px solid var(--primary-500);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.error-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 200px;
+}
+
+.error-message {
+  text-align: center;
+  padding: var(--space-8);
+  background: var(--danger-50);
+  border: 1px solid var(--danger-200);
+  border-radius: var(--radius-lg);
+  max-width: 400px;
+}
+
+.error-message h3 {
+  color: var(--danger-700);
+  margin: 0 0 var(--space-2) 0;
+  font-size: var(--text-lg);
+}
+
+.error-message p {
+  color: var(--danger-600);
+  margin: 0 0 var(--space-4) 0;
+}
+
+/* Header */
 .section-header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
+  align-items: flex-start;
+  margin-bottom: var(--space-6);
+  gap: var(--space-4);
 }
 
-.section-header h2 {
-  color: #1f2937;
+.header-info h2 {
+  color: var(--color-text-primary);
+  margin: 0 0 var(--space-1) 0;
+  font-size: var(--text-2xl);
+  font-weight: var(--font-bold);
+}
+
+.records-count {
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
   margin: 0;
 }
 
 .filters {
   display: flex;
-  gap: 12px;
+  gap: var(--space-3);
   align-items: center;
+  flex-wrap: wrap;
 }
 
-.date-input, .employee-filter {
-  padding: 8px 12px;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
+.date-input, 
+.employee-filter, 
+.section-filter, 
+.status-filter {
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border-medium);
+  border-radius: var(--radius-base);
+  font-size: var(--text-sm);
+  min-width: 120px;
+  transition: var(--transition-base);
+}
+
+.date-input:focus, 
+.employee-filter:focus, 
+.section-filter:focus, 
+.status-filter:focus {
+  outline: none;
+  border-color: var(--primary-400);
+  box-shadow: 0 0 0 3px var(--primary-100);
+}
+
+/* Empty State */
+.empty-state {
+  text-align: center;
+  padding: var(--space-16) var(--space-8);
+  color: var(--color-text-secondary);
+}
+
+.empty-icon {
+  font-size: 4rem;
+  margin-bottom: var(--space-4);
+  opacity: 0.5;
+}
+
+.empty-state h3 {
+  color: var(--color-text-primary);
+  margin: 0 0 var(--space-2) 0;
+  font-size: var(--text-xl);
+}
+
+.empty-state p {
+  margin: 0;
+  font-size: var(--text-base);
+}
+
+/* Records Table */
+.records-table-container {
+  background: var(--color-bg-primary);
+  border-radius: var(--radius-xl);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--color-border-light);
 }
 
 .records-table {
-  background: white;
-  border-radius: 12px;
-  overflow: hidden;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-}
-
-table {
   width: 100%;
-  border-collapse: collapse;
 }
 
-th, td {
-  padding: 12px;
-  text-align: left;
-  border-bottom: 1px solid #f3f4f6;
+.table-header {
+  background: var(--color-bg-secondary);
+  border-bottom: 1px solid var(--color-border-medium);
 }
 
-th {
-  background: #f8fafc;
-  font-weight: 600;
-  color: #374151;
+.table-row {
+  display: grid;
+  grid-template-columns: 120px 140px 80px 100px 100px 100px 120px 100px;
+  gap: var(--space-2);
+  align-items: center;
 }
 
-.btn {
-  padding: 8px 16px;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  font-weight: 600;
-  text-decoration: none;
+.header-row .table-cell {
+  padding: var(--space-4) var(--space-3);
+  font-weight: var(--font-semibold);
+  color: var(--color-text-primary);
+  font-size: var(--text-sm);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.data-row {
+  border-bottom: 1px solid var(--color-border-light);
+  transition: var(--transition-base);
+}
+
+.data-row:hover {
+  background: var(--color-bg-secondary);
+}
+
+.data-row:last-child {
+  border-bottom: none;
+}
+
+.data-row .table-cell {
+  padding: var(--space-4) var(--space-3);
+  font-size: var(--text-sm);
+}
+
+/* Cell Specific Styles */
+.date-cell {
+  display: flex;
+  flex-direction: column;
+}
+
+.date-main {
+  font-weight: var(--font-medium);
+  color: var(--color-text-primary);
+}
+
+.date-sub {
+  font-size: var(--text-xs);
+  color: var(--color-text-tertiary);
+  margin-top: var(--space-1);
+}
+
+.employee-cell {
+  display: flex;
+  flex-direction: column;
+}
+
+.employee-name {
+  font-weight: var(--font-medium);
+  color: var(--color-text-primary);
+}
+
+.employee-id {
+  font-size: var(--text-xs);
+  color: var(--color-text-tertiary);
+  margin-top: var(--space-1);
+}
+
+.position-badge {
   display: inline-block;
-  transition: all 0.2s;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-base);
+  font-size: var(--text-xs);
+  font-weight: var(--font-medium);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
-.btn-success {
-  background: #10b981;
-  color: white;
+.position-manager {
+  background: var(--primary-100);
+  color: var(--primary-700);
 }
 
-.no-data {
-  text-align: center;
-  color: #6b7280;
-  padding: 20px;
+.position-staff {
+  background: var(--success-100);
+  color: var(--success-700);
+}
+
+.position-part_time {
+  background: var(--warning-100);
+  color: var(--warning-700);
+}
+
+.section-badge {
+  display: inline-block;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-base);
+  font-size: var(--text-xs);
+  font-weight: var(--font-medium);
+}
+
+.section-kitchen {
+  background: var(--danger-100);
+  color: var(--danger-700);
+}
+
+.section-hall {
+  background: var(--primary-100);
+  color: var(--primary-700);
+}
+
+.section-unknown {
+  background: var(--gray-100);
+  color: var(--gray-600);
+}
+
+.time-in, .time-out {
+  font-family: var(--font-mono);
+  font-weight: var(--font-medium);
+}
+
+.time-in {
+  color: var(--success-600);
+}
+
+.time-out {
+  color: var(--danger-600);
+}
+
+.time-empty {
+  color: var(--color-text-tertiary);
   font-style: italic;
 }
 
+.duration-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.work-duration {
+  font-weight: var(--font-medium);
+  color: var(--color-text-primary);
+}
+
+.extra-time {
+  font-size: var(--text-xs);
+  color: var(--warning-600);
+  margin-top: var(--space-1);
+}
+
+/* Buttons */
+.btn {
+  padding: var(--space-2) var(--space-4);
+  border: none;
+  border-radius: var(--radius-base);
+  cursor: pointer;
+  font-weight: var(--font-semibold);
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  transition: var(--transition-base);
+  font-size: var(--text-sm);
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background: var(--primary-500);
+  color: white;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: var(--primary-600);
+}
+
+.btn-success {
+  background: var(--success-500);
+  color: white;
+}
+
+.btn-success:hover:not(:disabled) {
+  background: var(--success-600);
+}
+
+.btn-outline {
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  border: 1px solid var(--color-border-medium);
+}
+
+.btn-outline:hover:not(:disabled) {
+  background: var(--color-bg-secondary);
+  border-color: var(--color-border-strong);
+}
+
+/* Load More */
+.load-more-container {
+  padding: var(--space-6);
+  text-align: center;
+  border-top: 1px solid var(--color-border-light);
+}
+
+.load-more-btn {
+  min-width: 150px;
+}
+
+/* No Filtered Data */
+.no-filtered-data {
+  padding: var(--space-8);
+  text-align: center;
+  color: var(--color-text-secondary);
+  font-style: italic;
+}
+
+/* Responsive Design */
+@media (max-width: 1200px) {
+  .table-row {
+    grid-template-columns: 100px 120px 70px 80px 90px 90px 100px 80px;
+  }
+}
+
 @media (max-width: 768px) {
+  .tab-content {
+    padding: var(--space-4);
+  }
+  
+  .section-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
   .filters {
     flex-direction: column;
     align-items: stretch;
   }
   
-  .section-header {
-    flex-direction: column;
-    gap: 16px;
-    align-items: stretch;
+  .date-input, 
+  .employee-filter, 
+  .section-filter, 
+  .status-filter {
+    min-width: auto;
   }
   
-  .records-table {
+  .records-table-container {
     overflow-x: auto;
+  }
+  
+  .table-row {
+    grid-template-columns: 80px 100px 60px 70px 80px 80px 90px 70px;
+    min-width: 640px;
+  }
+  
+  .data-row .table-cell {
+    padding: var(--space-3) var(--space-2);
+    font-size: var(--text-xs);
+  }
+  
+  .header-row .table-cell {
+    padding: var(--space-3) var(--space-2);
+    font-size: var(--text-xs);
+  }
+}
+
+@media (max-width: 480px) {
+  .table-row {
+    grid-template-columns: 70px 90px 50px 60px 70px 70px 80px 60px;
+    min-width: 550px;
   }
 }
 </style>

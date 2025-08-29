@@ -121,7 +121,14 @@ export const useAuthStore = defineStore('auth', () => {
       localStorage.setItem('accessToken', newAccessToken)
       localStorage.setItem('refreshToken', newRefreshToken)
 
-      return userData
+      // 로그인 후 완전한 직원 정보 조회 시도
+      try {
+        await fetchCompleteUserData()
+      } catch (error) {
+        console.warn('완전한 사용자 정보 조회 실패, 기본 정보로 진행:', error)
+      }
+
+      return user.value
     } catch (error) {
       console.error('로그인 실패:', error)
       
@@ -133,6 +140,95 @@ export const useAuthStore = defineStore('auth', () => {
       throw new Error(errorMessage)
     } finally {
       loading.value = false
+    }
+  }
+
+  const fetchCompleteUserData = async () => {
+    try {
+      if (!user.value?.userId || !user.value?.shopId) {
+        throw new Error('사용자 기본 정보가 없습니다')
+      }
+
+      // 직원 상세 정보 조회
+      const response = await api.get(`/admin/shops/${user.value.shopId}/employees`)
+      const employees = response.data || []
+      
+      // 현재 로그인한 사용자 정보 찾기
+      const currentEmployee = employees.find(emp => 
+        emp.id === user.value.userId || 
+        (emp.name === user.value.name && emp.phone?.slice(-4) === user.value.phoneLastFour)
+      )
+
+      if (currentEmployee) {
+        // 사용자 정보 업데이트
+        user.value = {
+          ...user.value,
+          id: currentEmployee.id,
+          empId: currentEmployee.id,
+          name: currentEmployee.name,
+          position: currentEmployee.position,
+          section: currentEmployee.section,
+          pay: currentEmployee.pay,
+          payUnit: currentEmployee.payUnit,
+          phone: currentEmployee.phone,
+          bank: currentEmployee.bank,
+          accountNumber: currentEmployee.accountNumber,
+          nationalId: currentEmployee.nationalId,
+          qrCode: currentEmployee.qrCode,
+          schedule: currentEmployee.schedule
+        }
+
+        // 로컬 스토리지 업데이트
+        localStorage.setItem('user', JSON.stringify(user.value))
+        
+        console.log('완전한 직원 정보 로드 완료:', user.value)
+      } else {
+        // 직원 정보를 찾지 못한 경우 기본값 설정
+        console.warn('직원 정보를 찾지 못함, 기본값으로 설정')
+        user.value = {
+          ...user.value,
+          id: user.value.userId,
+          empId: user.value.userId,
+          position: 'STAFF',
+          section: 'HALL',
+          pay: 0,
+          payUnit: 'MONTHLY',
+          phone: user.value.phoneLastFour ? `010****${user.value.phoneLastFour}` : '',
+          bank: '',
+          accountNumber: '',
+          nationalId: '',
+          qrCode: '',
+          schedule: {}
+        }
+        localStorage.setItem('user', JSON.stringify(user.value))
+      }
+    } catch (error) {
+      console.error('완전한 사용자 정보 조회 실패:', error)
+      // API 조회 실패 시 기본값으로 설정
+      user.value = {
+        ...user.value,
+        id: user.value.userId,
+        empId: user.value.userId,
+        position: 'STAFF',
+        section: 'HALL',
+        pay: 2500000,
+        payUnit: 'MONTHLY',
+        phone: user.value.phoneLastFour ? `010****${user.value.phoneLastFour}` : '',
+        bank: '미등록',
+        accountNumber: '',
+        nationalId: '',
+        qrCode: '1',
+        schedule: {
+          mon: { start: '09:00', end: '18:00' },
+          tue: { start: '09:00', end: '18:00' },
+          wed: { start: '09:00', end: '18:00' },
+          thu: { start: '09:00', end: '18:00' },
+          fri: { start: '09:00', end: '18:00' },
+          sat: { start: '', end: '' },
+          sun: { start: '', end: '' }
+        }
+      }
+      localStorage.setItem('user', JSON.stringify(user.value))
     }
   }
 
@@ -195,7 +291,7 @@ export const useAuthStore = defineStore('auth', () => {
       localStorage.removeItem('accessToken')
       localStorage.removeItem('refreshToken')
 
-      // 로그인 페이지로 리다이렉트
+      // 로그인 페이지로 리다이렉트 (현재 라우트가 로그인이 아닌 경우에만)
       if (router.currentRoute.value.path !== '/login') {
         router.push('/login')
       }
@@ -215,6 +311,14 @@ export const useAuthStore = defineStore('auth', () => {
         const tokenPayload = decodeJWT(savedAccessToken)
         
         if (tokenPayload) {
+          // 토큰 만료 확인
+          const currentTime = Math.floor(Date.now() / 1000)
+          if (tokenPayload.exp && tokenPayload.exp < currentTime) {
+            // 토큰이 만료된 경우 로그아웃 처리
+            logout()
+            return
+          }
+          
           // 토큰이 유효하다면 정보 업데이트
           user.value = {
             ...parsedUser,
@@ -223,17 +327,14 @@ export const useAuthStore = defineStore('auth', () => {
             role: tokenPayload.role,
             tokenExpiry: tokenPayload.exp ? new Date(tokenPayload.exp * 1000) : null
           }
+          
+          accessToken.value = savedAccessToken
+          refreshToken.value = savedRefreshToken
+          isAuthenticated.value = true
         } else {
-          // 토큰이 유효하지 않다면 기존 저장된 정보 사용
-          user.value = parsedUser
+          // 토큰 디코딩 실패 시 로그아웃 처리
+          logout()
         }
-        
-        accessToken.value = savedAccessToken
-        refreshToken.value = savedRefreshToken
-        isAuthenticated.value = true
-        
-        // 토큰 유효성 검사 (선택사항)
-        // validateToken()
       }
     } catch (error) {
       console.error('인증 확인 실패:', error)
@@ -244,19 +345,21 @@ export const useAuthStore = defineStore('auth', () => {
 
   const validateToken = async () => {
     try {
-      // 현재 토큰으로 간단한 API 호출을 통해 유효성 검사
-      // 만약 별도의 validate endpoint가 있다면 사용
-      await api.get('/auth/validate')
-    } catch (error) {
-      console.error('토큰 유효성 검사 실패:', error)
-      // 토큰이 유효하지 않으면 리프레시 시도 또는 로그아웃
-      if (error.response?.status === 401) {
+      // 토큰 만료 여부를 클라이언트에서 먼저 확인
+      if (isTokenExpired()) {
         try {
           await refreshAccessToken()
-        } catch (refreshError) {
+        } catch {
           logout()
         }
+        return
       }
+      
+      // 필요한 경우에만 서버 검증 (현재는 클라이언트 검증만 사용)
+      console.log('토큰이 유효합니다')
+    } catch (error) {
+      console.error('토큰 유효성 검사 실패:', error)
+      logout()
     }
   }
 
@@ -302,6 +405,7 @@ export const useAuthStore = defineStore('auth', () => {
     logout,
     checkAuth,
     getCurrentEmployee,
+    fetchCompleteUserData,
     refreshAccessToken,
     validateToken,
     getApiInstance,

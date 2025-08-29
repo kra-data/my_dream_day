@@ -15,6 +15,7 @@ export const useAttendanceStore = defineStore('attendance', () => {
   const recentActivities = ref([])
   const loading = ref(false)
   const error = ref(null)
+  const isEmpty = ref(false) // 데이터가 비어있는지 표시 (에러와 구분)
   
   // 현재 사용자의 출퇴근 상태 (직원용)
   const currentStatus = ref({
@@ -137,8 +138,27 @@ export const useAttendanceStore = defineStore('attendance', () => {
 
   // ============= 관리자용 기능들 =============
 
+  // Security validation
+  const validateAdminPermission = () => {
+    const authStore = useAuthStore()
+    if (!authStore.isAuthenticated) {
+      throw new Error('인증이 필요합니다. 다시 로그인해주세요.')
+    }
+    if (authStore.user?.role !== 'admin') {
+      throw new Error('관리자 권한이 필요합니다.')
+    }
+    return true
+  }
+
+  // Pagination state
+  const nextCursor = ref(null)
+  const hasMore = ref(true)
+
   // 관리자용 - 전체 직원 출퇴근 기록 조회
-  const fetchRecords = async (startDate = null, endDate = null) => {
+  const fetchRecords = async (startDate = null, endDate = null, cursor = null, reset = false) => {
+    // Security validation
+    validateAdminPermission()
+    
     loading.value = true
     error.value = null
     
@@ -147,20 +167,105 @@ export const useAttendanceStore = defineStore('attendance', () => {
       const params = {}
       if (startDate) params.startDate = startDate
       if (endDate) params.endDate = endDate
+      if (cursor) params.cursor = cursor
       const shopId = getShopId()
       
-      const response = await api.get(`/admin/shops/${shopId}/attendance/records`, { params })
-      records.value = response.data || []
+      if (!shopId) {
+        throw new Error('매장 정보를 찾을 수 없습니다.')
+      }
       
-      console.log('전체 출퇴근 기록 조회 완료:', records.value.length, '건')
+      const response = await api.get(`attendance/admin/shops/${shopId}/attendance`, { params })
+      
+      // Handle new API response structure
+      const apiData = response.data || {}
+      const newRecords = apiData.records || []
+      
+      // Process records with enhanced data mapping
+      const processedRecords = newRecords.map(record => ({
+        id: record.id,
+        shopId: record.shopId,
+        employeeId: record.employeeId,
+        type: record.type,
+        clockInAt: record.clockInAt,
+        clockOutAt: record.clockOutAt,
+        workedMinutes: record.workedMinutes || 0,
+        extraMinutes: record.extraMinutes || 0,
+        paired: record.paired || false,
+        // Enhanced employee data
+        employeeName: record.employee?.name || '알 수 없음',
+        employeePosition: record.employee?.position || 'STAFF',
+        employeeSection: record.employee?.section || 'UNKNOWN',
+        // Additional computed fields
+        date: record.clockInAt ? new Date(record.clockInAt).toDateString() : null,
+        status: record.paired ? 'completed' : 'incomplete'
+      }))
+      
+      // Handle pagination
+      if (reset || !cursor) {
+        records.value = processedRecords
+      } else {
+        records.value = [...records.value, ...processedRecords]
+      }
+      
+      // Update pagination state
+      nextCursor.value = apiData.nextCursor || null
+      hasMore.value = !!apiData.nextCursor
+      isEmpty.value = records.value.length === 0
+      
+      console.log('전체 출퇴근 기록 조회 완료:', processedRecords.length, '건 (전체:', records.value.length, '건)')
+      console.log('Pagination - nextCursor:', nextCursor.value, 'hasMore:', hasMore.value)
       return records.value
     } catch (error) {
       console.error('전체 출퇴근 기록 조회 실패:', error)
-      error.value = error.response?.data?.message || error.message || '출퇴근 기록을 불러오는데 실패했습니다'
+      
+      // 404 에러와 데이터 없음을 구분하여 처리
+      if (error.response?.status === 404) {
+        // 404 에러는 데이터 없음으로 처리 (에러로 표시하지 않음)
+        records.value = []
+        error.value = null
+        isEmpty.value = true
+        console.log('출퇴근 기록이 없습니다 (404)')
+        return []
+      } else if (error.response?.status === 401) {
+        // 인증 오류
+        error.value = '인증에 실패했습니다. 다시 로그인해주세요.'
+      } else if (error.response?.status === 403) {
+        // 권한 오류
+        error.value = '접근 권한이 없습니다.'
+      } else if (error.response?.status >= 500) {
+        // 서버 오류
+        error.value = '서버에 일시적인 문제가 발생했습니다. 잠시 후 다시 시도해주세요.'
+      } else {
+        // 기타 오류
+        error.value = error.response?.data?.message || error.message || '출퇴근 기록을 불러오는데 실패했습니다'
+      }
+      
       throw error
     } finally {
       loading.value = false
     }
+  }
+
+  // Pagination functions
+  const loadMoreRecords = async (startDate = null, endDate = null) => {
+    if (!hasMore.value || loading.value) {
+      console.log('더 불러올 데이터가 없거나 이미 로딩 중입니다.')
+      return
+    }
+    
+    try {
+      await fetchRecords(startDate, endDate, nextCursor.value, false)
+    } catch (error) {
+      console.error('추가 데이터 로딩 실패:', error)
+      throw error
+    }
+  }
+
+  const resetRecords = () => {
+    records.value = []
+    nextCursor.value = null
+    hasMore.value = true
+    isEmpty.value = false
   }
 
   // 대시보드 관련 Actions
@@ -387,7 +492,7 @@ export const useAttendanceStore = defineStore('attendance', () => {
     }
   }
 
-  const processQRScan = async (qrData) => {
+  const processQRScan = async () => {
     try {
       // 매장 ID 가져오기
       const shopId = getShopId()
@@ -504,7 +609,12 @@ export const useAttendanceStore = defineStore('attendance', () => {
     recentActivities,
     loading,
     error,
+    isEmpty, // 데이터가 비어있는지 표시 (에러와 구분)
     currentStatus, // 직원의 현재 상태
+    
+    // Pagination State
+    nextCursor,
+    hasMore,
     
     // 직원용 Getters
     isOnDuty,
@@ -527,6 +637,8 @@ export const useAttendanceStore = defineStore('attendance', () => {
     
     // 관리자용 Actions
     fetchRecords,
+    loadMoreRecords,
+    resetRecords,
     fetchTodaySummary,
     fetchActiveEmployees,
     fetchRecentActivities,
@@ -538,6 +650,7 @@ export const useAttendanceStore = defineStore('attendance', () => {
     processQRScan,
     deleteRecordsByEmployee,
     getStatistics,
+    getApiInstance,
     
     // Helper functions
     calculateWorkedTime

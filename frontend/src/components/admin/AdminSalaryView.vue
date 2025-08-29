@@ -1,170 +1,396 @@
 <template>
-  <div class="tab-content">
-    <div class="payroll-section">
-      <!-- 급여 대시보드 -->
-      <div class="payroll-dashboard">
-        <div class="section-header">
-          <h2>💰 급여 관리</h2>
-          <div class="month-selector">
-            <select v-model="selectedYear" @change="fetchPayrollData">
-              <option v-for="year in availableYears" :key="year" :value="year">
-                {{ year }}년
-              </option>
-            </select>
-            <select v-model="selectedMonth" @change="fetchPayrollData">
-              <option v-for="month in 12" :key="month" :value="month">
-                {{ month }}월
-              </option>
-            </select>
-          </div>
+  <div class="payroll-management">
+    <!-- 헤더 섹션 -->
+    <div class="payroll-header">
+      <div class="header-content">
+        <h2>💰 급여 관리</h2>
+        <p>직원들의 급여 현황을 관리하고 정산을 진행하세요</p>
+      </div>
+      
+      <div class="header-actions">
+        <!-- 월별 선택기 -->
+        <div class="date-selector">
+          <select 
+            v-model="selectedYear" 
+            @change="onDateChange" 
+            :disabled="payrollStore.loading || isLoadingData"
+            class="date-select"
+          >
+            <option v-for="year in availableYears" :key="year" :value="year">
+              {{ year }}년
+            </option>
+          </select>
+          <select 
+            v-model="selectedMonth" 
+            @change="onDateChange" 
+            :disabled="payrollStore.loading || isLoadingData"
+            class="date-select"
+          >
+            <option v-for="month in 12" :key="month" :value="month">
+              {{ month }}월
+            </option>
+          </select>
         </div>
 
-        <!-- 급여 통계 카드 -->
-        <div class="payroll-stats">
-          <div class="stat-card">
-            <div class="stat-icon">💵</div>
-            <div class="stat-content">
-              <span class="stat-number">{{ salaryStore.formatSalary(salaryStore.payrollDashboard.expectedExpense) }}</span>
-              <span class="stat-label">이번달 예상 지출</span>
-            </div>
-          </div>
+        <!-- 액션 버튼들 -->
+        <div class="action-buttons">
+          <button 
+            @click="exportExcel"
+            :disabled="payrollStore.loading || isLoadingData"
+            class="btn btn-secondary"
+            title="급여 데이터를 엑셀로 다운로드"
+          >
+            <span class="btn-icon">📊</span>
+            엑셀 다운로드
+          </button>
           
-          <div class="stat-card">
-            <div class="stat-icon">📈</div>
-            <div class="stat-content">
-              <span class="stat-number">{{ salaryStore.formatSalary(salaryStore.payrollDashboard.lastMonthExpense) }}</span>
-              <span class="stat-label">지난달 지출</span>
-            </div>
-          </div>
-          
-          <div class="stat-card">
-            <div class="stat-icon">👥</div>
-            <div class="stat-content">
-              <span class="stat-number">{{ salaryStore.payrollDashboard.employeeCount }}</span>
-              <span class="stat-label">급여 대상 직원</span>
-            </div>
-          </div>
-          
-          <div class="stat-card">
-            <div class="stat-icon">⏰</div>
-            <div class="stat-content">
-              <span class="stat-number">{{ salaryStore.formatWorkDuration(salaryStore.payrollDashboard.totalWorkedMinutes) }}</span>
-              <span class="stat-label">총 근무 시간</span>
-            </div>
-          </div>
+          <button 
+            @click="refreshData"
+            :disabled="payrollStore.loading || isLoadingData"
+            class="btn btn-outline"
+            title="데이터 새로고침"
+          >
+            <span class="btn-icon" :class="{ 'rotate': payrollStore.loading || isLoadingData }">🔄</span>
+            새로고침
+          </button>
         </div>
       </div>
+      
+      <!-- 로딩 인디케이터 -->
+      <div v-if="payrollStore.loading || isLoadingData" class="loading-bar">
+        <div class="loading-progress"></div>
+      </div>
+    </div>
 
-      <!-- 직원별 급여 목록 -->
-      <div class="employee-payroll-list">
-        <h3>직원별 급여 현황</h3>
-        <div class="payroll-table">
-          <table>
-            <thead>
-              <tr>
-                <th>직원명</th>
-                <th>직위</th>
-                <th>급여 형태</th>
-                <th>기본 급여</th>
-                <th>근무 시간</th>
-                <th>추가 근무</th>
-                <th>총 급여</th>
-                <th>상세</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-if="salaryStore.employeePayrolls.length === 0">
-                <td colspan="8" class="no-data">급여 데이터가 없습니다</td>
-              </tr>
-              <tr v-else v-for="employee in salaryStore.employeePayrolls" :key="employee.employeeId">
-                <td>
-                  <div class="employee-cell">
-                    <div class="employee-avatar">
-                      {{ employee.name.charAt(0) }}
-                    </div>
-                    {{ employee.name }}
-                  </div>
-                </td>
-                <td>{{ formatPosition(employee.position) }}</td>
-                <td>
-                  <span class="pay-type">
-                    {{ employee.hourlyPay ? '시급' : '월급' }}
-                  </span>
-                </td>
-                <td>
-                  {{ employee.hourlyPay 
-                    ? `${employee.hourlyPay.toLocaleString()}원/시간` 
-                    : `${employee.monthlyPay.toLocaleString()}원/월` 
-                  }}
-                </td>
-                <td>{{ salaryStore.formatWorkDuration(employee.workedMinutes) }}</td>
-                <td>{{ salaryStore.formatWorkDuration(employee.extraMinutes) }}</td>
-                <td class="salary-amount">{{ salaryStore.formatSalary(employee.salary) }}</td>
-                <td>
-                  <button 
-                    @click="viewEmployeePayrollDetail(employee.employeeId)"
-                    class="btn btn-secondary btn-sm"
-                  >
-                    상세보기
-                  </button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
+    <!-- 대시보드 통계 -->
+    <div class="dashboard-stats">
+      <div class="stat-card primary">
+        <div class="stat-icon">💵</div>
+        <div class="stat-content">
+          <h3>{{ formatCurrency(payrollStore.payrollDashboard.expectedExpense) }}</h3>
+          <p>이번달 예상 지출</p>
+          <span class="stat-change" :class="getChangeClass(monthlyChange)">
+            {{ formatChange(monthlyChange) }}
+          </span>
+        </div>
+      </div>
+      
+      <div class="stat-card success">
+        <div class="stat-icon">👥</div>
+        <div class="stat-content">
+          <h3>{{ payrollStore.payrollDashboard.employeeCount }}</h3>
+          <p>급여 대상 직원</p>
+          <span class="stat-label">활성 직원</span>
+        </div>
+      </div>
+      
+      <div class="stat-card info">
+        <div class="stat-icon">⏰</div>
+        <div class="stat-content">
+          <h3>{{ formatWorkHours(payrollStore.payrollDashboard.totalWorkedMinutes) }}</h3>
+          <p>총 근무 시간</p>
+          <span class="stat-label">이번달 누적</span>
+        </div>
+      </div>
+      
+      <div class="stat-card warning">
+        <div class="stat-icon">📈</div>
+        <div class="stat-content">
+          <h3>{{ formatCurrency(payrollStore.payrollDashboard.lastMonthExpense) }}</h3>
+          <p>지난달 지출</p>
+          <span class="stat-label">비교 기준</span>
         </div>
       </div>
     </div>
 
-    <!-- 급여 상세 모달 -->
-    <div v-if="showPayrollDetailModal" class="modal-overlay" @click="closePayrollDetailModal">
-      <div class="modal-content payroll-detail-modal" @click.stop>
-        <div class="modal-header">
-          <h3>{{ salaryStore.employeeDetail?.employee?.name }}님 급여 상세</h3>
-          <button @click="closePayrollDetailModal" class="modal-close">&times;</button>
+    <!-- 정산 관리 섹션 -->
+    <div class="settlement-section">
+      <div class="section-header">
+        <h3>💼 정산 관리 (7일 기준)</h3>
+        <div class="settlement-info">
+          <span class="settlement-period">{{ currentSettlementPeriod }}</span>
+          <span class="settlement-status" :class="settlementStatusClass">
+            {{ settlementStatusText }}
+          </span>
         </div>
-        <div v-if="salaryStore.employeeDetail" class="payroll-detail">
+      </div>
+
+      <div class="settlement-content">
+        <div class="settlement-summary">
+          <div class="summary-item">
+            <span class="label">정산 대상 금액</span>
+            <span class="value amount">{{ formatCurrency(totalSettlementAmount) }}</span>
+          </div>
+          <div class="summary-item">
+            <span class="label">미정산 직원</span>
+            <span class="value count">{{ unsettledEmployeeCount }}명</span>
+          </div>
+          <div class="summary-item">
+            <span class="label">정산 예정일</span>
+            <span class="value date">{{ nextSettlementDate }}</span>
+          </div>
+        </div>
+
+        <div class="settlement-actions">
+          <button 
+            @click="processSettlement"
+            :disabled="payrollStore.loading || isLoadingData || totalSettlementAmount === 0"
+            class="btn btn-primary btn-large"
+          >
+            <span v-if="payrollStore.loading || isLoadingData" class="btn-loading">
+              <span class="loading-spinner"></span>
+              처리중...
+            </span>
+            <span v-else class="btn-content">
+              <span class="btn-icon">💰</span>
+              정산 처리하기
+            </span>
+          </button>
+          
+          <!-- TODO: API 개발 완료 후 활성화 -->
+          <!-- 
+          <button 
+            @click="viewSettlementHistory"
+            class="btn btn-secondary"
+            disabled
+            title="정산 API 개발 완료 후 활성화 예정"
+          >
+            <span class="btn-icon">📋</span>
+            정산 내역
+          </button>
+          -->
+        </div>
+      </div>
+    </div>
+
+    <!-- 직원별 급여 테이블 -->
+    <div class="payroll-table-section">
+      <div class="section-header">
+        <h3>직원별 급여 현황</h3>
+        <div class="table-controls">
+          <div class="search-box">
+            <input 
+              v-model="searchQuery"
+              type="text" 
+              placeholder="직원명 검색..."
+              class="search-input"
+            >
+            <span class="search-icon">🔍</span>
+          </div>
+          <div class="filter-controls">
+            <select v-model="positionFilter" class="filter-select">
+              <option value="">모든 직위</option>
+              <option value="OWNER">점장</option>
+              <option value="MANAGER">매니저</option>
+              <option value="STAFF">직원</option>
+              <option value="PART_TIME">알바</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div class="table-container">
+        <div v-if="payrollStore.loading || isLoadingData" class="table-loading">
+          <div class="loading-skeleton">
+            <div v-for="n in 5" :key="n" class="skeleton-row">
+              <div class="skeleton-cell"></div>
+              <div class="skeleton-cell"></div>
+              <div class="skeleton-cell"></div>
+              <div class="skeleton-cell"></div>
+            </div>
+          </div>
+        </div>
+
+        <div v-else-if="filteredPayrolls.length === 0" class="empty-state">
+          <div class="empty-icon">📊</div>
+          <h4>급여 데이터가 없습니다</h4>
+          <p>{{ selectedYear }}년 {{ selectedMonth }}월의 급여 데이터가 없습니다.</p>
+          <!-- 디버깅 정보 -->
+          <div style="margin-top: 16px; padding: 12px; background: #f3f4f6; border-radius: 8px; font-size: 12px; color: #6b7280;">
+            <div>전체 데이터: {{ payrollStore.employeePayrolls?.length || 0 }}건</div>
+            <div>필터된 데이터: {{ filteredPayrolls.length }}건</div>
+            <div>검색어: "{{ searchQuery }}"</div>
+            <div>직위 필터: "{{ positionFilter }}"</div>
+          </div>
+        </div>
+
+        <table v-else class="payroll-table">
+          <thead>
+            <tr>
+              <th class="sortable" @click="sortBy('name')">
+                직원명
+                <span class="sort-icon" :class="getSortIcon('name')">↕️</span>
+              </th>
+              <th>직위</th>
+              <th>급여 형태</th>
+              <th class="sortable" @click="sortBy('salary')" style="text-align: right;">
+                급여액
+                <span class="sort-icon" :class="getSortIcon('salary')">↕️</span>
+              </th>
+              <th style="text-align: right;">근무시간</th>
+              <th style="text-align: right;">추가근무</th>
+              <th class="actions">상세</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr 
+              v-for="employee in paginatedPayrolls" 
+              :key="employee.employeeId"
+              class="table-row"
+              @click="viewEmployeeDetail(employee.employeeId)"
+            >
+              <td class="employee-cell">
+                <div class="employee-info">
+                  <div class="employee-avatar">
+                    {{ getInitial(employee.name) }}
+                  </div>
+                  <div class="employee-details">
+                    <span class="employee-name">{{ employee.name }}</span>
+                    <span class="employee-id">ID: {{ employee.employeeId }}</span>
+                  </div>
+                </div>
+              </td>
+              
+              <td>
+                <span class="position-badge" :class="getPositionClass(employee.position)">
+                  {{ formatPosition(employee.position) }}
+                </span>
+              </td>
+              
+              <td>
+                <span class="pay-type-badge" :class="employee.hourlyPay ? 'hourly' : 'monthly'">
+                  {{ employee.hourlyPay ? '시급' : '월급' }}
+                </span>
+                <div class="pay-rate">
+                  {{ formatPayRate(employee) }}
+                </div>
+              </td>
+              
+              <td class="amount-cell">
+                <span class="salary-amount">{{ formatCurrency(employee.salary) }}</span>
+                <div class="salary-breakdown">
+                  <span v-if="employee.extraMinutes > 0" class="overtime">
+                    (+{{ formatCurrency(calculateOvertimePay(employee)) }} 연장)
+                  </span>
+                </div>
+              </td>
+              
+              <td class="time-cell">
+                <span class="work-time">{{ formatMinutes(employee.workedMinutes) }}</span>
+                <div class="work-days">{{ employee.daysWorked || calculateWorkDays(employee.workedMinutes) }}일</div>
+              </td>
+              
+              <td class="time-cell">
+                <span class="overtime-hours" :class="{ 'has-overtime': employee.extraMinutes > 0 }">
+                  {{ formatMinutes(employee.extraMinutes) }}
+                </span>
+              </td>
+              
+              <td class="actions-cell">
+                <button 
+                  @click.stop="viewEmployeeDetail(employee.employeeId)"
+                  class="btn btn-sm btn-outline"
+                >
+                  상세보기
+                </button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+
+        <!-- 페이지네이션 -->
+        <div v-if="totalPages > 1" class="pagination">
+          <button 
+            @click="currentPage = Math.max(1, currentPage - 1)"
+            :disabled="currentPage === 1"
+            class="pagination-btn"
+          >
+            ← 이전
+          </button>
+          
+          <div class="pagination-info">
+            <span>{{ currentPage }} / {{ totalPages }}</span>
+            <span class="total-count">(총 {{ filteredPayrolls.length }}건)</span>
+          </div>
+          
+          <button 
+            @click="currentPage = Math.min(totalPages, currentPage + 1)"
+            :disabled="currentPage === totalPages"
+            class="pagination-btn"
+          >
+            다음 →
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 직원 상세 모달 -->
+    <div v-if="showDetailModal" class="modal-overlay" @click="closeDetailModal">
+      <div class="modal-container" @click.stop>
+        <div class="modal-header">
+          <h3>{{ selectedEmployee?.name }}님 급여 상세</h3>
+          <button @click="closeDetailModal" class="modal-close">&times;</button>
+        </div>
+
+        <div v-if="payrollStore.loading" class="modal-loading">
+          <div class="loading-spinner large"></div>
+          <p>상세 정보를 불러오는 중...</p>
+        </div>
+
+        <div v-else-if="payrollStore.employeeDetail" class="modal-content">
+          <!-- 요약 정보 -->
           <div class="detail-summary">
-            <div class="summary-item">
-              <span class="label">근무 일수:</span>
-              <span class="value">{{ salaryStore.employeeDetail.daysWorked }}일</span>
-            </div>
-            <div class="summary-item">
-              <span class="label">총 근무시간:</span>
-              <span class="value">{{ salaryStore.formatWorkDuration(salaryStore.employeeDetail.workedMinutes) }}</span>
-            </div>
-            <div class="summary-item">
-              <span class="label">추가 근무시간:</span>
-              <span class="value">{{ salaryStore.formatWorkDuration(salaryStore.employeeDetail.extraMinutes) }}</span>
-            </div>
-            <div class="summary-item total">
-              <span class="label">총 급여:</span>
-              <span class="value">{{ salaryStore.formatSalary(salaryStore.employeeDetail.salary) }}</span>
+            <div class="summary-grid">
+              <div class="summary-card">
+                <span class="summary-label">근무 일수</span>
+                <span class="summary-value">{{ payrollStore.employeeDetail.daysWorked }}일</span>
+              </div>
+              <div class="summary-card">
+                <span class="summary-label">총 근무시간</span>
+                <span class="summary-value">{{ formatMinutes(payrollStore.employeeDetail.workedMinutes) }}</span>
+              </div>
+              <div class="summary-card">
+                <span class="summary-label">연장 근무시간</span>
+                <span class="summary-value overtime">{{ formatMinutes(payrollStore.employeeDetail.extraMinutes) }}</span>
+              </div>
+              <div class="summary-card total">
+                <span class="summary-label">총 급여</span>
+                <span class="summary-value">{{ formatCurrency(payrollStore.employeeDetail.salary) }}</span>
+              </div>
             </div>
           </div>
 
-          <div class="detail-logs">
+          <!-- 출퇴근 기록 -->
+          <div class="attendance-logs">
             <h4>출퇴근 기록</h4>
-            <div class="logs-table">
-              <table>
+            <div v-if="!payrollStore.employeeDetail.logs || payrollStore.employeeDetail.logs.length === 0" class="no-logs">
+              <span class="empty-icon">📅</span>
+              <p>출퇴근 기록이 없습니다</p>
+            </div>
+            <div v-else class="logs-table-container">
+              <table class="logs-table">
                 <thead>
                   <tr>
                     <th>날짜</th>
                     <th>출근시간</th>
                     <th>퇴근시간</th>
                     <th>근무시간</th>
-                    <th>추가근무</th>
+                    <th>연장시간</th>
+                    <th>상태</th>
                   </tr>
                 </thead>
                 <tbody>
-                  <tr v-if="!salaryStore.employeeDetail.logs || salaryStore.employeeDetail.logs.length === 0">
-                    <td colspan="5" class="no-data">출퇴근 기록이 없습니다</td>
-                  </tr>
-                  <tr v-else v-for="log in salaryStore.employeeDetail.logs" :key="log.date">
+                  <tr v-for="log in payrollStore.employeeDetail.logs" :key="log.date">
                     <td>{{ formatDate(log.date) }}</td>
                     <td>{{ log.clockInAt ? formatTime(log.clockInAt) : '-' }}</td>
                     <td>{{ log.clockOutAt ? formatTime(log.clockOutAt) : '-' }}</td>
-                    <td>{{ salaryStore.formatWorkDuration(log.workedMinutes) }}</td>
-                    <td>{{ salaryStore.formatWorkDuration(log.extraMinutes) }}</td>
+                    <td>{{ formatMinutes(log.workedMinutes) }}</td>
+                    <td class="overtime-cell">{{ formatMinutes(log.extraMinutes) }}</td>
+                    <td>
+                      <span class="status-badge" :class="getAttendanceStatus(log)">
+                        {{ getAttendanceStatusText(log) }}
+                      </span>
+                    </td>
                   </tr>
                 </tbody>
               </table>
@@ -173,308 +399,1331 @@
         </div>
       </div>
     </div>
+
+    <!-- 알림 토스트 -->
+    <div v-if="notification.show" class="notification-toast" :class="notification.type">
+      <span class="notification-icon">
+        {{ notification.type === 'success' ? '✅' : notification.type === 'error' ? '❌' : 'ℹ️' }}
+      </span>
+      <span class="notification-message">{{ notification.message }}</span>
+      <button @click="hideNotification" class="notification-close">&times;</button>
+    </div>
   </div>
 </template>
 
 <script>
-import { ref, computed } from 'vue'
-import { useSalaryStore } from '@/stores/salary'
+import { ref, computed, onMounted, watch } from 'vue'
+import { usePayrollStore } from '@/stores/payroll'
+import { useEmployeesStore } from '@/stores/employees'
 
 export default {
   name: 'AdminSalaryView',
   setup() {
-    const salaryStore = useSalaryStore()
+    const payrollStore = usePayrollStore()
+    const employeesStore = useEmployeesStore()
     
-    // 급여 관련 상태
-    const currentDate = new Date()
-    const selectedYear = ref(currentDate.getFullYear())
-    const selectedMonth = ref(currentDate.getMonth() + 1)
-    const showPayrollDetailModal = ref(false)
+    // 상태 관리
+    const isLoadingData = ref(false)
+    const selectedYear = ref(new Date().getFullYear())
+    const selectedMonth = ref(new Date().getMonth() + 1)
+    const showDetailModal = ref(false)
+    const selectedEmployee = ref(null)
+    const searchQuery = ref('')
+    const positionFilter = ref('')
+    const sortField = ref('name')
+    const sortDirection = ref('asc')
+    const currentPage = ref(1)
+    const itemsPerPage = ref(10)
     
-    // 사용 가능한 연도 목록 (현재 연도부터 3년 전까지)
+    let fetchTimeout = null
+    
+    // 알림 시스템
+    const notification = ref({
+      show: false,
+      type: 'info',
+      message: ''
+    })
+    
+    // 계산된 속성들
     const availableYears = computed(() => {
       const current = new Date().getFullYear()
       return Array.from({ length: 4 }, (_, i) => current - i)
     })
     
-    // 급여 데이터 가져오기
+    const monthlyChange = computed(() => {
+      const current = payrollStore.payrollDashboard.expectedExpense || 0
+      const last = payrollStore.payrollDashboard.lastMonthExpense || 0
+      if (last === 0) return 0
+      return ((current - last) / last * 100).toFixed(1)
+    })
+    
+    const currentSettlementPeriod = computed(() => {
+      const now = new Date()
+      const currentDate = now.getDate()
+      
+      if (currentDate >= 7) {
+        const start = new Date(now.getFullYear(), now.getMonth(), 7)
+        const end = new Date(now.getFullYear(), now.getMonth() + 1, 6)
+        return `${start.getMonth() + 1}월 7일 ~ ${end.getMonth() + 1}월 6일`
+      } else {
+        const start = new Date(now.getFullYear(), now.getMonth() - 1, 7)
+        const end = new Date(now.getFullYear(), now.getMonth(), 6)
+        return `${start.getMonth() + 1}월 7일 ~ ${end.getMonth() + 1}월 6일`
+      }
+    })
+    
+    const totalSettlementAmount = computed(() => {
+      return payrollStore.employeePayrolls.reduce((sum, emp) => sum + (emp.salary || 0), 0)
+    })
+    
+    const unsettledEmployeeCount = computed(() => {
+      return payrollStore.employeePayrolls.filter(emp => !emp.settled).length
+    })
+    
+    const nextSettlementDate = computed(() => {
+      const now = new Date()
+      const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 7)
+      return nextMonth.toLocaleDateString('ko-KR')
+    })
+    
+    const settlementStatusClass = computed(() => {
+      const amount = totalSettlementAmount.value
+      if (amount === 0) return 'completed'
+      if (amount > 10000000) return 'warning'
+      return 'pending'
+    })
+    
+    const settlementStatusText = computed(() => {
+      const amount = totalSettlementAmount.value
+      if (amount === 0) return '정산 완료'
+      if (amount > 10000000) return '고액 정산 대기'
+      return '정산 대기'
+    })
+    
+    // 필터링된 급여 목록
+    const filteredPayrolls = computed(() => {
+      let filtered = [...payrollStore.employeePayrolls]
+      
+      // 검색 필터
+      if (searchQuery.value) {
+        const query = searchQuery.value.toLowerCase()
+        filtered = filtered.filter(emp => 
+          emp.name.toLowerCase().includes(query) ||
+          emp.employeeId.toString().includes(query)
+        )
+      }
+      
+      // 직위 필터
+      if (positionFilter.value) {
+        filtered = filtered.filter(emp => emp.position === positionFilter.value)
+      }
+      
+      // 정렬
+      filtered.sort((a, b) => {
+        let aVal = a[sortField.value]
+        let bVal = b[sortField.value]
+        
+        if (typeof aVal === 'string') {
+          aVal = aVal.toLowerCase()
+          bVal = bVal.toLowerCase()
+        }
+        
+        if (sortDirection.value === 'asc') {
+          return aVal > bVal ? 1 : -1
+        } else {
+          return aVal < bVal ? 1 : -1
+        }
+      })
+      
+      return filtered
+    })
+    
+    const totalPages = computed(() => {
+      return Math.ceil(filteredPayrolls.value.length / itemsPerPage.value)
+    })
+    
+    const paginatedPayrolls = computed(() => {
+      const start = (currentPage.value - 1) * itemsPerPage.value
+      const end = start + itemsPerPage.value
+      return filteredPayrolls.value.slice(start, end)
+    })
+    
+    // 메서드들
     const fetchPayrollData = async () => {
+      const hasCurrentData = payrollStore.payrollDashboard && 
+                           payrollStore.payrollDashboard.year === selectedYear.value && 
+                           payrollStore.payrollDashboard.month === selectedMonth.value &&
+                           payrollStore.employeePayrolls.length > 0
+      
+      if (hasCurrentData) {
+        console.log(`💾 ${selectedYear.value}년 ${selectedMonth.value}월 데이터 캐시 사용`)
+        return
+      }
+      
+      if (isLoadingData.value || payrollStore.loading) {
+        return
+      }
+      
+      isLoadingData.value = true
       try {
+        console.log(`🔄 급여 데이터 로딩: ${selectedYear.value}년 ${selectedMonth.value}월`)
+        
         await Promise.all([
-          salaryStore.fetchPayrollDashboard(selectedYear.value, selectedMonth.value),
-          salaryStore.fetchEmployeePayrolls(selectedYear.value, selectedMonth.value)
+          payrollStore.fetchPayrollDashboard(selectedYear.value, selectedMonth.value),
+          new Promise(resolve => setTimeout(resolve, 200)),
+          payrollStore.fetchEmployeePayrolls(selectedYear.value, selectedMonth.value)
         ])
+        
+        showNotification('success', '급여 데이터를 성공적으로 불러왔습니다.')
       } catch (error) {
         console.error('급여 데이터 로딩 실패:', error)
+        showNotification('error', '급여 데이터를 불러오는데 실패했습니다.')
+      } finally {
+        isLoadingData.value = false
       }
     }
     
-    // 직원 급여 상세 보기
-    const viewEmployeePayrollDetail = async (employeeId) => {
+    const onDateChange = () => {
+      if (fetchTimeout) {
+        clearTimeout(fetchTimeout)
+      }
+      
+      fetchTimeout = setTimeout(() => {
+        fetchPayrollData()
+      }, 1000)
+    }
+    
+    const refreshData = async () => {
+      // 캐시 무시하고 강제 새로고침
+      payrollStore.payrollDashboard.year = null
+      await fetchPayrollData()
+    }
+    
+    const exportExcel = async () => {
       try {
-        await salaryStore.fetchEmployeePayrollDetail(employeeId, selectedYear.value, selectedMonth.value)
-        showPayrollDetailModal.value = true
+        showNotification('info', '엑셀 파일을 생성중입니다...')
+        await payrollStore.exportPayrollExcel(selectedYear.value, selectedMonth.value)
+        showNotification('success', '엑셀 파일이 다운로드되었습니다.')
       } catch (error) {
-        alert('급여 상세 정보를 불러오는데 실패했습니다: ' + error.message)
+        console.error('엑셀 다운로드 실패:', error)
+        showNotification('error', '엑셀 다운로드에 실패했습니다.')
       }
     }
     
-    // 급여 상세 모달 닫기
-    const closePayrollDetailModal = () => {
-      showPayrollDetailModal.value = false
-      salaryStore.employeeDetail = null
+    const viewEmployeeDetail = async (employeeId) => {
+      try {
+        selectedEmployee.value = payrollStore.employeePayrolls.find(emp => emp.employeeId === employeeId)
+        showDetailModal.value = true
+        
+        await payrollStore.fetchEmployeePayrollDetail(employeeId, selectedYear.value, selectedMonth.value)
+      } catch (error) {
+        console.error('직원 상세 정보 조회 실패:', error)
+        showNotification('error', '직원 상세 정보를 불러오는데 실패했습니다.')
+      }
     }
     
-    return {
-      salaryStore,
-      selectedYear,
-      selectedMonth,
-      availableYears,
-      showPayrollDetailModal,
-      fetchPayrollData,
-      viewEmployeePayrollDetail,
-      closePayrollDetailModal
+    const closeDetailModal = () => {
+      showDetailModal.value = false
+      selectedEmployee.value = null
+      payrollStore.employeeDetail = null
     }
-  },
-  methods: {
-    formatPosition(position) {
+    
+    const processSettlement = async () => {
+      const totalAmount = totalSettlementAmount.value
+      const employeeCount = unsettledEmployeeCount.value
+      
+      if (totalAmount === 0) {
+        showNotification('warning', '정산할 급여가 없습니다.')
+        return
+      }
+      
+      const confirmed = confirm(
+        `총 ${formatCurrency(totalAmount)}을(를) ${employeeCount}명의 직원에게 정산하시겠습니까?`
+      )
+      
+      if (!confirmed) return
+      
+      try {
+        const settlementData = {
+          period: currentSettlementPeriod.value,
+          startDate: new Date().toISOString(),
+          endDate: new Date().toISOString(),
+          totalAmount: totalAmount,
+          employees: payrollStore.employeePayrolls.map(emp => ({
+            employeeId: emp.employeeId,
+            name: emp.name,
+            amount: emp.salary,
+            workedMinutes: emp.workedMinutes,
+            daysWorked: emp.daysWorked || 0
+          }))
+        }
+        
+        const result = await payrollStore.processSettlement(settlementData)
+        
+        if (result.success) {
+          showNotification('success', `정산이 완료되었습니다! (${formatCurrency(totalAmount)}, ${employeeCount}명)`)
+          await refreshData() // 정산 후 데이터 새로고침
+        }
+      } catch (error) {
+        console.error('정산 처리 실패:', error)
+        showNotification('error', `정산 처리에 실패했습니다: ${error.message}`)
+      }
+    }
+    
+    const sortBy = (field) => {
+      if (sortField.value === field) {
+        sortDirection.value = sortDirection.value === 'asc' ? 'desc' : 'asc'
+      } else {
+        sortField.value = field
+        sortDirection.value = 'asc'
+      }
+      currentPage.value = 1
+    }
+    
+    const showNotification = (type, message) => {
+      notification.value = { show: true, type, message }
+      setTimeout(() => {
+        hideNotification()
+      }, 5000)
+    }
+    
+    const hideNotification = () => {
+      notification.value.show = false
+    }
+    
+    // 유틸리티 함수들
+    const formatCurrency = (amount) => {
+      if (!amount) return '0원'
+      return `${amount.toLocaleString()}원`
+    }
+    
+    const formatMinutes = (minutes) => {
+      if (!minutes || minutes === 0) return '0시간'
+      const hours = Math.floor(minutes / 60)
+      const remainingMinutes = minutes % 60
+      return remainingMinutes > 0 ? `${hours}시간 ${remainingMinutes}분` : `${hours}시간`
+    }
+    
+    const formatWorkHours = (minutes) => {
+      if (!minutes) return '0시간'
+      return `${Math.round(minutes / 60)}시간`
+    }
+    
+    const formatChange = (change) => {
+      const changeNum = parseFloat(change)
+      if (changeNum === 0) return '변동없음'
+      return `${changeNum > 0 ? '+' : ''}${changeNum}%`
+    }
+    
+    const getChangeClass = (change) => {
+      const changeNum = parseFloat(change)
+      if (changeNum > 0) return 'positive'
+      if (changeNum < 0) return 'negative'
+      return 'neutral'
+    }
+    
+    const formatPayRate = (employee) => {
+      if (employee.hourlyPay) {
+        return `${employee.hourlyPay.toLocaleString()}원/시간`
+      } else if (employee.monthlyPay) {
+        return `${employee.monthlyPay.toLocaleString()}원/월`
+      }
+      return '미설정'
+    }
+    
+    const calculateOvertimePay = (employee) => {
+      if (!employee.hourlyPay || !employee.extraMinutes) return 0
+      return Math.round(employee.hourlyPay * (employee.extraMinutes / 60) * 1.5)
+    }
+    
+    const getInitial = (name) => {
+      return name ? name.charAt(0) : '?'
+    }
+    
+    const formatPosition = (position) => {
       const positions = {
         'OWNER': '점장',
-        'MANAGER': '매니저',
+        'MANAGER': '매니저', 
         'STAFF': '직원',
         'PART_TIME': '알바'
       }
       return positions[position] || position
-    },
+    }
     
-    formatTime(timestamp) {
+    const getPositionClass = (position) => {
+      const classes = {
+        'OWNER': 'owner',
+        'MANAGER': 'manager',
+        'STAFF': 'staff', 
+        'PART_TIME': 'part-time'
+      }
+      return classes[position] || 'default'
+    }
+    
+    const getSortIcon = (field) => {
+      if (sortField.value !== field) return ''
+      return sortDirection.value === 'asc' ? 'asc' : 'desc'
+    }
+    
+    const formatTime = (timestamp) => {
       return new Date(timestamp).toLocaleTimeString('ko-KR', {
         hour: '2-digit',
         minute: '2-digit'
       })
-    },
+    }
     
-    formatDate(timestamp) {
+    const formatDate = (timestamp) => {
       return new Date(timestamp).toLocaleDateString('ko-KR')
+    }
+    
+    const getAttendanceStatus = (log) => {
+      if (!log.clockInAt) return 'absent'
+      if (!log.clockOutAt) return 'incomplete'
+      if (log.extraMinutes > 0) return 'overtime'
+      return 'normal'
+    }
+    
+    const getAttendanceStatusText = (log) => {
+      const status = getAttendanceStatus(log)
+      const statusTexts = {
+        'absent': '결근',
+        'incomplete': '미퇴근',
+        'overtime': '연장근무',
+        'normal': '정상'
+      }
+      return statusTexts[status] || '알 수 없음'
+    }
+    
+    // 근무 일수 계산 (대략적인 추정)
+    const calculateWorkDays = (workedMinutes) => {
+      if (!workedMinutes) return 0
+      // 하루 8시간(480분) 기준으로 계산
+      return Math.round(workedMinutes / 480)
+    }
+    
+    // 컴포넌트 마운트
+    onMounted(() => {
+      console.log('🔍 AdminSalaryView: 마운트됨')
+      console.log('📊 payrollStore.payrollDashboard:', payrollStore.payrollDashboard)
+      console.log('👥 payrollStore.employeePayrolls:', payrollStore.employeePayrolls)
+      console.log('🔄 payrollStore.loading:', payrollStore.loading)
+      console.log('❌ payrollStore.error:', payrollStore.error)
+    })
+    
+    // 검색어 변경시 페이지 리셋
+    watch([searchQuery, positionFilter], () => {
+      currentPage.value = 1
+    })
+    
+    // 급여 데이터 변경 감지 (디버깅용)
+    watch(() => payrollStore.employeePayrolls, (newVal, oldVal) => {
+      console.log('🔄 employeePayrolls 변경됨:', {
+        이전: oldVal?.length || 0,
+        현재: newVal?.length || 0,
+        데이터: newVal
+      })
+    }, { deep: true })
+    
+    watch(() => payrollStore.payrollDashboard, (newVal) => {
+      console.log('📊 payrollDashboard 변경됨:', newVal)
+    }, { deep: true })
+    
+    return {
+      // Store
+      payrollStore,
+      employeesStore,
+      
+      // State
+      isLoadingData,
+      selectedYear,
+      selectedMonth,
+      showDetailModal,
+      selectedEmployee,
+      searchQuery,
+      positionFilter,
+      sortField,
+      sortDirection,
+      currentPage,
+      itemsPerPage,
+      notification,
+      
+      // Computed
+      availableYears,
+      monthlyChange,
+      currentSettlementPeriod,
+      totalSettlementAmount,
+      unsettledEmployeeCount,
+      nextSettlementDate,
+      settlementStatusClass,
+      settlementStatusText,
+      filteredPayrolls,
+      totalPages,
+      paginatedPayrolls,
+      
+      // Methods
+      fetchPayrollData,
+      onDateChange,
+      refreshData,
+      exportExcel,
+      viewEmployeeDetail,
+      closeDetailModal,
+      processSettlement,
+      sortBy,
+      showNotification,
+      hideNotification,
+      
+      // Utils
+      formatCurrency,
+      formatMinutes,
+      formatWorkHours,
+      formatChange,
+      getChangeClass,
+      formatPayRate,
+      calculateOvertimePay,
+      getInitial,
+      formatPosition,
+      getPositionClass,
+      getSortIcon,
+      formatTime,
+      formatDate,
+      getAttendanceStatus,
+      getAttendanceStatusText,
+      calculateWorkDays
     }
   }
 }
 </script>
 
 <style scoped>
-.tab-content {
-  animation: fadeIn 0.3s ease-in;
+/* =========================
+   기본 레이아웃 및 컨테이너
+   ========================= */
+.payroll-management {
+  padding: 24px;
+  max-width: 1400px;
+  margin: 0 auto;
+  background: #f8fafc;
+  min-height: 100vh;
 }
 
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-.payroll-section {
-  display: flex;
-  flex-direction: column;
-  gap: 30px;
-}
-
-.payroll-dashboard {
+/* =========================
+   헤더 섹션
+   ========================= */
+.payroll-header {
   background: white;
   border-radius: 12px;
   padding: 24px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  margin-bottom: 24px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  position: relative;
+  overflow: hidden;
 }
 
-.section-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+.header-content {
   margin-bottom: 20px;
 }
 
-.section-header h2 {
+.payroll-header h2 {
   color: #1f2937;
-  margin: 0;
+  margin: 0 0 8px 0;
+  font-size: 1.75rem;
+  font-weight: 700;
 }
 
-.month-selector {
+.payroll-header p {
+  color: #6b7280;
+  margin: 0;
+  font-size: 1rem;
+}
+
+.header-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.date-selector {
   display: flex;
   gap: 12px;
 }
 
-.month-selector select {
-  padding: 8px 12px;
+.date-select {
+  padding: 8px 16px;
   border: 1px solid #d1d5db;
-  border-radius: 6px;
+  border-radius: 8px;
   background: white;
+  font-size: 14px;
+  min-width: 100px;
+  transition: border-color 0.2s;
 }
 
-.payroll-stats {
+.date-select:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.date-select:disabled {
+  background: #f9fafb;
+  color: #9ca3af;
+  cursor: not-allowed;
+}
+
+.action-buttons {
+  display: flex;
+  gap: 12px;
+}
+
+/* 로딩 바 */
+.loading-bar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: #e5e7eb;
+  overflow: hidden;
+}
+
+.loading-progress {
+  height: 100%;
+  background: linear-gradient(45deg, #3b82f6, #8b5cf6);
+  animation: loading-slide 1.5s infinite;
+}
+
+@keyframes loading-slide {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+/* =========================
+   대시보드 통계
+   ========================= */
+.dashboard-stats {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 16px;
-  margin-top: 20px;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 20px;
+  margin-bottom: 32px;
 }
 
 .stat-card {
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 16px;
-  border-radius: 8px;
-  background: #f8fafc;
-  border-left: 4px solid #e5e7eb;
+  gap: 16px;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.15);
 }
 
 .stat-icon {
-  font-size: 1.5rem;
+  font-size: 2.5rem;
+  width: 60px;
+  height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+}
+
+.stat-card.primary .stat-icon {
+  background: linear-gradient(135deg, #3b82f6, #1e40af);
+  color: white;
+}
+
+.stat-card.success .stat-icon {
+  background: linear-gradient(135deg, #10b981, #059669);
+  color: white;
+}
+
+.stat-card.info .stat-icon {
+  background: linear-gradient(135deg, #06b6d4, #0891b2);
+  color: white;
+}
+
+.stat-card.warning .stat-icon {
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+  color: white;
 }
 
 .stat-content {
-  display: flex;
-  flex-direction: column;
+  flex: 1;
 }
 
-.stat-number {
-  font-size: 1.2rem;
+.stat-content h3 {
+  margin: 0 0 4px 0;
+  font-size: 1.75rem;
   font-weight: 700;
   color: #1f2937;
 }
 
-.stat-label {
-  font-size: 0.9rem;
+.stat-content p {
+  margin: 0 0 8px 0;
+  color: #6b7280;
+  font-size: 0.95rem;
+}
+
+.stat-change {
+  font-size: 0.85rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.stat-change.positive {
+  background: #dcfce7;
+  color: #16a34a;
+}
+
+.stat-change.negative {
+  background: #fef2f2;
+  color: #dc2626;
+}
+
+.stat-change.neutral {
+  background: #f3f4f6;
   color: #6b7280;
 }
 
-.employee-payroll-list {
+.stat-label {
+  font-size: 0.85rem;
+  color: #9ca3af;
+  font-weight: 500;
+}
+
+/* =========================
+   정산 관리 섹션
+   ========================= */
+.settlement-section {
   background: white;
   border-radius: 12px;
   padding: 24px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  margin-bottom: 32px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  border-left: 4px solid #10b981;
 }
 
-.employee-payroll-list h3 {
-  margin-bottom: 20px;
+.settlement-section .section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.settlement-section h3 {
+  margin: 0;
+  color: #1f2937;
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+
+.settlement-info {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.settlement-period {
+  font-size: 0.9rem;
+  color: #059669;
+  font-weight: 600;
+  background: #dcfce7;
+  padding: 4px 12px;
+  border-radius: 20px;
+}
+
+.settlement-status {
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 4px 8px;
+  border-radius: 12px;
+  text-transform: uppercase;
+}
+
+.settlement-status.pending {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.settlement-status.warning {
+  background: #fecaca;
+  color: #991b1b;
+}
+
+.settlement-status.completed {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.settlement-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 32px;
+  flex-wrap: wrap;
+}
+
+.settlement-summary {
+  display: flex;
+  gap: 32px;
+  flex-wrap: wrap;
+}
+
+.summary-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.summary-item .label {
+  font-size: 0.85rem;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.summary-item .value {
+  font-size: 1.1rem;
+  font-weight: 700;
   color: #1f2937;
 }
 
-.payroll-table {
+.summary-item .value.amount {
+  color: #dc2626;
+  font-size: 1.25rem;
+}
+
+.summary-item .value.count {
+  color: #059669;
+}
+
+.summary-item .value.date {
+  color: #7c3aed;
+}
+
+.settlement-actions {
+  display: flex;
+  gap: 12px;
+}
+
+/* =========================
+   테이블 섹션
+   ========================= */
+.payroll-table-section {
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.payroll-table-section .section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.payroll-table-section h3 {
+  margin: 0;
+  color: #1f2937;
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+
+.table-controls {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+}
+
+.search-box {
+  position: relative;
+}
+
+.search-input {
+  padding: 8px 40px 8px 16px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 14px;
+  min-width: 200px;
+  transition: border-color 0.2s;
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.search-icon {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #9ca3af;
+}
+
+.filter-select {
+  padding: 8px 16px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background: white;
+  font-size: 14px;
+  min-width: 120px;
+}
+
+.table-container {
   overflow-x: auto;
 }
 
-.payroll-table table {
-  width: 100%;
-  border-collapse: collapse;
+/* 로딩 스켈레톤 */
+.table-loading {
+  padding: 20px 0;
 }
 
-.payroll-table th,
-.payroll-table td {
-  padding: 12px;
-  text-align: left;
-  border-bottom: 1px solid #f3f4f6;
+.loading-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.skeleton-row {
+  display: flex;
+  gap: 16px;
+}
+
+.skeleton-cell {
+  height: 20px;
+  background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
+  background-size: 200% 100%;
+  animation: loading-skeleton 1.5s infinite;
+  border-radius: 4px;
+  flex: 1;
+}
+
+@keyframes loading-skeleton {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* 빈 상태 */
+.empty-state {
+  text-align: center;
+  padding: 60px 20px;
+}
+
+.empty-icon {
+  font-size: 4rem;
+  margin-bottom: 16px;
+  opacity: 0.5;
+}
+
+.empty-state h4 {
+  margin: 0 0 8px 0;
+  color: #1f2937;
+  font-size: 1.25rem;
+}
+
+.empty-state p {
+  margin: 0;
+  color: #6b7280;
+}
+
+/* 테이블 스타일 */
+.payroll-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0;
 }
 
 .payroll-table th {
   background: #f8fafc;
+  padding: 16px 12px;
+  text-align: left;
   font-weight: 600;
   color: #374151;
+  border-bottom: 2px solid #e5e7eb;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.payroll-table th.sortable {
+  cursor: pointer;
+  user-select: none;
+  transition: background-color 0.2s;
+}
+
+.payroll-table th.sortable:hover {
+  background: #f1f5f9;
+}
+
+.sort-icon {
+  margin-left: 4px;
+  opacity: 0.5;
+  font-size: 0.8rem;
+}
+
+.sort-icon.asc {
+  opacity: 1;
+  transform: rotate(180deg);
+}
+
+.sort-icon.desc {
+  opacity: 1;
+}
+
+.payroll-table td {
+  padding: 16px 12px;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.table-row {
+  transition: background-color 0.2s;
+  cursor: pointer;
+}
+
+.table-row:hover {
+  background: #f8fafc;
 }
 
 .employee-cell {
+  min-width: 180px;
+}
+
+.employee-info {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 12px;
 }
 
 .employee-avatar {
-  width: 32px;
-  height: 32px;
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
-  background: #3b82f6;
+  background: linear-gradient(135deg, #3b82f6, #8b5cf6);
   color: white;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-weight: 600;
-  font-size: 14px;
+  font-weight: 700;
+  font-size: 1rem;
+  flex-shrink: 0;
 }
 
-.pay-type {
+.employee-details {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.employee-name {
+  font-weight: 600;
+  color: #1f2937;
+  font-size: 0.95rem;
+}
+
+.employee-id {
+  font-size: 0.8rem;
+  color: #9ca3af;
+}
+
+.position-badge {
   display: inline-block;
-  padding: 4px 8px;
-  background: #dbeafe;
-  color: #1d4ed8;
-  border-radius: 4px;
+  padding: 4px 10px;
+  border-radius: 12px;
   font-size: 0.8rem;
   font-weight: 600;
+  text-transform: uppercase;
+}
+
+.position-badge.owner {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.position-badge.manager {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.position-badge.staff {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.position-badge.part-time {
+  background: #fce7f3;
+  color: #be185d;
+}
+
+.pay-type-badge {
+  display: inline-block;
+  padding: 3px 8px;
+  border-radius: 8px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+
+.pay-type-badge.hourly {
+  background: #ddd6fe;
+  color: #5b21b6;
+}
+
+.pay-type-badge.monthly {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.pay-rate {
+  font-size: 0.8rem;
+  color: #6b7280;
+}
+
+.amount-cell {
+  text-align: right;
+  min-width: 120px;
 }
 
 .salary-amount {
   font-weight: 700;
   color: #059669;
+  font-size: 1.05rem;
 }
 
-.btn {
+.salary-breakdown {
+  margin-top: 4px;
+}
+
+.overtime {
+  font-size: 0.75rem;
+  color: #dc2626;
+  font-weight: 500;
+}
+
+.time-cell {
+  text-align: right;
+  min-width: 100px;
+}
+
+.work-time {
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.work-days {
+  font-size: 0.8rem;
+  color: #6b7280;
+  margin-top: 2px;
+}
+
+.overtime-hours {
+  font-weight: 600;
+  color: #6b7280;
+}
+
+.overtime-hours.has-overtime {
+  color: #dc2626;
+}
+
+.actions-cell {
+  text-align: center;
+  min-width: 100px;
+}
+
+/* 페이지네이션 */
+.pagination {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 24px;
+  padding-top: 24px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.pagination-btn {
   padding: 8px 16px;
-  border: none;
+  border: 1px solid #d1d5db;
+  background: white;
   border-radius: 6px;
   cursor: pointer;
-  font-weight: 600;
-  text-decoration: none;
-  display: inline-block;
+  font-size: 14px;
   transition: all 0.2s;
 }
 
-.btn-secondary {
-  background: #6b7280;
+.pagination-btn:hover:not(:disabled) {
+  background: #f3f4f6;
+  border-color: #9ca3af;
+}
+
+.pagination-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.pagination-info {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.total-count {
+  font-size: 0.8rem;
+  color: #6b7280;
+}
+
+/* =========================
+   버튼 스타일
+   ========================= */
+.btn {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 14px;
+  transition: all 0.2s;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
   color: white;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+}
+
+.btn-secondary {
+  background: linear-gradient(135deg, #6b7280, #4b5563);
+  color: white;
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: linear-gradient(135deg, #4b5563, #374151);
+}
+
+.btn-outline {
+  background: white;
+  border: 1px solid #d1d5db;
+  color: #374151;
+}
+
+.btn-outline:hover:not(:disabled) {
+  background: #f9fafb;
+  border-color: #9ca3af;
 }
 
 .btn-sm {
   padding: 6px 12px;
-  font-size: 0.9rem;
+  font-size: 12px;
 }
 
-.no-data {
-  text-align: center;
-  color: #6b7280;
-  padding: 20px;
-  font-style: italic;
+.btn-large {
+  padding: 12px 24px;
+  font-size: 16px;
 }
 
-/* 급여 상세 모달 스타일 */
+.btn-icon {
+  font-size: 1rem;
+}
+
+.btn-loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.loading-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255,255,255,0.3);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+.loading-spinner.large {
+  width: 32px;
+  height: 32px;
+  border-width: 3px;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.rotate {
+  animation: spin 1s linear infinite;
+}
+
+/* =========================
+   모달
+   ========================= */
 .modal-overlay {
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0,0,0,0.5);
+  background: rgba(0, 0, 0, 0.6);
   display: flex;
   justify-content: center;
   align-items: center;
-  z-index: 9999;
+  z-index: 1000;
+  backdrop-filter: blur(4px);
 }
 
-.modal-content {
+.modal-container {
   background: white;
-  border-radius: 12px;
-  padding: 24px;
-  max-width: 500px;
-  width: 90%;
-  max-height: 80vh;
-  overflow-y: auto;
-}
-
-.payroll-detail-modal {
+  border-radius: 16px;
+  padding: 0;
   max-width: 800px;
+  width: 90%;
   max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
 }
 
 .modal-header {
+  padding: 24px 24px 16px;
+  border-bottom: 1px solid #e5e7eb;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 20px;
+}
+
+.modal-header h3 {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #1f2937;
 }
 
 .modal-close {
@@ -482,109 +1731,335 @@ export default {
   border: none;
   font-size: 24px;
   cursor: pointer;
+  color: #9ca3af;
+  padding: 4px;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.modal-close:hover {
+  background: #f3f4f6;
   color: #6b7280;
 }
 
-.payroll-detail {
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
+.modal-loading {
+  padding: 60px 24px;
+  text-align: center;
 }
 
+.modal-loading p {
+  margin: 16px 0 0;
+  color: #6b7280;
+}
+
+.modal-content {
+  padding: 24px;
+}
+
+/* 상세 요약 */
 .detail-summary {
+  margin-bottom: 32px;
+}
+
+.summary-grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   gap: 16px;
 }
 
-.summary-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 12px;
+.summary-card {
   background: #f8fafc;
+  padding: 16px;
   border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border-left: 3px solid #e5e7eb;
 }
 
-.summary-item.total {
-  grid-column: span 2;
+.summary-card.total {
   background: #ecfdf5;
-  border: 2px solid #10b981;
+  border-left-color: #10b981;
 }
 
-.summary-item .label {
-  font-weight: 600;
-  color: #374151;
+.summary-label {
+  font-size: 0.85rem;
+  color: #6b7280;
+  font-weight: 500;
 }
 
-.summary-item .value {
+.summary-value {
+  font-size: 1.1rem;
   font-weight: 700;
   color: #1f2937;
 }
 
-.summary-item.total .value {
-  color: #059669;
-  font-size: 1.2rem;
+.summary-value.overtime {
+  color: #dc2626;
 }
 
-.detail-logs h4 {
-  margin-bottom: 16px;
+.summary-card.total .summary-value {
+  color: #059669;
+  font-size: 1.25rem;
+}
+
+/* 출퇴근 기록 */
+.attendance-logs h4 {
+  margin: 0 0 16px 0;
   color: #1f2937;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.no-logs {
+  text-align: center;
+  padding: 40px 20px;
+}
+
+.no-logs .empty-icon {
+  font-size: 3rem;
+  margin-bottom: 12px;
+  opacity: 0.5;
+}
+
+.no-logs p {
+  margin: 0;
+  color: #6b7280;
+}
+
+.logs-table-container {
+  overflow-x: auto;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
 }
 
 .logs-table {
-  overflow-x: auto;
-}
-
-.logs-table table {
   width: 100%;
   border-collapse: collapse;
-}
-
-.logs-table th,
-.logs-table td {
-  padding: 10px;
-  text-align: left;
-  border-bottom: 1px solid #f3f4f6;
+  margin: 0;
 }
 
 .logs-table th {
   background: #f8fafc;
+  padding: 12px;
+  text-align: left;
   font-weight: 600;
   color: #374151;
+  border-bottom: 1px solid #e5e7eb;
+  font-size: 0.9rem;
 }
 
+.logs-table td {
+  padding: 12px;
+  border-bottom: 1px solid #f3f4f6;
+  font-size: 0.9rem;
+}
+
+.overtime-cell {
+  color: #dc2626;
+  font-weight: 500;
+}
+
+.status-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.status-badge.normal {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.status-badge.overtime {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.status-badge.incomplete {
+  background: #fecaca;
+  color: #991b1b;
+}
+
+.status-badge.absent {
+  background: #f3f4f6;
+  color: #6b7280;
+}
+
+/* =========================
+   알림 토스트
+   ========================= */
+.notification-toast {
+  position: fixed;
+  top: 24px;
+  right: 24px;
+  background: white;
+  border-radius: 12px;
+  padding: 16px 20px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  z-index: 1100;
+  min-width: 300px;
+  max-width: 400px;
+  border-left: 4px solid;
+  animation: slideInRight 0.3s ease;
+}
+
+.notification-toast.success {
+  border-left-color: #10b981;
+}
+
+.notification-toast.error {
+  border-left-color: #ef4444;
+}
+
+.notification-toast.info {
+  border-left-color: #3b82f6;
+}
+
+.notification-toast.warning {
+  border-left-color: #f59e0b;
+}
+
+.notification-icon {
+  font-size: 1.2rem;
+  flex-shrink: 0;
+}
+
+.notification-message {
+  flex: 1;
+  color: #1f2937;
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.notification-close {
+  background: none;
+  border: none;
+  font-size: 20px;
+  cursor: pointer;
+  color: #9ca3af;
+  padding: 0;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.notification-close:hover {
+  background: #f3f4f6;
+  color: #6b7280;
+}
+
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* =========================
+   반응형 디자인
+   ========================= */
 @media (max-width: 1024px) {
-  .payroll-stats {
-    grid-template-columns: repeat(2, 1fr);
+  .payroll-management {
+    padding: 16px;
   }
   
-  .detail-summary {
-    grid-template-columns: 1fr;
+  .dashboard-stats {
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   }
   
-  .summary-item.total {
-    grid-column: span 1;
+  .header-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .settlement-content {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 24px;
+  }
+  
+  .settlement-summary {
+    justify-content: space-between;
+  }
+  
+  .table-controls {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+  
+  .search-input {
+    min-width: auto;
   }
 }
 
 @media (max-width: 768px) {
-  .payroll-stats {
-    grid-template-columns: 1fr;
+  .stat-card {
+    flex-direction: column;
+    text-align: center;
+    gap: 12px;
   }
   
-  .section-header {
+  .settlement-section .section-header {
     flex-direction: column;
-    gap: 16px;
     align-items: stretch;
   }
   
-  .month-selector {
-    flex-direction: column;
+  .settlement-info {
+    justify-content: center;
   }
   
-  .payroll-table {
-    overflow-x: auto;
+  .settlement-summary {
+    flex-direction: column;
+    gap: 16px;
+  }
+  
+  .payroll-table th,
+  .payroll-table td {
+    padding: 8px 6px;
+    font-size: 0.8rem;
+  }
+  
+  .employee-info {
+    flex-direction: column;
+    text-align: center;
+    gap: 8px;
+  }
+  
+  .employee-avatar {
+    width: 32px;
+    height: 32px;
+    font-size: 0.9rem;
+  }
+  
+  .summary-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .modal-container {
+    width: 95%;
+    margin: 20px;
+  }
+  
+  .notification-toast {
+    left: 12px;
+    right: 12px;
+    min-width: auto;
   }
 }
 </style>

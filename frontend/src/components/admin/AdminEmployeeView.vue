@@ -95,130 +95,217 @@
           <button @click="closeEmployeeModal" class="modal-close">&times;</button>
         </div>
         <div class="employee-form">
-          <div class="form-group">
-            <label>이름 *</label>
-            <input 
-              type="text" 
-              v-model="employeeForm.name"
-              placeholder="직원 이름을 입력하세요"
-              required
-            >
-          </div>
-          
-          <div class="form-group">
-            <label>주민(외국인)등록번호 *</label>
-            <input 
-              type="text" 
-              v-model="employeeForm.nationalId"
-              placeholder="주민등록번호 입력"
-              required
-            >
-          </div>
-          
-          <div class="form-group">
-            <label>급여 계좌번호 *</label>
-            <input 
-              type="text" 
-              v-model="employeeForm.accountNumber"
-              placeholder="계좌번호 입력"
-              required
-            >
-          </div>
-          
-          <div class="form-group">
-            <label>은행명 *</label>
-            <select v-model="employeeForm.bank" required>
-              <option value="">은행 선택</option>
-              <option value="국민">국민</option>
-              <option value="토스">토스</option>
-              <option value="신한">신한</option>
-              <option value="우리">우리</option>
-              <option value="하나">하나</option>
-            </select>
-          </div>
-          
-          <div class="form-group">
-            <label>휴대폰 번호 *</label>
-            <input 
-              type="tel" 
-              v-model="employeeForm.phone"
-              placeholder="01012341234"
-              required
-            >
-          </div>
-          
-          <div class="form-group">
-            <label>직위 *</label>
-            <select v-model="employeeForm.position" required>
-              <option value="">직위 선택</option>
-              <option value="OWNER">오너</option>
-              <option value="MANAGER">매니저</option>
-              <option value="STAFF">스태프</option>
-              <option value="PART_TIME">아르바이트</option>
-            </select>
-          </div>
-          
-          <div class="form-group">
-            <label>구역 *</label>
-            <div class="radio-group">
-              <label class="radio-label">
+          <!-- 기본 정보 섹션 -->
+          <div class="form-section">
+            <h4 class="section-title">👤 기본 정보</h4>
+            <div class="form-row">
+              <div class="form-group">
+                <label>이름 *</label>
                 <input 
-                  type="radio" 
-                  v-model="employeeForm.section" 
-                  value="HALL" 
+                  type="text" 
+                  v-model="employeeForm.name"
+                  placeholder="홍길동"
                   required
+                  class="form-input"
                 >
-                홀
-              </label>
-              <label class="radio-label">
+              </div>
+              
+              <div class="form-group">
+                <label>휴대폰 번호 *</label>
                 <input 
-                  type="radio" 
-                  v-model="employeeForm.section" 
-                  value="KITCHEN" 
+                  type="tel" 
+                  v-model="employeeForm.phone"
+                  placeholder="010-1234-5678"
                   required
+                  class="form-input"
+                  @input="formatPhoneNumber"
                 >
-                주방
-              </label>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label>주민(외국인)등록번호 *</label>
+              <input 
+                type="text" 
+                v-model="employeeForm.nationalId"
+                placeholder="000000-0000000"
+                required
+                class="form-input"
+                @input="formatNationalId"
+              >
             </div>
           </div>
-          
-          <div class="form-group">
-            <label>급여 *</label>
-            <input 
-              type="number" 
-              v-model="employeeForm.pay"
-              placeholder="급여 금액 입력"
-              required
-              min="0"
-            >
-          </div>
-          
-          <div class="form-group">
-            <label>급여 단위 *</label>
-            <select v-model="employeeForm.payUnit" required>
-              <option value="">급여 단위 선택</option>
-              <option value="HOURLY">시급</option>
-              <option value="MONTHLY">월급</option>
-            </select>
-          </div>
-          
-          <div class="form-group">
-            <label>근무 시간표</label>
-            <div class="schedule-grid">
-              <div v-for="day in days" :key="day" class="schedule-day">
-                <label>{{ dayLabels[day] }}</label>
-                <div class="schedule-times">
+
+          <!-- 급여 정보 섹션 -->
+          <div class="form-section">
+            <h4 class="section-title">💰 급여 정보</h4>
+            <div class="form-row">
+              <div class="form-group">
+                <label>급여 단위 *</label>
+                <div class="radio-group horizontal">
+                  <label class="radio-option">
+                    <input 
+                      type="radio" 
+                      v-model="employeeForm.payUnit" 
+                      value="HOURLY" 
+                      required
+                      @change="updatePayPlaceholder"
+                    >
+                    <span class="radio-text">💵 시급</span>
+                  </label>
+                  <label class="radio-option">
+                    <input 
+                      type="radio" 
+                      v-model="employeeForm.payUnit" 
+                      value="MONTHLY" 
+                      required
+                      @change="updatePayPlaceholder"
+                    >
+                    <span class="radio-text">💼 월급</span>
+                  </label>
+                </div>
+              </div>
+              
+              <div class="form-group">
+                <label>급여 금액 *</label>
+                <div class="input-with-suffix">
                   <input 
-                    type="time" 
-                    v-model="employeeForm.schedule[day].start"
-                    placeholder="시작 시간"
+                    type="number" 
+                    v-model="employeeForm.pay"
+                    :placeholder="payPlaceholder"
+                    required
+                    min="0"
+                    class="form-input"
+                    @input="formatPayAmount"
                   >
-                  <span>-</span>
-                  <input 
-                    type="time" 
-                    v-model="employeeForm.schedule[day].end"
-                    placeholder="종료 시간"
-                  >
+                  <span class="input-suffix">원</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label>은행명 *</label>
+                <select v-model="employeeForm.bank" required class="form-select">
+                  <option value="">은행을 선택하세요</option>
+                  <option value="국민">🏦 국민은행</option>
+                  <option value="토스">🎯 토스뱅크</option>
+                  <option value="신한">🔵 신한은행</option>
+                  <option value="우리">🟢 우리은행</option>
+                  <option value="하나">🟡 하나은행</option>
+                  <option value="농협">🌾 농협은행</option>
+                  <option value="기업">🏢 기업은행</option>
+                </select>
+              </div>
+              
+              <div class="form-group">
+                <label>계좌번호 *</label>
+                <input 
+                  type="text" 
+                  v-model="employeeForm.accountNumber"
+                  placeholder="123-456-789012"
+                  required
+                  class="form-input"
+                  @input="formatAccountNumber"
+                >
+              </div>
+            </div>
+          </div>
+
+          <!-- 근무 정보 섹션 -->
+          <div class="form-section">
+            <h4 class="section-title">🏢 근무 정보</h4>
+            <div class="form-row">
+              <div class="form-group">
+                <label>직위 *</label>
+                <select v-model="employeeForm.position" required class="form-select">
+                  <option value="">직위를 선택하세요</option>
+                  <option value="OWNER">👑 오너</option>
+                  <option value="MANAGER">👨‍💼 매니저</option>
+                  <option value="STAFF">👩‍💻 스태프</option>
+                  <option value="PART_TIME">⏰ 아르바이트</option>
+                </select>
+              </div>
+              
+              <div class="form-group">
+                <label>근무 구역 *</label>
+                <div class="radio-group horizontal">
+                  <label class="radio-option">
+                    <input 
+                      type="radio" 
+                      v-model="employeeForm.section" 
+                      value="HALL" 
+                      required
+                    >
+                    <span class="radio-text">🍽️ 홀</span>
+                  </label>
+                  <label class="radio-option">
+                    <input 
+                      type="radio" 
+                      v-model="employeeForm.section" 
+                      value="KITCHEN" 
+                      required
+                    >
+                    <span class="radio-text">👨‍🍳 주방</span>
+                  </label>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 근무 시간표 섹션 -->
+          <div class="form-section">
+            <h4 class="section-title">⏰ 근무 시간표</h4>
+            <p class="section-description">근무하지 않는 날은 비워두세요</p>
+            
+            <div class="schedule-container">
+              <div class="schedule-quick-actions">
+                <button type="button" @click="applyWeekdaySchedule" class="btn-quick">
+                  📅 평일 일괄 적용 (09:00-18:00)
+                </button>
+                <button type="button" @click="clearSchedule" class="btn-quick">
+                  🗑️ 전체 초기화
+                </button>
+              </div>
+
+              <div class="schedule-grid">
+                <div v-for="day in days" :key="day" class="schedule-day">
+                  <div class="day-header">
+                    <span class="day-name">{{ dayLabels[day] }}</span>
+                    <label class="checkbox-wrapper">
+                      <input 
+                        type="checkbox" 
+                        :checked="isWorkingDay(day)"
+                        @change="toggleWorkingDay(day)"
+                        class="day-checkbox"
+                      >
+                      <span class="checkmark">근무일</span>
+                    </label>
+                  </div>
+                  
+                  <div class="schedule-times" v-if="isWorkingDay(day)">
+                    <div class="time-input-group">
+                      <label>시작</label>
+                      <input 
+                        type="time" 
+                        v-model="employeeForm.schedule[day].start"
+                        class="time-input"
+                      >
+                    </div>
+                    <div class="time-separator">~</div>
+                    <div class="time-input-group">
+                      <label>종료</label>
+                      <input 
+                        type="time" 
+                        v-model="employeeForm.schedule[day].end"
+                        class="time-input"
+                      >
+                    </div>
+                  </div>
+                  
+                  <div class="no-work-day" v-else>
+                    휴무
+                  </div>
                 </div>
               </div>
             </div>
@@ -229,8 +316,8 @@
               취소
             </button>
             <button @click="saveEmployee" class="btn btn-primary" :disabled="employeesStore.loading">
-              <span v-if="employeesStore.loading">저장 중...</span>
-              <span v-else>{{ showEditEmployeeModal ? '수정' : '추가' }}</span>
+              <span v-if="employeesStore.loading">💾 저장 중...</span>
+              <span v-else>{{ showEditEmployeeModal ? '✏️ 수정 완료' : '➕ 직원 추가' }}</span>
             </button>
           </div>
         </div>
@@ -274,6 +361,8 @@ export default {
       sun: '일요일'
     }
     
+    const payPlaceholder = ref('급여 단위를 먼저 선택하세요')
+    
     const employeeForm = ref({
       name: '',
       nationalId: '',
@@ -306,6 +395,7 @@ export default {
       days,
       dayLabels,
       employeeForm,
+      payPlaceholder,
       emit
     }
   },
@@ -429,6 +519,82 @@ export default {
       }
     },
     
+    // 입력 포맷팅 메서드들
+    formatPhoneNumber() {
+      let value = this.employeeForm.phone.replace(/\D/g, '')
+      if (value.length <= 11) {
+        value = value.replace(/(\d{3})(\d{4})(\d{4})/, '$1-$2-$3')
+        this.employeeForm.phone = value
+      }
+    },
+
+    formatNationalId() {
+      let value = this.employeeForm.nationalId.replace(/\D/g, '')
+      if (value.length <= 13) {
+        value = value.replace(/(\d{6})(\d{7})/, '$1-$2')
+        this.employeeForm.nationalId = value
+      }
+    },
+
+    formatAccountNumber() {
+      // 계좌번호는 은행별로 다르지만 일반적인 형식으로 포맷팅
+      let value = this.employeeForm.accountNumber.replace(/\D/g, '')
+      if (value.length <= 14) {
+        value = value.replace(/(\d{3})(\d{6})(\d{5})/, '$1-$2-$3')
+        this.employeeForm.accountNumber = value
+      }
+    },
+
+    formatPayAmount() {
+      // 급여 금액에 콤마 추가 (실제 저장은 숫자로)
+      if (this.employeeForm.pay) {
+        const numValue = parseInt(this.employeeForm.pay.toString().replace(/,/g, ''))
+        this.employeeForm.pay = numValue
+      }
+    },
+
+    updatePayPlaceholder() {
+      if (this.employeeForm.payUnit === 'HOURLY') {
+        this.payPlaceholder = '15,000 (시급)'
+      } else if (this.employeeForm.payUnit === 'MONTHLY') {
+        this.payPlaceholder = '3,000,000 (월급)'
+      } else {
+        this.payPlaceholder = '급여 단위를 먼저 선택하세요'
+      }
+    },
+
+    // 근무 시간표 관련 메서드들
+    isWorkingDay(day) {
+      const schedule = this.employeeForm.schedule[day]
+      return schedule.start !== '' || schedule.end !== ''
+    },
+
+    toggleWorkingDay(day) {
+      if (this.isWorkingDay(day)) {
+        // 근무일에서 휴무일로 변경
+        this.employeeForm.schedule[day] = { start: '', end: '' }
+      } else {
+        // 휴무일에서 근무일로 변경 (기본 시간 설정)
+        this.employeeForm.schedule[day] = { start: '09:00', end: '18:00' }
+      }
+    },
+
+    applyWeekdaySchedule() {
+      const weekdays = ['mon', 'tue', 'wed', 'thu', 'fri']
+      weekdays.forEach(day => {
+        this.employeeForm.schedule[day] = { start: '09:00', end: '18:00' }
+      })
+      // 주말은 휴무로 설정
+      this.employeeForm.schedule.sat = { start: '', end: '' }
+      this.employeeForm.schedule.sun = { start: '', end: '' }
+    },
+
+    clearSchedule() {
+      this.days.forEach(day => {
+        this.employeeForm.schedule[day] = { start: '', end: '' }
+      })
+    },
+
     async saveEmployee() {
       // 필수 필드 검증
       if (!this.employeeForm.name ||
@@ -438,14 +604,33 @@ export default {
           !this.employeeForm.phone ||
           !this.employeeForm.position ||
           !this.employeeForm.section ||
-          !this.employeeForm.pay) {
+          !this.employeeForm.pay ||
+          !this.employeeForm.payUnit) {
         alert('모든 필수 항목을 입력해주세요')
+        return
+      }
+
+      // 휴대폰 번호 검증
+      const phoneRegex = /^\d{3}-\d{4}-\d{4}$/
+      if (!phoneRegex.test(this.employeeForm.phone)) {
+        alert('올바른 휴대폰 번호 형식을 입력해주세요 (010-1234-5678)')
+        return
+      }
+
+      // 주민등록번호 검증
+      const nationalIdRegex = /^\d{6}-\d{7}$/
+      if (!nationalIdRegex.test(this.employeeForm.nationalId)) {
+        alert('올바른 주민등록번호 형식을 입력해주세요 (000000-0000000)')
         return
       }
       
       try {
         const employeeData = {
           ...this.employeeForm,
+          // 포맷팅된 값들을 원본 형태로 변환
+          phone: this.employeeForm.phone.replace(/-/g, ''),
+          nationalId: this.employeeForm.nationalId.replace(/-/g, ''),
+          accountNumber: this.employeeForm.accountNumber.replace(/-/g, ''),
           schedule: Object.fromEntries(
             Object.entries(this.employeeForm.schedule).filter(([day, times]) => 
               times.start && times.end
@@ -455,16 +640,16 @@ export default {
         
         if (this.showEditEmployeeModal) {
           await this.employeesStore.updateEmployee(this.editingEmployeeId, employeeData)
-          alert('직원 정보가 수정되었습니다')
+          alert('✅ 직원 정보가 성공적으로 수정되었습니다')
         } else {
           await this.employeesStore.addEmployee(employeeData)
-          alert('새 직원이 추가되었습니다')
+          alert('✅ 새 직원이 성공적으로 추가되었습니다')
         }
         
         this.closeEmployeeModal()
         this.emit('retry-fetch')
       } catch (error) {
-        alert('저장에 실패했습니다: ' + error.message)
+        alert('❌ 저장에 실패했습니다: ' + error.message)
       }
     }
   }
@@ -590,7 +775,7 @@ th {
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0,0,0,0.5);
+  background: var(--color-bg-overlay);
   display: flex;
   justify-content: center;
   align-items: center;
@@ -669,86 +854,258 @@ th {
   color: #374151;
 }
 
+/* 개선된 직원 폼 스타일 */
 .employee-form {
   display: flex;
   flex-direction: column;
+  gap: 24px;
+}
+
+.form-section {
+  background: #f8fafc;
+  border-radius: 12px;
+  padding: 20px;
+  border: 1px solid #e2e8f0;
+}
+
+.section-title {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #1e293b;
+  margin: 0 0 12px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.section-description {
+  color: #64748b;
+  font-size: 0.9rem;
+  margin-bottom: 16px;
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: 16px;
 }
 
 .form-group {
   display: flex;
   flex-direction: column;
+  gap: 6px;
 }
 
 .form-group label {
-  margin-bottom: 4px;
   font-weight: 600;
   color: #374151;
+  font-size: 0.9rem;
 }
 
-.form-group input,
-.form-group select {
-  padding: 12px;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
+.form-input, .form-select {
+  padding: 12px 16px;
+  border: 2px solid #e2e8f0;
+  border-radius: 8px;
   font-size: 16px;
+  transition: all 0.2s;
+  background: white;
 }
 
-.form-group input:focus,
-.form-group select:focus {
+.form-input:focus, .form-select:focus {
   outline: none;
   border-color: #3b82f6;
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  transform: translateY(-1px);
 }
 
-.radio-group {
-  display: flex;
-  gap: 16px;
-  margin-top: 8px;
-}
-
-.radio-label {
+.input-with-suffix {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-weight: normal !important;
-  margin-bottom: 0 !important;
-  cursor: pointer;
 }
 
-.radio-label input[type="radio"] {
-  margin: 0;
-  padding: 0;
-  width: auto;
+.input-suffix {
+  position: absolute;
+  right: 16px;
+  color: #6b7280;
+  font-weight: 500;
+  pointer-events: none;
+}
+
+/* 라디오 버튼 개선 */
+.radio-group {
+  display: flex;
+  gap: 8px;
+}
+
+.radio-group.horizontal {
+  flex-direction: row;
+  flex-wrap: wrap;
+}
+
+.radio-option {
+  display: flex;
+  align-items: center;
+  padding: 12px 16px;
+  border: 2px solid #e2e8f0;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+  background: white;
+  flex: 1;
+  justify-content: center;
+}
+
+.radio-option:hover {
+  border-color: #cbd5e1;
+  background: #f8fafc;
+}
+
+.radio-option input[type="radio"] {
+  display: none;
+}
+
+.radio-option input[type="radio"]:checked + .radio-text {
+  color: #3b82f6;
+  font-weight: 600;
+}
+
+.radio-option:has(input[type="radio"]:checked) {
+  border-color: #3b82f6;
+  background: #eff6ff;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.radio-text {
+  font-size: 0.9rem;
+  color: #374151;
+  transition: all 0.2s;
+}
+
+/* 근무 시간표 스타일 */
+.schedule-container {
+  margin-top: 16px;
+}
+
+.schedule-quick-actions {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.btn-quick {
+  padding: 8px 16px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  background: white;
+  color: #374151;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-quick:hover {
+  background: #f3f4f6;
+  border-color: #9ca3af;
 }
 
 .schedule-grid {
   display: grid;
-  gap: 12px;
+  gap: 16px;
 }
 
 .schedule-day {
-  display: flex;
-  align-items: center;
-  gap: 12px;
+  border: 2px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 16px;
+  background: white;
+  transition: all 0.2s;
 }
 
-.schedule-day label {
-  width: 60px;
-  font-weight: normal !important;
-  margin-bottom: 0 !important;
+.schedule-day:hover {
+  border-color: #cbd5e1;
+}
+
+.day-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.day-name {
+  font-weight: 600;
+  color: #1e293b;
+  font-size: 0.95rem;
+}
+
+.checkbox-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.day-checkbox {
+  width: 16px;
+  height: 16px;
+  accent-color: #3b82f6;
+}
+
+.checkmark {
+  font-size: 0.8rem;
+  color: #64748b;
 }
 
 .schedule-times {
   display: flex;
   align-items: center;
-  gap: 8px;
-  flex: 1;
+  gap: 12px;
+  justify-content: center;
 }
 
-.schedule-times input {
-  width: 100px;
-  padding: 8px;
+.time-input-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.time-input-group label {
+  font-size: 0.8rem;
+  color: #64748b;
+  margin: 0;
+}
+
+.time-input {
+  padding: 8px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  width: 90px;
+  text-align: center;
+}
+
+.time-input:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+}
+
+.time-separator {
+  font-weight: 600;
+  color: #9ca3af;
+  font-size: 1.2rem;
+  margin: 0 8px;
+}
+
+.no-work-day {
+  text-align: center;
+  color: #9ca3af;
+  font-style: italic;
+  padding: 20px 0;
+  background: #f8fafc;
+  border-radius: 6px;
 }
 
 .form-actions {
@@ -773,19 +1130,39 @@ th {
     flex-direction: column;
   }
   
-  .radio-group {
+  .modal-content {
+    max-width: 95%;
+    margin: 10px;
+  }
+  
+  .form-row {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  
+  .radio-group.horizontal {
     flex-direction: column;
     gap: 8px;
   }
   
-  .schedule-day {
+  .schedule-quick-actions {
     flex-direction: column;
-    align-items: stretch;
     gap: 8px;
   }
   
-  .schedule-day label {
-    width: auto;
+  .btn-quick {
+    font-size: 0.8rem;
+    padding: 6px 12px;
+  }
+  
+  .schedule-times {
+    flex-direction: column;
+    gap: 8px;
+  }
+  
+  .time-separator {
+    transform: rotate(90deg);
+    margin: 4px 0;
   }
 }
 </style>

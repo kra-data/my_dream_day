@@ -147,7 +147,13 @@ export default {
   },
   computed: {
     currentEmployee() {
-      return this.authStore.user || {}
+      const user = this.authStore.user || {}
+      // authStore의 user 객체가 empId를 가지고 있는지 확인하고, 없으면 id로 설정
+      return {
+        ...user,
+        id: user.empId || user.id || user.userId,
+        empId: user.empId || user.id || user.userId
+      }
     },
     weekSummary() {
       const days = ['일', '월', '화', '수', '목', '금', '토']
@@ -282,13 +288,22 @@ export default {
       }
       absentDays = Math.max(0, weekdays - workDays)
       
-      const hourlyRate = this.currentEmployee.payUnit === 'HOURLY' ? 
-        this.currentEmployee.pay : 
-        this.currentEmployee.pay / 160
+      // 급여 계산을 위한 기본값 설정
+      const employeePay = this.currentEmployee.pay || 0
+      const payUnit = this.currentEmployee.payUnit || 'MONTHLY'
+      
+      let hourlyRate
+      if (payUnit === 'HOURLY') {
+        hourlyRate = employeePay
+      } else {
+        // 월급을 시급으로 환산 (월 160시간 기준)
+        hourlyRate = employeePay / 160
+      }
       
       const baseSalary = totalHours * hourlyRate
       const overtimePay = overtimeDays * hourlyRate * 1.5
-      const totalSalary = baseSalary + overtimePay
+      const totalSalary = Math.round(baseSalary + overtimePay)
+      
       
       return {
         totalHours: Math.round(totalHours * 10) / 10,
@@ -296,8 +311,8 @@ export default {
         lateDays,
         absentDays,
         overtimeDays,
-        baseSalary,
-        overtimePay,
+        baseSalary: Math.round(baseSalary),
+        overtimePay: Math.round(overtimePay),
         totalSalary
       }
     },
