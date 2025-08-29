@@ -68,4 +68,5 @@ router.use('/attendance', attendanceRoutes);
 
 router.use('/', myRoutes);
 
+
 export default router;

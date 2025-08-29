@@ -31,15 +31,16 @@ enum PayUnit {
 }
 
 model Shop {
-  id         Int        @id @default(autoincrement())
-  name       String
-  hourlyWage Int
-  payday     Int
-  qrSecret   String
-  createdAt  DateTime   @default(now())
-  updatedAt  DateTime   @updatedAt
-  employees  Employee[]
-  attendanceRecords AttendanceRecord[] @relation("ShopAttendance")
+  id                 Int                 @id @default(autoincrement())
+  name               String
+  hourlyWage         Int
+  payday             Int
+  qrSecret           String
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  employees          Employee[]
+  attendanceRecords  AttendanceRecord[]  @relation("ShopAttendance")
+  payrollSettlements PayrollSettlement[]
 }
 
 model Employee {
@@ -59,8 +60,12 @@ model Employee {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
-  attendanceRecords AttendanceRecord[] @relation("EmployeeAttendance")
+  shop                 Shop                @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  attendanceRecords    AttendanceRecord[]  @relation("EmployeeAttendance")
+  // 직원 자신의 정산들
+  payrollSettlements   PayrollSettlement[] @relation("SettlementEmployee")
+  // 관리자로서 처리한 정산들
+  processedSettlements PayrollSettlement[] @relation("SettlementProcessedBy")
 }
 
 model AttendanceRecord {
@@ -73,6 +78,28 @@ model AttendanceRecord {
   workedMinutes Int? // OUT 시 계산
   extraMinutes  Int? // OUT 시 계산
   paired        Boolean   @default(false) // IN ↔ OUT 짝지음 여부
-  employee   Employee @relation("EmployeeAttendance", fields: [employeeId], references: [id], onDelete: Cascade)
-  shop       Shop     @relation("ShopAttendance",     fields: [shopId],    references: [id], onDelete: Cascade)
+  employee      Employee  @relation("EmployeeAttendance", fields: [employeeId], references: [id], onDelete: Cascade)
+  shop          Shop      @relation("ShopAttendance", fields: [shopId], references: [id], onDelete: Cascade)
+}
+
+model PayrollSettlement {
+  id            Int      @id @default(autoincrement())
+  shopId        Int
+  employeeId    Int
+  cycleStart    DateTime @db.Timestamp(3)
+  cycleEnd      DateTime @db.Timestamp(3)
+  workedMinutes Int
+  basePay       Int
+  totalPay      Int
+  settledAt     DateTime @default(now())
+  processedBy   Int?
+  note          String?
+
+  // 관계들
+  shop            Shop      @relation(fields: [shopId], references: [id])
+  employee        Employee  @relation("SettlementEmployee", fields: [employeeId], references: [id])
+  processedByUser Employee? @relation("SettlementProcessedBy", fields: [processedBy], references: [id], onDelete: SetNull)
+
+  @@unique([employeeId, cycleStart, cycleEnd])
+  @@index([shopId])
 }
