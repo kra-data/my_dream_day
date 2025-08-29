@@ -184,12 +184,7 @@
   }
 }
 
-/* 다크 모드 지원 */
-@media (prefers-color-scheme: dark) {
-  .tab-button.active {
-    box-shadow: var(--shadow-md);
-  }
-}
+/* Dark mode removed - Light mode only */
 
 /* 애니메이션 비활성화 지원 */
 @media (prefers-reduced-motion: reduce) {

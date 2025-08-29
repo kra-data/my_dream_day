@@ -20,13 +20,6 @@
               📊 대시보드
             </router-link>
             <router-link 
-              to="/admin/salary" 
-              class="nav-link"
-              @click="closeMobileMenu"
-            >
-              💰 급여관리
-            </router-link>
-            <router-link 
               to="/attendance" 
               class="nav-link"
               @click="closeMobileMenu"

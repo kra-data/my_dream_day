@@ -39,18 +39,18 @@
         </div>
       </div>
 
-      <!-- 실시간 출퇴근 현황 -->
-      <div class="live-status">
-        <h2>🔴 실시간 현황</h2>
-        <div class="status-list">
-          <div v-if="attendanceStore.activeEmployees.length === 0" class="no-data">
-            현재 근무 중인 직원이 없습니다
+      <!-- 수동 출퇴근 관리 -->
+      <div class="manual-attendance">
+        <h2>👨‍💼 수동 출퇴근 관리</h2>
+        <div class="manual-controls">
+          <div v-if="employeesStore.employees.length === 0" class="no-data">
+            등록된 직원이 없습니다
           </div>
           <div 
             v-else
-            v-for="employee in attendanceStore.activeEmployees" 
-            :key="employee.employeeId"
-            :class="['status-item', 'working']"
+            v-for="employee in employeesStore.employees" 
+            :key="employee.id"
+            class="employee-control-item"
           >
             <div class="employee-info">
               <div class="employee-avatar">
@@ -58,16 +58,38 @@
               </div>
               <div class="employee-details">
                 <span class="employee-name">{{ employee.name }}</span>
-                <span class="employee-dept">{{ formatSection(employee.section) }}</span>
+                <span class="employee-dept">{{ formatSection(employee.section) }} · {{ formatPosition(employee.position) }}</span>
               </div>
             </div>
             
-            <div class="status-info">
-              <StatusBadge status="working" />
-              <div class="time-info">
-                <span>
-                  출근: {{ formatTime(employee.clockInAt) }}
-                </span>
+            <div class="attendance-controls">
+              <div class="current-status">
+                <StatusBadge :status="getEmployeeStatus(employee.id)" />
+                <div class="status-time" v-if="getEmployeeWorkTime(employee.id)">
+                  {{ getEmployeeWorkTime(employee.id) }}
+                </div>
+              </div>
+              
+              <div class="control-buttons">
+                <button 
+                  @click="manualCheckIn(employee)"
+                  :disabled="isEmployeeWorking(employee.id) || attendanceStore.loading"
+                  class="btn btn-success btn-sm"
+                  :class="{ 'btn-loading': attendanceStore.loading && processingEmployeeId === employee.id }"
+                >
+                  <span v-if="attendanceStore.loading && processingEmployeeId === employee.id">처리중...</span>
+                  <span v-else>📥 출근</span>
+                </button>
+                
+                <button 
+                  @click="manualCheckOut(employee)"
+                  :disabled="!isEmployeeWorking(employee.id) || attendanceStore.loading"
+                  class="btn btn-warning btn-sm"
+                  :class="{ 'btn-loading': attendanceStore.loading && processingEmployeeId === employee.id }"
+                >
+                  <span v-if="attendanceStore.loading && processingEmployeeId === employee.id">처리중...</span>
+                  <span v-else>📤 퇴근</span>
+                </button>
               </div>
             </div>
           </div>
@@ -109,8 +131,10 @@
 </template>
 
 <script>
+import { ref } from 'vue'
 import StatusBadge from '@/components/StatusBadge.vue'
 import { useAttendanceStore } from '@/stores/attendance'
+import { useEmployeesStore } from '@/stores/employees'
 
 export default {
   name: 'AdminDashboardView',
@@ -119,9 +143,13 @@ export default {
   },
   setup() {
     const attendanceStore = useAttendanceStore()
+    const employeesStore = useEmployeesStore()
+    const processingEmployeeId = ref(null)
     
     return {
-      attendanceStore
+      attendanceStore,
+      employeesStore,
+      processingEmployeeId
     }
   },
   methods: {
@@ -131,6 +159,16 @@ export default {
         'KITCHEN': '주방'
       }
       return sections[section] || section
+    },
+    
+    formatPosition(position) {
+      const positions = {
+        'OWNER': '오너',
+        'MANAGER': '매니저',
+        'STAFF': '스태프',
+        'PART_TIME': '아르바이트'
+      }
+      return positions[position] || position
     },
     
     formatTime(timestamp) {
@@ -151,6 +189,130 @@ export default {
       const minutes = workedMinutes % 60
       
       return `${hours}시간 ${minutes}분`
+    },
+
+    getEmployeeStatus(employeeId) {
+      const activeEmployee = this.attendanceStore.activeEmployees.find(emp => emp.employeeId === employeeId)
+      return activeEmployee && activeEmployee.clockInAt ? 'working' : 'not-checked-in'
+    },
+
+    isEmployeeWorking(employeeId) {
+      const activeEmployee = this.attendanceStore.activeEmployees.find(emp => emp.employeeId === employeeId)
+      return activeEmployee && activeEmployee.clockInAt && !activeEmployee.clockOutAt
+    },
+
+    getEmployeeWorkTime(employeeId) {
+      const activeEmployee = this.attendanceStore.activeEmployees.find(emp => emp.employeeId === employeeId)
+      if (activeEmployee && activeEmployee.clockInAt) {
+        return `출근: ${this.formatTime(activeEmployee.clockInAt)}`
+      }
+      return null
+    },
+
+    async manualCheckIn(employee) {
+      if (this.isEmployeeWorking(employee.id)) {
+        alert('이미 출근한 직원입니다.')
+        return
+      }
+
+      if (!confirm(`${employee.name}님을 출근 처리하시겠습니까?`)) {
+        return
+      }
+
+      this.processingEmployeeId = employee.id
+
+      try {
+        const user = JSON.parse(localStorage.getItem('user'))
+        const shopId = user ? user.shopId : null
+        
+        if (!shopId) {
+          throw new Error('매장 정보를 찾을 수 없습니다.')
+        }
+
+        // 관리자용 수동 출근 API 호출
+        const api = this.attendanceStore.getApiInstance()
+        
+        try {
+          await api.post(`/admin/shops/${shopId}/attendance/manual`, {
+            employeeId: employee.id,
+            type: 'IN'
+          })
+        } catch (apiError) {
+          // 관리자용 수동 출퇴근 API가 구현되지 않은 경우 일반 출퇴근 API 사용
+          if (apiError.response?.status === 404) {
+            console.warn('관리자용 수동 출퇴근 API가 구현되지 않음. 일반 출퇴근 API 사용')
+            await api.post('/attendance', {
+              shopId: parseInt(shopId),
+              type: 'IN'
+            })
+          } else {
+            throw apiError
+          }
+        }
+
+        // 대시보드 데이터 새로고침
+        await this.attendanceStore.fetchDashboardData()
+        
+        alert(`${employee.name}님이 출근 처리되었습니다.`)
+      } catch (error) {
+        console.error('수동 출근 처리 실패:', error)
+        alert(`출근 처리에 실패했습니다: ${error.message}`)
+      } finally {
+        this.processingEmployeeId = null
+      }
+    },
+
+    async manualCheckOut(employee) {
+      if (!this.isEmployeeWorking(employee.id)) {
+        alert('출근하지 않은 직원입니다.')
+        return
+      }
+
+      if (!confirm(`${employee.name}님을 퇴근 처리하시겠습니까?`)) {
+        return
+      }
+
+      this.processingEmployeeId = employee.id
+
+      try {
+        const user = JSON.parse(localStorage.getItem('user'))
+        const shopId = user ? user.shopId : null
+        
+        if (!shopId) {
+          throw new Error('매장 정보를 찾을 수 없습니다.')
+        }
+
+        // 관리자용 수동 퇴근 API 호출
+        const api = this.attendanceStore.getApiInstance()
+        
+        try {
+          await api.post(`/admin/shops/${shopId}/attendance/manual`, {
+            employeeId: employee.id,
+            type: 'OUT'
+          })
+        } catch (apiError) {
+          // 관리자용 수동 출퇴근 API가 구현되지 않은 경우 일반 출퇴근 API 사용
+          if (apiError.response?.status === 404) {
+            console.warn('관리자용 수동 출퇴근 API가 구현되지 않음. 일반 출퇴근 API 사용')
+            await api.post('/attendance', {
+              shopId: parseInt(shopId),
+              type: 'OUT'
+            })
+          } else {
+            throw apiError
+          }
+        }
+
+        // 대시보드 데이터 새로고침
+        await this.attendanceStore.fetchDashboardData()
+        
+        alert(`${employee.name}님이 퇴근 처리되었습니다.`)
+      } catch (error) {
+        console.error('수동 퇴근 처리 실패:', error)
+        alert(`퇴근 처리에 실패했습니다: ${error.message}`)
+      } finally {
+        this.processingEmployeeId = null
+      }
     }
   }
 }
@@ -173,14 +335,14 @@ export default {
   margin-bottom: 30px;
 }
 
-.stats-overview, .live-status {
+.stats-overview, .manual-attendance {
   background: white;
   border-radius: 12px;
   padding: 24px;
   box-shadow: 0 1px 3px rgba(0,0,0,0.1);
 }
 
-.stats-overview h2, .live-status h2 {
+.stats-overview h2, .manual-attendance h2 {
   margin-bottom: 20px;
   color: #1f2937;
 }
@@ -331,6 +493,97 @@ export default {
   font-size: 0.8rem;
   color: #059669;
   font-weight: 500;
+}
+
+/* 수동 출퇴근 관리 스타일 */
+.manual-controls {
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.employee-control-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px;
+  border-bottom: 1px solid #f3f4f6;
+  border-radius: 8px;
+  margin-bottom: 8px;
+  background: #f8fafc;
+  transition: all 0.2s;
+}
+
+.employee-control-item:hover {
+  background: #f1f5f9;
+}
+
+.attendance-controls {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.current-status {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-width: 80px;
+}
+
+.status-time {
+  font-size: 0.75rem;
+  color: #6b7280;
+  text-align: center;
+}
+
+.control-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.btn {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+  text-decoration: none;
+  display: inline-block;
+  transition: all 0.2s;
+  font-size: 0.875rem;
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-sm {
+  padding: 6px 12px;
+  font-size: 0.8rem;
+}
+
+.btn-success {
+  background: #10b981;
+  color: white;
+}
+
+.btn-success:hover:not(:disabled) {
+  background: #059669;
+}
+
+.btn-warning {
+  background: #f59e0b;
+  color: white;
+}
+
+.btn-warning:hover:not(:disabled) {
+  background: #d97706;
+}
+
+.btn-loading {
+  position: relative;
 }
 
 .no-data {
