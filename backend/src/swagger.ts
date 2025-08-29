@@ -94,7 +94,87 @@ export const swaggerDocument: any = {
           clockOutAt:    { type: 'string', format: 'date-time', nullable: true },
           workedMinutes: { type: 'integer', nullable: true, example: 285 }
         }
+      },
+// swaggerDocument.components.schemas 에 추가
+MyPageProfile: {
+  type: 'object',
+  properties: {
+    name: { type: 'string', example: '김철수' },
+    section: { type: 'string', example: 'HALL' },
+    position: { type: 'string', example: 'STAFF' },
+    pay: { type: 'integer', example: 2500000 },
+    payUnit: { type: 'string', enum: ['MONTHLY','HOURLY'], example: 'MONTHLY' },
+    phoneMasked: { type: 'string', example: '010****5432' },
+    bank: { type: 'string', nullable: true, example: '국민' },
+    bankRegistered: { type: 'boolean', example: false }
+  }
+},
+MyPageCycle: {
+  type: 'object',
+  properties: {
+    start: { type: 'string', format: 'date-time' },
+    end:   { type: 'string', format: 'date-time' },
+    label: { type: 'string', example: '8월 7일 ~ 9월 6일' },
+    startDay: { type: 'integer', minimum: 1, maximum: 28, example: 7 }
+  }
+},
+MyPageCards: {
+  type: 'object',
+  properties: {
+    current: {
+      type: 'object',
+      properties: {
+        amount: { type: 'integer', example: 2500000 },
+        status: { type: 'string', enum: ['PENDING','PAID'], example: 'PENDING' },
+        cycleStart: { type: 'string', format: 'date-time' },
+        cycleEnd: { type: 'string', format: 'date-time' }
       }
+    },
+    previous: {
+      type: 'object',
+      properties: {
+        amount: { type: 'integer', example: 2500000 },
+        status: { type: 'string', enum: ['PENDING','PAID'], example: 'PAID' },
+        cycleStart: { type: 'string', format: 'date-time' },
+        cycleEnd: { type: 'string', format: 'date-time' },
+        settledAt: { type: 'string', format: 'date-time', nullable: true }
+      }
+    }
+  }
+},
+MyPageMonth: {
+  type: 'object',
+  properties: {
+    year: { type: 'integer', example: 2025 },
+    month:{ type: 'integer', example: 8 },
+    workedMinutes: { type: 'integer', example: 14982 },
+    workedHours: { type: 'number', example: 249.7 },
+    basePay: { type: 'integer', example: 3901923 },
+    totalPay: { type: 'integer', example: 3948798 }
+  }
+},
+MyPageStats: {
+  type: 'object',
+  properties: {
+    presentDays: { type: 'integer', example: 10 },
+    lateCount: { type: 'integer', example: 8 },
+    absentCount: { type: 'integer', example: 11 }
+  }
+},
+MyPageSettlementResponse: {
+  type: 'object',
+  properties: {
+    ok: { type: 'boolean', example: true },
+    profile: { $ref: '#/components/schemas/MyPageProfile' },
+    cycle:   { $ref: '#/components/schemas/MyPageCycle' },
+    cards:   { $ref: '#/components/schemas/MyPageCards' },
+    month:   { $ref: '#/components/schemas/MyPageMonth' },
+    stats:   { $ref: '#/components/schemas/MyPageStats' }
+  }
+}
+
+
+
 
     }
   },
@@ -393,7 +473,41 @@ export const swaggerDocument: any = {
           '400': { description: 'Invalid limit' }
         }
       }
+    },
+// swaggerDocument.paths 에 추가
+'/api/my/settlement': {
+  get: {
+    tags: ['Payroll'],
+    summary: '마이페이지 정산/프로필/통계',
+    security: [{ bearerAuth: [] }],
+    parameters: [
+      {
+        name: 'anchor',
+        in: 'query',
+        required: false,
+        schema: { type: 'string', format: 'date-time' },
+        description: '기준 시각(KST 기준 사이클/월 계산 anchor). 기본값: 현재 시각'
+      },
+      {
+        name: 'cycleStartDay',
+        in: 'query',
+        required: false,
+        schema: { type: 'integer', minimum: 1, maximum: 28 },
+        description: '사이클 시작일(숫자). 기본: 매장 payday 또는 환경변수'
+      }
+    ],
+    responses: {
+      '200': {
+        description: 'OK',
+        content: {
+          'application/json': { schema: { $ref: '#/components/schemas/MyPageSettlementResponse' } }
+        }
+      },
+      '401': { description: 'Unauthorized' }
     }
+  }
+}
+
 
   }
 };

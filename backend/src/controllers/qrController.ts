@@ -61,8 +61,7 @@ export const scanQr = async (req: AuthRequest, res: Response) => {
   // 미로그인 → 공용 로그인 페이지로. shopId는 안 넘기고 redirect만 전달
   if (!req.user) {
     const base = (FRONTEND || API_BASE).replace(/\/$/, '');
-    const redirect = `${base}/qr/scan?token=${encodeURIComponent(token)}`;
-    const loginUrl = `${base}/login?redirect=${encodeURIComponent(redirect)}`;
+    const loginUrl = `${base}/login`;
     res.status(401).json({ needLogin: true, loginUrl, shopId: claims.shopId });
     return;
   }
