@@ -506,7 +506,25 @@ MyPageSettlementResponse: {
       '401': { description: 'Unauthorized' }
     }
   }
+},
+'/api/admin/shops/{shopId}/settlements/employees/{employeeId}': {
+  post: {
+    tags: ['Payroll'],
+    summary: '지난 사이클 정산(스냅샷 저장)',
+    security: [{ bearerAuth: [] }],
+    parameters: [
+      { name: 'shopId', in: 'path', required: true, schema: { type: 'integer' } },
+      { name: 'employeeId', in: 'path', required: true, schema: { type: 'integer' } }
+    ],
+    responses: {
+      '201': { description: 'Created', content: { 'application/json': { schema: { $ref: '#/components/schemas/SettlePreviousResponse' } } } },
+      '401': { description: 'Unauthorized' },
+      '403': { description: 'Forbidden' },
+      '404': { description: 'Not Found' }
+    }
+  }
 }
+
 
 
   }

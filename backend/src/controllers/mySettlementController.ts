@@ -53,14 +53,22 @@ const resolveCycleStartDay = async (shopId: number) => {
   return shop?.payday ?? DEFAULT_CYCLE_START_DAY;
 };
 
-/** (선택) 지난 사이클 정산 여부 조회 */
+
 type PaidInfo = { status: 'PAID' | 'PENDING'; settledAt: Date | null };
+
 const findPaidInfoForCycle = async (shopId: number, employeeId: number, start: Date, end: Date): Promise<PaidInfo> => {
+  if ((prisma as any).payrollSettlement?.findFirst) {
+    const row = await (prisma as any).payrollSettlement.findFirst({
+      where: { shopId, employeeId, cycleStart: start, cycleEnd: end },
+      select: { settledAt: true }
+    });
+    return row ? { status: 'PAID', settledAt: row.settledAt } : { status: 'PENDING', settledAt: null };
+  }
+  // 모델 없을 때는 기존 $queryRaw 방식 유지 (당신 코드 그대로 두셔도 됩니다)
   const reg: Array<{ exists: boolean }> = await prisma.$queryRaw`
     SELECT to_regclass('public."PayrollSettlement"') IS NOT NULL AS exists
   `;
   if (!reg?.[0]?.exists) return { status: 'PENDING', settledAt: null };
-
   const rows: Array<{ settledAt: Date }> = await prisma.$queryRaw`
     SELECT "settledAt"
     FROM "PayrollSettlement"
@@ -71,9 +79,9 @@ const findPaidInfoForCycle = async (shopId: number, employeeId: number, start: D
     ORDER BY "settledAt" DESC
     LIMIT 1
   `;
-  if (rows.length > 0) return { status: 'PAID', settledAt: rows[0].settledAt };
-  return { status: 'PENDING', settledAt: null };
+  return rows.length ? { status: 'PAID', settledAt: rows[0].settledAt } : { status: 'PENDING', settledAt: null };
 };
+
 
 /** 스케줄 파서 */
 type DaySpec = { startMin: number; endMin: number; graceMin: number } | null;
