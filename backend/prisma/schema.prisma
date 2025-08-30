@@ -68,18 +68,28 @@ model Employee {
   processedSettlements PayrollSettlement[] @relation("SettlementProcessedBy")
 }
 
+// prisma/schema.prisma
+
 model AttendanceRecord {
   id            Int       @id @default(autoincrement())
   shopId        Int
   employeeId    Int
-  type          String // "IN" | "OUT"
-  clockInAt     DateTime? // 🔹 출근 시각
-  clockOutAt    DateTime? // 🔹 퇴근 시각
-  workedMinutes Int? // OUT 시 계산
-  extraMinutes  Int? // OUT 시 계산
-  paired        Boolean   @default(false) // IN ↔ OUT 짝지음 여부
-  employee      Employee  @relation("EmployeeAttendance", fields: [employeeId], references: [id], onDelete: Cascade)
-  shop          Shop      @relation("ShopAttendance", fields: [shopId], references: [id], onDelete: Cascade)
+  type          String
+  clockInAt     DateTime?
+  clockOutAt    DateTime?
+  workedMinutes Int?
+  extraMinutes  Int?
+  paired        Boolean   @default(false)
+
+  // 🔽🔽 추가: 정산 스냅샷 FK
+  settlementId Int?
+  settlement   PayrollSettlement? @relation(fields: [settlementId], references: [id], onDelete: SetNull)
+
+  employee Employee @relation("EmployeeAttendance", fields: [employeeId], references: [id], onDelete: Cascade)
+  shop     Shop     @relation("ShopAttendance", fields: [shopId], references: [id], onDelete: Cascade)
+
+  @@index([employeeId, clockInAt])
+  @@index([settlementId]) // 🔽 정산 여부/검색 최적화
 }
 
 model PayrollSettlement {
@@ -95,10 +105,12 @@ model PayrollSettlement {
   processedBy   Int?
   note          String?
 
-  // 관계들
-  shop            Shop      @relation(fields: [shopId], references: [id])
-  employee        Employee  @relation("SettlementEmployee", fields: [employeeId], references: [id])
+  shop            Shop      @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  employee        Employee  @relation("SettlementEmployee", fields: [employeeId], references: [id], onDelete: Cascade)
   processedByUser Employee? @relation("SettlementProcessedBy", fields: [processedBy], references: [id], onDelete: SetNull)
+
+  // 🔽🔽 역관계: 정산에 묶인 근무 레코드들
+  attendanceRecords AttendanceRecord[]
 
   @@unique([employeeId, cycleStart, cycleEnd])
   @@index([shopId])

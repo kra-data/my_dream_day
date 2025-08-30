@@ -54,9 +54,117 @@ export const swaggerDocument: any = {
           clockInAt: { type: 'string', format: 'date-time' },
           clockOutAt: { type: 'string', format: 'date-time' },
           workedMinutes: { type: 'integer' },
-          extraMinutes: { type: 'integer' }
+          extraMinutes: { type: 'integer' },
+          // 기존 components.schemas.AttendanceRecord.properties 에 아래 한 줄 추가
+          settlementId: { type: 'integer', nullable: true, description: '정산 스냅샷 ID(있으면 정산됨)' }
+
         }
       },
+      // 🔽 components.schemas 에 추가
+PayrollCycle: {
+  type: 'object',
+  properties: {
+    start: { type: 'string', format: 'date-time', example: '2025-07-07T00:00:00.000Z' },
+    end:   { type: 'string', format: 'date-time', example: '2025-08-06T23:59:59.999Z' },
+    label: { type: 'string', example: '7월 7일 ~ 8월 6일' },
+    startDay: { type: 'integer', minimum: 1, maximum: 28, example: 7 }
+  }
+},
+SettlementStatus: {
+  type: 'object',
+  properties: {
+    status: { type: 'string', enum: ['PENDING','PAID'], example: 'PAID' },
+    settlementId: { type: 'integer', nullable: true, example: 123 },
+    totalPay: { type: 'integer', nullable: true, example: 2500000 },
+    settledAt: { type: 'string', format: 'date-time', nullable: true, example: '2025-08-10T09:00:00.000Z' },
+    // 상세 응답에서만 쓰는 보조 필드(있어도 되고 없어도 됨)
+    fullyApplied: { type: 'boolean', nullable: true, example: true, description: '사이클 내 모든 근무 기록이 settlementId로 묶였는지' }
+  }
+},
+EmployeePayrollListItem: {
+  type: 'object',
+  properties: {
+    employeeId: { type: 'integer', example: 42 },
+    name: { type: 'string', example: '김철수' },
+    position: { type: 'string', example: 'STAFF' },
+    hourlyPay: { type: 'integer', nullable: true, example: null },
+    monthlyPay: { type: 'integer', nullable: true, example: 2500000 },
+    workedMinutes: { type: 'integer', example: 14982 },
+    extraMinutes: { type: 'integer', example: 0 },
+    salary: { type: 'integer', example: 2500000 },
+    settlement: { $ref: '#/components/schemas/SettlementStatus' }
+  }
+},
+PayrollByEmployeeSummary: {
+  type: 'object',
+  properties: {
+    employeeCount: { type: 'integer', example: 17 },
+    paidCount: { type: 'integer', example: 9 },
+    pendingCount: { type: 'integer', example: 8 },
+    totalWorkedMinutes: { type: 'integer', example: 23850 }
+  }
+},
+PayrollByEmployeeResponse: {
+  type: 'object',
+  properties: {
+    year: { type: 'integer', example: 2025 },
+    month: { type: 'integer', example: 8 },
+    cycle: { $ref: '#/components/schemas/PayrollCycle' },
+    summary: { $ref: '#/components/schemas/PayrollByEmployeeSummary' },
+    employees: {
+      type: 'array',
+      items: { $ref: '#/components/schemas/EmployeePayrollListItem' }
+    },
+    paid: {
+      type: 'array',
+      items: { $ref: '#/components/schemas/EmployeePayrollListItem' }
+    },
+    pending: {
+      type: 'array',
+      items: { $ref: '#/components/schemas/EmployeePayrollListItem' }
+    }
+  }
+},
+PayrollEmployeeDetailLog: {
+  type: 'object',
+  properties: {
+    id: { type: 'integer', example: 9876 },
+    date: { type: 'string', format: 'date', nullable: true, example: '2025-08-03' },
+    clockInAt: { type: 'string', format: 'date-time', nullable: true },
+    clockOutAt: { type: 'string', format: 'date-time', nullable: true },
+    workedMinutes: { type: 'integer', nullable: true, example: 360 },
+    extraMinutes: { type: 'integer', nullable: true, example: 0 },
+    settlementId: { type: 'integer', nullable: true, example: 123 }
+  }
+},
+PayrollEmployeeDetailResponse: {
+  type: 'object',
+  properties: {
+    year: { type: 'integer', example: 2025 },
+    month: { type: 'integer', example: 8 },
+    cycle: { $ref: '#/components/schemas/PayrollCycle' },
+    settlement: { $ref: '#/components/schemas/SettlementStatus' },
+    employee: {
+      type: 'object',
+      properties: {
+        id: { type: 'integer', example: 42 },
+        name: { type: 'string', example: '김철수' },
+        position: { type: 'string', example: 'STAFF' },
+        hourlyPay: { type: 'integer', nullable: true, example: null },
+        monthlyPay: { type: 'integer', nullable: true, example: 2500000 }
+      }
+    },
+    daysWorked: { type: 'integer', example: 12 },
+    workedMinutes: { type: 'integer', example: 14982 },
+    extraMinutes: { type: 'integer', example: 0 },
+    salary: { type: 'integer', example: 2500000 },
+    logs: {
+      type: 'array',
+      items: { $ref: '#/components/schemas/PayrollEmployeeDetailLog' }
+    }
+  }
+},
+
       // ... 기존 components.schemas 아래에 이어서 추가
       DashboardTodaySummary: {
         type: 'object',
@@ -393,10 +501,132 @@ MyPageSettlementResponse: {
       get: { tags: ['Payroll'], summary: '급여 대시보드', parameters: [ { name:'shopId',in:'path',required:true,schema:{type:'integer'} }, { name:'year',in:'query',schema:{type:'integer'} }, { name:'month',in:'query',schema:{type:'integer'} } ], responses: { '200': { description: 'OK' } } }
     },
     '/api/admin/shops/{shopId}/payroll/employees': {
-      get: { tags: ['Payroll'], summary: '직원별 급여 목록', parameters: [ { name:'shopId',in:'path',required:true,schema:{type:'integer'} }, { name:'year',in:'query',schema:{type:'integer'} }, { name:'month',in:'query',schema:{type:'integer'} } ], responses: { '200': { description: 'OK' } } }
+      get: { tags: ['Payroll'], summary: '직원별 급여 목록', parameters: [ { name:'shopId',in:'path',required:true,schema:{type:'integer'} }, { name:'year',in:'query',schema:{type:'integer'} }, { name:'month',in:'query',schema:{type:'integer'} } ], // 기존 paths['/api/admin/shops/{shopId}/payroll/employees'].get.responses 를 아래로 교체
+responses: {
+  '200': {
+    description: 'OK',
+    content: {
+      'application/json': {
+        schema: { $ref: '#/components/schemas/PayrollByEmployeeResponse' },
+        examples: {
+          sample: {
+            value: {
+              year: 2025,
+              month: 8,
+              cycle: {
+                start: '2025-07-07T00:00:00.000Z',
+                end:   '2025-08-06T23:59:59.999Z',
+                label: '7월 7일 ~ 8월 6일',
+                startDay: 7
+              },
+              summary: {
+                employeeCount: 2,
+                paidCount: 1,
+                pendingCount: 1,
+                totalWorkedMinutes: 28182
+              },
+              employees: [
+                {
+                  employeeId: 1, name: '김철수', position: 'STAFF',
+                  hourlyPay: null, monthlyPay: 2500000,
+                  workedMinutes: 14982, extraMinutes: 0, salary: 2500000,
+                  settlement: { status: 'PAID', settlementId: 10, settledAt: '2025-08-10T09:00:00.000Z', totalPay: 2500000 }
+                },
+                {
+                  employeeId: 2, name: '이영희', position: 'PART_TIME',
+                  hourlyPay: 12000, monthlyPay: null,
+                  workedMinutes: 13200, extraMinutes: 0, salary: 2640000,
+                  settlement: { status: 'PENDING', settlementId: null, settledAt: null, totalPay: null }
+                }
+              ],
+              paid: [
+                {
+                  employeeId: 1, name: '김철수', position: 'STAFF',
+                  hourlyPay: null, monthlyPay: 2500000,
+                  workedMinutes: 14982, extraMinutes: 0, salary: 2500000,
+                  settlement: { status: 'PAID', settlementId: 10, settledAt: '2025-08-10T09:00:00.000Z', totalPay: 2500000 }
+                }
+              ],
+              pending: [
+                {
+                  employeeId: 2, name: '이영희', position: 'PART_TIME',
+                  hourlyPay: 12000, monthlyPay: null,
+                  workedMinutes: 13200, extraMinutes: 0, salary: 2640000,
+                  settlement: { status: 'PENDING', settlementId: null, settledAt: null, totalPay: null }
+                }
+              ]
+            }
+          }
+        }
+      }
+    }
+  }
+}
+ }
     },
     '/api/admin/shops/{shopId}/payroll/employees/{employeeId}': {
-      get: { tags: ['Payroll'], summary: '직원 월별 급여 상세', parameters: [ { name:'shopId',in:'path',required:true,schema:{type:'integer'} }, { name:'employeeId',in:'path',required:true,schema:{type:'integer'} }, { name:'year',in:'query',schema:{type:'integer'} }, { name:'month',in:'query',schema:{type:'integer'} } ], responses: { '200': { description: 'OK' }, '404': { description: 'Not Found' } } }
+      get: { tags: ['Payroll'], summary: '직원 월별 급여 상세', parameters: [ { name:'shopId',in:'path',required:true,schema:{type:'integer'} }, { name:'employeeId',in:'path',required:true,schema:{type:'integer'} }, { name:'year',in:'query',schema:{type:'integer'} }, { name:'month',in:'query',schema:{type:'integer'} } ], // 기존 paths['/api/admin/shops/{shopId}/payroll/employees/{employeeId}'].get.responses 를 아래로 교체
+responses: {
+  '200': {
+    description: 'OK',
+    content: {
+      'application/json': {
+        schema: { $ref: '#/components/schemas/PayrollEmployeeDetailResponse' },
+        examples: {
+          sample: {
+            value: {
+              year: 2025,
+              month: 8,
+              cycle: {
+                start: '2025-07-07T00:00:00.000Z',
+                end:   '2025-08-06T23:59:59.999Z',
+                label: '7월 7일 ~ 8월 6일',
+                startDay: 7
+              },
+              settlement: {
+                status: 'PAID',
+                settlementId: 10,
+                totalPay: 2500000,
+                settledAt: '2025-08-10T09:00:00.000Z',
+                fullyApplied: true
+              },
+              employee: {
+                id: 1, name: '김철수', position: 'STAFF',
+                hourlyPay: null, monthlyPay: 2500000
+              },
+              daysWorked: 12,
+              workedMinutes: 14982,
+              extraMinutes: 0,
+              salary: 2500000,
+              logs: [
+                {
+                  id: 901,
+                  date: '2025-08-01',
+                  clockInAt: '2025-08-01T00:05:00.000Z',
+                  clockOutAt: '2025-08-01T09:00:00.000Z',
+                  workedMinutes: 535,
+                  extraMinutes: 0,
+                  settlementId: 10
+                },
+                {
+                  id: 902,
+                  date: '2025-08-02',
+                  clockInAt: '2025-08-02T00:03:00.000Z',
+                  clockOutAt: '2025-08-02T09:01:00.000Z',
+                  workedMinutes: 538,
+                  extraMinutes: 0,
+                  settlementId: 10
+                }
+              ]
+            }
+          }
+        }
+      }
+    }
+  },
+  '404': { description: 'Not Found' }
+}
+}
     },
     '/api/admin/shops/{shopId}/payroll/employees/{employeeId}/summary': {
       get: { tags: ['Payroll'], summary: '직원 월별 요약', parameters: [ { name:'shopId',in:'path',required:true,schema:{type:'integer'} }, { name:'employeeId',in:'path',required:true,schema:{type:'integer'} }, { name:'year',in:'query',schema:{type:'integer'} }, { name:'month',in:'query',schema:{type:'integer'} } ], responses: { '200': { description: 'OK' } } }

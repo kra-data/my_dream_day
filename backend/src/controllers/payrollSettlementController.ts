@@ -88,6 +88,15 @@ export const settlePreviousCycle = async (req: AuthRequiredRequest, res: Respons
       processedBy: adminId ?? undefined
     },
   });
+  await prisma.attendanceRecord.updateMany({
+  where: {
+    shopId,
+    employeeId,
+    paired: true,
+    clockInAt: { gte: prev.start, lte: prev.end }
+  },
+  data: { settlementId: settlement.id }  // 🔗 링크
+});
 
   return res.status(201).json({ ok:true, settlement });
 };
