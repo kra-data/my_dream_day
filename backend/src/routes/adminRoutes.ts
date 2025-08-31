@@ -16,6 +16,12 @@ import {
 import { employeePayrollSummary } from '../controllers/payrollSummaryController';
 import { getShopQrPng } from '../controllers/qrController';
 import { getAttendanceRecords, adminCreateOrCloseAttendance, adminUpdateAttendance } from '../controllers/attendanceController';
+import {
+  adminListShifts,
+  adminCreateShift,
+  adminUpdateShift,
+  adminDeleteShift,
+} from '../controllers/workShiftController';
 
 // ✅ 추가: 타입 안전 래퍼 & 정산 컨트롤러
 import { withUser, AuthRequiredRequest } from '../middlewares/requireUser';
@@ -39,6 +45,13 @@ const requireAdmin = (
 /* ───────── 공통 미들웨어 ───────── */
 router.use(authenticateJWT);
 router.use(requireAdmin);
+
+
+// ───────── WorkShift (Admin/Owner) ─────────
+router.get('/shops/:shopId/workshifts', adminListShifts);
+router.post('/shops/:shopId/employees/:employeeId/workshifts', adminCreateShift);
+router.put('/shops/:shopId/workshifts/:shiftId', adminUpdateShift);
+router.delete('/shops/:shopId/workshifts/:shiftId', adminDeleteShift);
 router.get('/shops/:shopId/qr', getShopQrPng);
 /* ───────── 매장 CRUD ───────── */
 router.get('/shops',                 adminController.getShops);
@@ -73,5 +86,7 @@ router.post(
   '/shops/:shopId/settlements/employees/:employeeId',
   withUser((req: AuthRequiredRequest, res) => settlePreviousCycle(req, res))
 );
+
+
 
 export default router;
