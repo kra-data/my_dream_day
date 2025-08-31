@@ -26,7 +26,7 @@ export const exportPayroll = async (req: AuthRequest, res: Response) => {
   const employees = await prisma.employee.findMany({
     where: { shopId },
     select: {
-      id: true, name: true, nationalId: true,
+      id: true, name: true, nationalIdMasked: true,
       accountNumber: true, bank: true,
       pay: true, payUnit: true
     }
@@ -70,7 +70,7 @@ export const exportPayroll = async (req: AuthRequest, res: Response) => {
         : emp.pay;                             // 월급제 그대로
     ws.addRow({
       name: emp.name,
-      nationalId: emp.nationalId,
+      nationalIdMasked: emp.nationalIdMasked,
       accountNumber: emp.accountNumber,
       bank: emp.bank,
       salary,

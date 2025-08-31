@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { prisma } from '../db/prisma';
 import crypto from 'crypto';
 import { isValidSchedule } from '../utils/scheduleValidator';
+import { encryptNationalId, hashNationalId, maskNationalId } from '../utils/nationalId';
 
 import { Prisma, Position, Section, PayUnit } from '@prisma/client';
 
@@ -89,7 +90,7 @@ export const getEmployees = async (req: Request, res: Response) => {
       name: true,
       bank: true,
       accountNumber: true,
-      nationalId: true,
+      nationalIdMasked: true,
       phone: true,
       schedule: true,
       position: true,
@@ -108,7 +109,6 @@ export const getEmployees = async (req: Request, res: Response) => {
  * ------------------------------------------------------------------*/
 const createEmployeeSchema = z.object({
   name: z.string().min(1),
-  nationalId: z.string().min(1),
   accountNumber: z.string().min(1),
   bank: z.string().min(1),
   phone: z.string().min(1),
@@ -125,17 +125,17 @@ export const createEmployee = async (req: Request, res: Response) => {
   if (!parsed.success) { res.status(400).json({ error: 'Invalid payload' }); return; }
   const {
     name,
-    nationalId,
     accountNumber,
     bank,
     phone,
     schedule,
+    nationalId,
     position = 'STAFF',
     section  = 'HALL',
     pay,
     payUnit
   } = parsed.data as unknown as {
-    name: string; nationalId: string; accountNumber: string; bank: string;
+    name: string; nationalId:string; accountNumber: string; bank: string;
     phone: string; schedule: Json; position?: Position; section?: Section;
     pay?: number; payUnit?: PayUnit;
   };
@@ -166,12 +166,14 @@ export const createEmployee = async (req: Request, res: Response) => {
     res.status(400).json({ error: '급여(pay) 또는 payUnit이 잘못되었습니다.' });
     return;
   }
+  const nationalIdEnc = encryptNationalId(nationalId);
+  const nationalIdHash = hashNationalId(nationalId /*, shopId*/);
+  const nationalIdMasked = maskNationalId(nationalId);
 
   const emp = await prisma.employee.create({
     data: {
       shopId,
       name,
-      nationalId,
       accountNumber,
       bank,
       phone,
@@ -179,10 +181,21 @@ export const createEmployee = async (req: Request, res: Response) => {
       position,
       section,
       pay,
-      payUnit: finalPayUnit
+      payUnit: finalPayUnit,
+      // 🔽 더 이상 평문 저장하지 않음 (nationalId 필드는 나중 단계에서 삭제)
+      nationalIdEnc,
+      nationalIdHash,
+      nationalIdMasked
     }
   });
-  res.status(201).json(emp);
+  // 응답에 enc/hash는 절대 포함X
+  res.status(201).json({
+    ...emp,
+    nationalId: undefined,
+    nationalIdEnc: undefined,
+    nationalIdHash: undefined,
+    nationalIdMasked: emp.nationalIdMasked
+  });
 };
 
 /** ------------------------------------------------------------------

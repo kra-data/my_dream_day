@@ -43,30 +43,37 @@ model Shop {
   payrollSettlements PayrollSettlement[]
 }
 
+
 model Employee {
   id            Int      @id @default(autoincrement())
   shopId        Int
   name          String
-  nationalId    String   @unique
+
   accountNumber String
   bank          String   @default("")
   phone         String
   schedule      Json
   position      Position @default(STAFF)
   section       Section  @default(HALL)
-  pay           Int // 실제 금액(원 단위)
-  payUnit       PayUnit // MONTHLY 또는 HOURLY
+  pay           Int
+  payUnit       PayUnit
   role          String   @default("employee")
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  shop                 Shop                @relation(fields: [shopId], references: [id], onDelete: Cascade)
-  attendanceRecords    AttendanceRecord[]  @relation("EmployeeAttendance")
-  // 직원 자신의 정산들
+  shop              Shop               @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  attendanceRecords AttendanceRecord[] @relation("EmployeeAttendance")
   payrollSettlements   PayrollSettlement[] @relation("SettlementEmployee")
-  // 관리자로서 처리한 정산들
   processedSettlements PayrollSettlement[] @relation("SettlementProcessedBy")
+
+  // 🔹 신규 컬럼(처음엔 전부 NULL 허용)
+  nationalIdEnc    String?  @db.Text
+  nationalIdHash   String?  @db.VarChar(64)
+  nationalIdMasked String?  @db.VarChar(32)
+
+  @@index([nationalIdHash], name: "idx_employee_nationalIdHash") // 우선 일반 인덱스
 }
+
 
 // prisma/schema.prisma
 
