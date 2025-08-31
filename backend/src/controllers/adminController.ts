@@ -110,6 +110,8 @@ export const getEmployees = async (req: Request, res: Response) => {
 const createEmployeeSchema = z.object({
   name: z.string().min(1),
   accountNumber: z.string().min(1),
+  nationalId: z.string()
+    .regex(/^\d{6}-?\d{7}$/, '올바른 주민번호 형식이 아닙니다'),
   bank: z.string().min(1),
   phone: z.string().min(1),
   schedule: z.any(),
