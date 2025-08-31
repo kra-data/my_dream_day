@@ -68,10 +68,9 @@ const overlapWhere = (employeeId: number, shopId: number, startAt: Date, endAt: 
 });
 
 /* ───────────────── 직원 전용: 내 근무일정 생성 ───────────────── */
-export const myCreateShift: RequestHandler = async (req, res) => {
-  const auth = req as AuthRequiredRequest;
+export const myCreateShift = async (req: AuthRequiredRequest, res: Response): Promise<void> => {
+  const parsed = createShiftSchema.safeParse(req.body);
 
-  const parsed = createShiftSchema.safeParse(auth.body);
   if (!parsed.success) { res.status(400).json({ error: 'Invalid payload' }); return; }
 
   let startAt: Date, endAt: Date;
@@ -83,8 +82,8 @@ export const myCreateShift: RequestHandler = async (req, res) => {
   }
   if (!(startAt < endAt)) { res.status(400).json({ error: 'endAt must be after startAt' }); return; }
 
-  const employeeId = auth.user.userId;
-  const shopId     = auth.user.shopId;
+  const employeeId = req.user.userId;
+  const shopId     = req.user.shopId;
 
   const exists = await prisma.workShift.findFirst({ where: overlapWhere(employeeId, shopId, startAt, endAt) });
   if (exists) { res.status(409).json({ error: '이미 겹치는 근무일정이 있습니다.' }); return; }
@@ -96,15 +95,14 @@ export const myCreateShift: RequestHandler = async (req, res) => {
 };
 
 /* ───────────────── 직원 전용: 내 근무일정 목록 ───────────────── */
-export const myListShifts: RequestHandler = async (req, res) => {
-  const auth = req as AuthRequiredRequest;
+export const myListShifts = async (req: AuthRequiredRequest, res: Response): Promise<void> => {
+  const parsed = listQuerySchema.safeParse(req.query);
 
-  const parsed = listQuerySchema.safeParse(auth.query);
   if (!parsed.success) { res.status(400).json({ error: 'Invalid query' }); return; }
   const { from, to, status } = parsed.data;
 
-  const employeeId = auth.user.userId;
-  const shopId     = auth.user.shopId;
+  const employeeId = req.user.userId;
+  const shopId     = req.user.shopId;
 
   const where: any = { employeeId, shopId };
   if (status) where.status = status;
@@ -118,12 +116,10 @@ export const myListShifts: RequestHandler = async (req, res) => {
 };
 
 /* ───────────────── 관리자/점주: 가게 내 모든 직원 일정 목록 ───────────────── */
-export const adminListShifts: RequestHandler = async (req, res) => {
-  const auth = req as AuthRequiredRequest;
-  const shopId = Number(auth.params.shopId);
-  if (auth.user.shopId !== shopId) { res.status(403).json({ error: '다른 가게는 조회할 수 없습니다.' }); return; }
-
-  const parsed = listQuerySchema.safeParse(auth.query);
+ export const adminListShifts = async (req: AuthRequiredRequest, res: Response): Promise<void> => {
+  const shopId = Number(req.params.shopId);
+  if (req.user.shopId !== shopId) { res.status(403).json({ error: '다른 가게는 조회할 수 없습니다.' }); return; }
+  const parsed = listQuerySchema.safeParse(req.query);
   if (!parsed.success) { res.status(400).json({ error: 'Invalid query' }); return; }
   const { from, to, employeeId, status } = parsed.data;
 
@@ -144,16 +140,15 @@ export const adminListShifts: RequestHandler = async (req, res) => {
 };
 
 /* ───────────────── 관리자/점주: 특정 직원 일정 생성 ───────────────── */
-export const adminCreateShift: RequestHandler = async (req, res) => {
-  const auth = req as AuthRequiredRequest;
-  const shopId     = Number(auth.params.shopId);
-  const employeeId = Number(auth.params.employeeId);
-  if (auth.user.shopId !== shopId) { res.status(403).json({ error: '다른 가게는 관리할 수 없습니다.' }); return; }
+ export const adminCreateShift = async (req: AuthRequiredRequest, res: Response): Promise<void> => {
+  const shopId     = Number(req.params.shopId);
+  const employeeId = Number(req.params.employeeId);
+  if (req.user.shopId !== shopId) { res.status(403).json({ error: '다른 가게는 관리할 수 없습니다.' }); return; }
 
   const emp = await prisma.employee.findFirst({ where: { id: employeeId, shopId }, select: { id: true } });
   if (!emp) { res.status(404).json({ error: '직원이 존재하지 않거나 다른 가게 소속입니다.' }); return; }
 
-  const parsed = createShiftSchema.safeParse(auth.body);
+  const parsed = createShiftSchema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: 'Invalid payload' }); return; }
 
   let startAt: Date, endAt: Date;
@@ -169,19 +164,17 @@ export const adminCreateShift: RequestHandler = async (req, res) => {
   if (exists) { res.status(409).json({ error: '이미 겹치는 근무일정이 있습니다.' }); return; }
 
   const created = await prisma.workShift.create({
-    data: { shopId, employeeId, startAt, endAt, status: 'SCHEDULED', createdBy: auth.user.userId }
+    data: { shopId, employeeId, startAt, endAt, status: 'SCHEDULED', createdBy: req.user.userId }
   });
   res.status(201).json(created);
 };
 
 /* ───────────────── 관리자/점주: 일정 수정 ───────────────── */
-export const adminUpdateShift: RequestHandler = async (req, res) => {
-  const auth = req as AuthRequiredRequest;
-  const shopId  = Number(auth.params.shopId);
-  const shiftId = Number(auth.params.shiftId);
-  if (auth.user.shopId !== shopId) { res.status(403).json({ error: '다른 가게는 관리할 수 없습니다.' }); return; }
-
-  const parsed = updateShiftSchema.safeParse(auth.body);
+ export const adminUpdateShift = async (req: AuthRequiredRequest, res: Response): Promise<void> => {
+  const shopId  = Number(req.params.shopId);
+  const shiftId = Number(req.params.shiftId);
+  if (req.user.shopId !== shopId) { res.status(403).json({ error: '다른 가게는 관리할 수 없습니다.' }); return; }
+  const parsed = updateShiftSchema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: 'Invalid payload' }); return; }
   const { startAt, endAt, status } = parsed.data;
 
@@ -203,19 +196,17 @@ export const adminUpdateShift: RequestHandler = async (req, res) => {
       startAt: startAt ? new Date(startAt) : undefined,
       endAt:   endAt   ? new Date(endAt)   : undefined,
       status:  status  ?? undefined,
-      updatedBy: auth.user.userId,
+      updatedBy: req.user.userId,
     }
   });
   res.json(updated);
 };
 
 /* ───────────────── 관리자/점주: 일정 삭제 ───────────────── */
-export const adminDeleteShift: RequestHandler = async (req, res) => {
-  const auth = req as AuthRequiredRequest;
-  const shopId  = Number(auth.params.shopId);
-  const shiftId = Number(auth.params.shiftId);
-  if (auth.user.shopId !== shopId) { res.status(403).json({ error: '다른 가게는 관리할 수 없습니다.' }); return; }
-
+ export const adminDeleteShift = async (req: AuthRequiredRequest, res: Response): Promise<void> => {
+  const shopId  = Number(req.params.shopId);
+  const shiftId = Number(req.params.shiftId);
+  if (req.user.shopId !== shopId) { res.status(403).json({ error: '다른 가게는 관리할 수 없습니다.' }); return; }
   const shift = await prisma.workShift.findUnique({ where: { id: shiftId } });
   if (!shift || shift.shopId !== shopId) { res.status(404).json({ error: '일정을 찾을 수 없습니다.' }); return; }
 

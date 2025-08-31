@@ -48,10 +48,10 @@ router.use(requireAdmin);
 
 
 // ───────── WorkShift (Admin/Owner) ─────────
-router.get('/shops/:shopId/workshifts', adminListShifts);
-router.post('/shops/:shopId/employees/:employeeId/workshifts', adminCreateShift);
-router.put('/shops/:shopId/workshifts/:shiftId', adminUpdateShift);
-router.delete('/shops/:shopId/workshifts/:shiftId', adminDeleteShift);
++router.get('/shops/:shopId/workshifts', withUser(adminListShifts));
++router.post('/shops/:shopId/employees/:employeeId/workshifts', withUser(adminCreateShift));
++router.put('/shops/:shopId/workshifts/:shiftId', withUser(adminUpdateShift));
++router.delete('/shops/:shopId/workshifts/:shiftId', withUser(adminDeleteShift));
 router.get('/shops/:shopId/qr', getShopQrPng);
 /* ───────── 매장 CRUD ───────── */
 router.get('/shops',                 adminController.getShops);
