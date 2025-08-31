@@ -5,6 +5,7 @@ import {
   UserRole,
   AuthRequest
 } from '../middlewares/jwtMiddleware';
+
 import {
   requireUser,
   withUser,
@@ -39,7 +40,21 @@ router.get(
   withUser((req: AuthRequiredRequest, res, _next) => mySettlementSummary(req, res))
 );
 
-router.post('/my/workshifts', myCreateShift);
-router.get('/my/workshifts', myListShifts);
+router.post(
+  '/my/workshifts',
+  authenticateJWT,
+  requireUser,
+  requireRoles('employee'),
+  withUser((req: AuthRequiredRequest, res, _next) => myCreateShift(req, res))
+);
+
+router.get(
+  '/my/workshifts',
+  authenticateJWT,
+  requireUser,
+  requireRoles('employee'),
+  withUser((req: AuthRequiredRequest, res, _next) => myListShifts(req, res))
+);
+
 
 export default router;
