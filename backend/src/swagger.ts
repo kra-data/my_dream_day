@@ -164,6 +164,97 @@ PayrollEmployeeDetailResponse: {
     }
   }
 },
+      // ───────────────────────────────
+      // Shifts (근무일정) 스키마 추가
+      // ───────────────────────────────
+      WorkShiftStatus: {
+        type: 'string',
+        enum: ['SCHEDULED', 'COMPLETED', 'CANCELED'],
+        example: 'SCHEDULED'
+      },
+      WorkShift: {
+        type: 'object',
+        properties: {
+          id:          { type: 'integer', example: 101 },
+          shopId:      { type: 'integer', example: 1 },
+          employeeId:  { type: 'integer', example: 42 },
+          startAt:     { type: 'string', format: 'date-time', example: '2025-09-01T02:00:00.000Z' },
+          endAt:       { type: 'string', format: 'date-time', example: '2025-09-01T10:00:00.000Z' },
+          status:      { $ref: '#/components/schemas/WorkShiftStatus' },
+          // 아래 필드는 선택(DB에 존재하는 경우 문서화)
+          createdBy:   { type: 'integer', nullable: true, example: 42 },
+          updatedBy:   { type: 'integer', nullable: true, example: 1 },
+          createdAt:   { type: 'string', format: 'date-time', nullable: true },
+          updatedAt:   { type: 'string', format: 'date-time', nullable: true },
+          actualInAt:  { type: 'string', format: 'date-time', nullable: true },
+          actualOutAt: { type: 'string', format: 'date-time', nullable: true },
+          leftEarly:   { type: 'boolean', nullable: true, example: false },
+          notes:       { type: 'string', nullable: true }
+        }
+      },
+      WorkShiftEmployeeLite: {
+        type: 'object',
+        properties: {
+          name:     { type: 'string', example: '김직원' },
+          position: { type: 'string', example: 'STAFF' },
+          section:  { type: 'string', example: 'HALL' }
+        }
+      },
+      WorkShiftWithEmployee: {
+        allOf: [
+          { $ref: '#/components/schemas/WorkShift' },
+          {
+            type: 'object',
+            properties: {
+              employee: { $ref: '#/components/schemas/WorkShiftEmployeeLite' }
+            }
+          }
+        ]
+      },
+      // 생성 요청: ISO 모드
+      WorkShiftCreateByIso: {
+        type: 'object',
+        required: ['startAt', 'endAt'],
+        properties: {
+          startAt: { type: 'string', format: 'date-time', example: '2025-09-01T02:00:00.000Z' },
+          endAt:   { type: 'string', format: 'date-time', example: '2025-09-01T10:00:00.000Z' }
+        }
+      },
+      // 생성 요청: Local(HH:MM) 모드
+      WorkShiftCreateByLocal: {
+        type: 'object',
+        required: ['date', 'start', 'end'],
+        properties: {
+          date:  { type: 'string', example: '2025-09-01', description: 'KST 기준 날짜 (YYYY-MM-DD)' },
+          start: { type: 'string', example: '11:00', description: 'KST HH:MM' },
+          end:   { type: 'string', example: '19:00', description: 'KST HH:MM' }
+        }
+      },
+      // 생성 요청: oneOf
+      WorkShiftCreateRequest: {
+        oneOf: [
+          { $ref: '#/components/schemas/WorkShiftCreateByIso' },
+          { $ref: '#/components/schemas/WorkShiftCreateByLocal' }
+        ]
+      },
+      // 수정 요청
+      WorkShiftUpdateRequest: {
+        type: 'object',
+        properties: {
+          startAt: { type: 'string', format: 'date-time' },
+          endAt:   { type: 'string', format: 'date-time' },
+          status:  { $ref: '#/components/schemas/WorkShiftStatus' }
+        }
+      },
+      WorkShiftListResponse: {
+        type: 'array',
+        items: { $ref: '#/components/schemas/WorkShift' }
+      },
+      WorkShiftListWithEmployeeResponse: {
+        type: 'array',
+        items: { $ref: '#/components/schemas/WorkShiftWithEmployee' }
+      },
+
 
       // ... 기존 components.schemas 아래에 이어서 추가
       DashboardTodaySummary: {
@@ -751,9 +842,188 @@ responses: {
       '401': { description: 'Unauthorized' },
       '403': { description: 'Forbidden' },
       '404': { description: 'Not Found' }
-    }
-  }
-}
+   }
+ }
+},
+    '/api/my/workshifts': {
+      get: {
+        tags: ['Shifts'],
+        summary: '내 근무일정 목록',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'from', in: 'query', required: false, schema: { type: 'string', format: 'date-time' } },
+          { name: 'to',   in: 'query', required: false, schema: { type: 'string', format: 'date-time' } },
+          { name: 'status', in: 'query', required: false, schema: { $ref: '#/components/schemas/WorkShiftStatus' } }
+        ],
+        responses: {
+          '200': {
+            description: 'OK',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/WorkShiftListResponse' },
+                examples: {
+                  sample: {
+                    value: [
+                      { id: 101, shopId: 1, employeeId: 42, startAt: '2025-09-01T02:00:00.000Z', endAt: '2025-09-01T10:00:00.000Z', status: 'SCHEDULED' }
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          '401': { description: 'Unauthorized' }
+        }
+      },
+      post: {
+        tags: ['Shifts'],
+        summary: '내 근무일정 생성',
+        security: [{ bearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: { $ref: '#/components/schemas/WorkShiftCreateRequest' },
+              examples: {
+                iso:   { value: { startAt: '2025-09-01T02:00:00.000Z', endAt: '2025-09-01T10:00:00.000Z' } },
+                local: { value: { date: '2025-09-01', start: '11:00', end: '19:00' } }
+              }
+            }
+          }
+        },
+        responses: {
+          '201': {
+            description: 'Created',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/WorkShift' }
+              }
+            }
+          },
+          '400': { description: 'Invalid payload' },
+          '401': { description: 'Unauthorized' },
+          '409': { description: 'Conflict (overlap)' }
+        }
+      }
+    },
+
+    '/api/admin/shops/{shopId}/workshifts': {
+      get: {
+        tags: ['Shifts (Admin)'],
+        summary: '가게 전체 근무일정 목록',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'shopId', in: 'path', required: true, schema: { type: 'integer' } },
+          { name: 'from',   in: 'query', required: false, schema: { type: 'string', format: 'date-time' } },
+          { name: 'to',     in: 'query', required: false, schema: { type: 'string', format: 'date-time' } },
+          { name: 'employeeId', in: 'query', required: false, schema: { type: 'integer' } },
+          { name: 'status', in: 'query', required: false, schema: { $ref: '#/components/schemas/WorkShiftStatus' } }
+        ],
+        responses: {
+          '200': {
+            description: 'OK',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/WorkShiftListWithEmployeeResponse' },
+                examples: {
+                  sample: {
+                    value: [
+                      {
+                        id: 201, shopId: 1, employeeId: 42,
+                        startAt: '2025-09-01T02:00:00.000Z', endAt: '2025-09-01T10:00:00.000Z', status: 'SCHEDULED',
+                        employee: { name: '김직원', position: 'STAFF', section: 'HALL' }
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          '401': { description: 'Unauthorized' },
+          '403': { description: 'Forbidden' }
+        }
+      }
+    },
+
+    '/api/admin/shops/{shopId}/employees/{employeeId}/workshifts': {
+      post: {
+        tags: ['Shifts (Admin)'],
+        summary: '특정 직원 근무일정 생성',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'shopId', in: 'path', required: true, schema: { type: 'integer' } },
+          { name: 'employeeId', in: 'path', required: true, schema: { type: 'integer' } }
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: { $ref: '#/components/schemas/WorkShiftCreateRequest' },
+              examples: {
+                iso:   { value: { startAt: '2025-09-02T02:00:00.000Z', endAt: '2025-09-02T10:00:00.000Z' } },
+                local: { value: { date: '2025-09-02', start: '11:00', end: '19:00' } }
+              }
+            }
+          }
+        },
+        responses: {
+          '201': {
+            description: 'Created',
+            content: {
+              'application/json': { schema: { $ref: '#/components/schemas/WorkShift' } }
+            }
+          },
+          '400': { description: 'Invalid payload' },
+          '401': { description: 'Unauthorized' },
+          '403': { description: 'Forbidden' },
+          '404': { description: 'Not Found' },
+          '409': { description: 'Conflict (overlap)' }
+        }
+      }
+    },
+
+    '/api/admin/shops/{shopId}/workshifts/{shiftId}': {
+      put: {
+        tags: ['Shifts (Admin)'],
+        summary: '근무일정 수정',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'shopId', in: 'path', required: true, schema: { type: 'integer' } },
+          { name: 'shiftId', in: 'path', required: true, schema: { type: 'integer' } }
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: { $ref: '#/components/schemas/WorkShiftUpdateRequest' },
+              example: { startAt: '2025-09-01T03:00:00.000Z', endAt: '2025-09-01T11:00:00.000Z', status: 'SCHEDULED' }
+            }
+          }
+        },
+        responses: {
+          '200': { description: 'Updated', content: { 'application/json': { schema: { $ref: '#/components/schemas/WorkShift' } } } },
+          '400': { description: 'Invalid payload' },
+          '401': { description: 'Unauthorized' },
+          '403': { description: 'Forbidden' },
+          '404': { description: 'Not Found' },
+          '409': { description: 'Conflict (overlap)' }
+        }
+      },
+      delete: {
+        tags: ['Shifts (Admin)'],
+        summary: '근무일정 삭제',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'shopId', in: 'path', required: true, schema: { type: 'integer' } },
+          { name: 'shiftId', in: 'path', required: true, schema: { type: 'integer' } }
+        ],
+        responses: {
+          '204': { description: 'No Content' },
+          '401': { description: 'Unauthorized' },
+          '403': { description: 'Forbidden' },
+          '404': { description: 'Not Found' }
+        }
+      }
+    },
 
 
 

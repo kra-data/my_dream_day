@@ -29,7 +29,6 @@ enum PayUnit {
   MONTHLY // 월급제
   HOURLY // 시급제
 }
-
 model Shop {
   id                 Int                 @id @default(autoincrement())
   name               String
@@ -38,17 +37,18 @@ model Shop {
   qrSecret           String
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
+
   employees          Employee[]
   attendanceRecords  AttendanceRecord[]  @relation("ShopAttendance")
   payrollSettlements PayrollSettlement[]
+  // 🔹 추가
+  workShifts         WorkShift[]
 }
-
 
 model Employee {
   id            Int      @id @default(autoincrement())
   shopId        Int
   name          String
-
   accountNumber String
   bank          String   @default("")
   phone         String
@@ -61,21 +61,23 @@ model Employee {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  shop              Shop               @relation(fields: [shopId], references: [id], onDelete: Cascade)
-  attendanceRecords AttendanceRecord[] @relation("EmployeeAttendance")
+  shop                 Shop                @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  attendanceRecords    AttendanceRecord[]  @relation("EmployeeAttendance")
   payrollSettlements   PayrollSettlement[] @relation("SettlementEmployee")
   processedSettlements PayrollSettlement[] @relation("SettlementProcessedBy")
 
-  // 🔹 신규 컬럼(처음엔 전부 NULL 허용)
+    // 🔹 신규 컬럼(처음엔 전부 NULL 허용)
   nationalIdEnc    String?  @db.Text
   nationalIdHash   String?  @db.VarChar(64)
   nationalIdMasked String?  @db.VarChar(32)
 
+
+  // 🔹 추가
+  workShifts           WorkShift[]
+
+
   @@index([nationalIdHash], name: "idx_employee_nationalIdHash") // 우선 일반 인덱스
 }
-
-
-// prisma/schema.prisma
 
 model AttendanceRecord {
   id            Int       @id @default(autoincrement())
@@ -88,16 +90,51 @@ model AttendanceRecord {
   extraMinutes  Int?
   paired        Boolean   @default(false)
 
-  // 🔽🔽 추가: 정산 스냅샷 FK
-  settlementId Int?
-  settlement   PayrollSettlement? @relation(fields: [settlementId], references: [id], onDelete: SetNull)
+  employee      Employee  @relation("EmployeeAttendance", fields: [employeeId], references: [id], onDelete: Cascade)
+  shop          Shop      @relation("ShopAttendance", fields: [shopId], references: [id], onDelete: Cascade)
 
-  employee Employee @relation("EmployeeAttendance", fields: [employeeId], references: [id], onDelete: Cascade)
-  shop     Shop     @relation("ShopAttendance", fields: [shopId], references: [id], onDelete: Cascade)
+  // 🔹 추가: WorkShift 연결(옵션)
+  shiftId       Int?
+  shift         WorkShift? @relation(fields: [shiftId], references: [id])
+
+  // 이미 있는 정산 연결(있다면 유지)
+  settlementId  Int?
+  settlement    PayrollSettlement? @relation(fields: [settlementId], references: [id])
 
   @@index([employeeId, clockInAt])
-  @@index([settlementId]) // 🔽 정산 여부/검색 최적화
+  @@index([shiftId])
+  @@index([settlementId])
 }
+
+// 🔹 신규 테이블: 스케줄에서 생성되는 근무일정
+model WorkShift {
+  id            Int      @id @default(autoincrement())
+  shopId        Int
+  employeeId    Int
+  startAt       DateTime  // 예정 시작 (KST 기준 UTC 시각)
+  endAt         DateTime  // 예정 종료
+  graceInMin    Int?      // 지각 유예 (분)
+  status        String    @default("PLANNED") // PLANNED | IN_PROGRESS | COMPLETED | MISSED
+
+  // 실측 기록(선택)
+  actualInAt    DateTime?
+  actualOutAt   DateTime?
+  late          Boolean?  // 지각 여부
+  leftEarly     Boolean?  // 조퇴 여부
+
+  shop          Shop      @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  employee      Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  attendance    AttendanceRecord[]
+
+  createdBy   Int?
+  updatedBy   Int?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@index([shopId, employeeId, startAt])
+  @@index([employeeId, startAt])
+}
+
 
 model PayrollSettlement {
   id            Int      @id @default(autoincrement())

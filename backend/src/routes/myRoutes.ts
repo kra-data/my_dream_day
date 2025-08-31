@@ -10,7 +10,10 @@ import {
   withUser,
   AuthRequiredRequest
 } from '../middlewares/requireUser';
-
+import {
+  myCreateShift,
+  myListShifts
+} from '../controllers/workShiftController';
 import { mySettlementSummary } from '../controllers/mySettlementController';
 
 const router = Router();
@@ -35,5 +38,8 @@ router.get(
   requireRoles('employee'),
   withUser((req: AuthRequiredRequest, res, _next) => mySettlementSummary(req, res))
 );
+
+router.post('/my/workshifts', myCreateShift);
+router.get('/my/workshifts', myListShifts);
 
 export default router;
