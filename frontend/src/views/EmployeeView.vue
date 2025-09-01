@@ -36,6 +36,9 @@
       <!-- 이번 주 근무 현황 -->
       <WeekSummary :week-summary="weekSummary" />
 
+      <!-- 내 근무 일정 -->
+      <EmployeeWorkshiftView />
+
       <!-- 월간 캘린더 -->
       <MonthlyCalendar 
         :attendance-store="attendanceStore"
@@ -58,8 +61,6 @@
     <!-- 마이페이지 모달 -->
     <MyPageModal 
       :show="showMyPage"
-      :current-employee="currentEmployee"
-      :monthly-stats="monthlyStats"
       @close="showMyPage = false"
     />
   </div>
@@ -73,6 +74,7 @@ import WeekSummary from '@/components/employee/WeekSummary.vue'
 import MonthlyCalendar from '@/components/employee/MonthlyCalendar.vue'
 import QRModal from '@/components/employee/QRModal.vue'
 import MyPageModal from '@/components/employee/MyPageModal.vue'
+import EmployeeWorkshiftView from '@/components/employee/EmployeeWorkshiftView.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useAttendanceStore } from '@/stores/attendance'
 
@@ -84,7 +86,8 @@ export default {
     WeekSummary,
     MonthlyCalendar,
     QRModal,
-    MyPageModal
+    MyPageModal,
+    EmployeeWorkshiftView
   },
   setup() {
     const authStore = useAuthStore()

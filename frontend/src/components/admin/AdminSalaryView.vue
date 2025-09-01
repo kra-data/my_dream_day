@@ -123,7 +123,11 @@
           </div>
           <div class="summary-item">
             <span class="label">미정산 직원</span>
-            <span class="value count">{{ unsettledEmployeeCount }}명</span>
+            <span class="value count pending">{{ unsettledEmployeeCount }}명</span>
+          </div>
+          <div class="summary-item">
+            <span class="label">정산 완료 직원</span>
+            <span class="value count settled">{{ settledEmployeeCount }}명</span>
           </div>
           <div class="summary-item">
             <span class="label">정산 예정일</span>
@@ -147,18 +151,6 @@
             </span>
           </button>
           
-          <!-- TODO: API 개발 완료 후 활성화 -->
-          <!-- 
-          <button 
-            @click="viewSettlementHistory"
-            class="btn btn-secondary"
-            disabled
-            title="정산 API 개발 완료 후 활성화 예정"
-          >
-            <span class="btn-icon">📋</span>
-            정산 내역
-          </button>
-          -->
         </div>
       </div>
     </div>
@@ -184,6 +176,11 @@
               <option value="MANAGER">매니저</option>
               <option value="STAFF">직원</option>
               <option value="PART_TIME">알바</option>
+            </select>
+            <select v-model="settlementFilter" class="filter-select">
+              <option value="">모든 정산상태</option>
+              <option value="PAID">정산 완료</option>
+              <option value="PENDING">정산 전</option>
             </select>
           </div>
         </div>
@@ -229,7 +226,8 @@
               </th>
               <th style="text-align: right;">근무시간</th>
               <th style="text-align: right;">추가근무</th>
-              <th class="actions">상세</th>
+              <th style="text-align: center;">정산상태</th>
+              <th class="actions">관리</th>
             </tr>
           </thead>
           <tbody>
@@ -237,6 +235,10 @@
               v-for="employee in paginatedPayrolls" 
               :key="employee.employeeId"
               class="table-row"
+              :class="{ 
+                'settled-row': employee.settlement?.status === 'PAID',
+                'pending-row': !employee.settlement || employee.settlement.status === 'PENDING'
+              }"
               @click="viewEmployeeDetail(employee.employeeId)"
             >
               <td class="employee-cell">
@@ -286,13 +288,41 @@
                 </span>
               </td>
               
+              <td class="settlement-status-cell" style="text-align: center;">
+                <div class="settlement-status-badge" :class="getSettlementStatusClass(employee)">
+                  <span class="status-icon">{{ getSettlementStatusIcon(employee) }}</span>
+                  <span class="status-text">{{ getSettlementStatusText(employee) }}</span>
+                </div>
+                <div v-if="employee.settlement?.settledAt" class="settlement-date">
+                  <small>{{ formatDate(employee.settlement.settledAt) }}</small>
+                </div>
+              </td>
+              
               <td class="actions-cell">
-                <button 
-                  @click.stop="viewEmployeeDetail(employee.employeeId)"
-                  class="btn btn-sm btn-outline"
-                >
-                  상세보기
-                </button>
+                <div class="action-buttons">
+                  <button 
+                    @click.stop="viewEmployeeDetail(employee.employeeId)"
+                    class="btn btn-sm btn-outline"
+                    title="상세 정보 보기"
+                  >
+                    상세
+                  </button>
+                  <button 
+                    @click.stop="processIndividualSettlement(employee)"
+                    class="btn btn-sm"
+                    :class="employee.settlement?.status === 'PAID' ? 'btn-secondary' : 'btn-success'"
+                    :disabled="payrollStore.loading || employee.salary === 0 || employee.settlement?.status === 'PAID'"
+                    :title="employee.settlement?.status === 'PAID' ? '정산 완료됨' : '개별 정산 처리'"
+                  >
+                    <span v-if="payrollStore.loading && settlingEmployeeId === employee.employeeId">
+                      처리중...
+                    </span>
+                    <span v-else-if="employee.settlement?.status === 'PAID'">
+                      완료
+                    </span>
+                    <span v-else>정산</span>
+                  </button>
+                </div>
               </td>
             </tr>
           </tbody>
@@ -328,7 +358,7 @@
     <div v-if="showDetailModal" class="modal-overlay" @click="closeDetailModal">
       <div class="modal-container" @click.stop>
         <div class="modal-header">
-          <h3>{{ selectedEmployee?.name }}님 급여 상세</h3>
+          <h3>{{ payrollStore.employeeDetail?.employee?.name || selectedEmployee?.name || '직원' }}님 급여 상세</h3>
           <button @click="closeDetailModal" class="modal-close">&times;</button>
         </div>
 
@@ -337,9 +367,67 @@
           <p>상세 정보를 불러오는 중...</p>
         </div>
 
+        <div v-else-if="payrollStore.error" class="modal-error">
+          <div class="error-icon">⚠️</div>
+          <h4>오류가 발생했습니다</h4>
+          <p>{{ payrollStore.error }}</p>
+          <button @click="closeDetailModal" class="btn btn-primary">확인</button>
+        </div>
+        
         <div v-else-if="payrollStore.employeeDetail" class="modal-content">
           <!-- 요약 정보 -->
           <div class="detail-summary">
+            <!-- 정산 정보 표시 (단순화) -->
+            <div class="settlement-info-card" :class="payrollStore.employeeDetail.settlementStatus === 'PENDING' ? 'pending' : ''">
+              <div class="settlement-header">
+                <h4>정산 정보</h4>
+                <div class="settlement-status-badge" :class="payrollStore.employeeDetail.settlementStatus === 'PAID' ? 'settled' : 'pending'">
+                  <span class="status-icon">
+                    {{ payrollStore.employeeDetail.settlementStatus === 'PAID' ? '✅' : '⏳' }}
+                  </span>
+                  <span class="status-text">
+                    {{ payrollStore.employeeDetail.settlementStatus === 'PAID' ? '정산 완료' : '정산 대기' }}
+                  </span>
+                </div>
+              </div>
+              
+              <div class="settlement-details">
+                <div v-if="payrollStore.employeeDetail.settlement && payrollStore.employeeDetail.settlement.id" class="settlement-detail-row">
+                  <span class="label">정산 ID:</span>
+                  <span class="value settlement-id">#{{ payrollStore.employeeDetail.settlement.id }}</span>
+                </div>
+                
+                <div v-if="payrollStore.employeeDetail.settlement && payrollStore.employeeDetail.settlement.totalPay" class="settlement-detail-row">
+                  <span class="label">정산 금액:</span>
+                  <span class="value amount">{{ formatCurrency(payrollStore.employeeDetail.settlement.totalPay) }}</span>
+                </div>
+                
+                <div v-if="payrollStore.employeeDetail.settlement && payrollStore.employeeDetail.settlement.settledAt" class="settlement-detail-row">
+                  <span class="label">정산 일자:</span>
+                  <span class="value date">{{ formatDate(payrollStore.employeeDetail.settlement.settledAt) }}</span>
+                </div>
+                
+                <div v-if="payrollStore.employeeDetail.settlementStatus === 'PENDING'" class="settlement-detail-row">
+                  <span class="notice">이 직원의 급여는 아직 정산되지 않았습니다.</span>
+                </div>
+                
+                <div class="settlement-detail-row">
+                  <span class="label">{{ payrollStore.employeeDetail.settlementStatus === 'PAID' ? '정산 금액' : '예상 정산 금액' }}:</span>
+                  <span class="value amount" :class="payrollStore.employeeDetail.settlementStatus === 'PENDING' ? 'pending' : ''">{{ formatCurrency(payrollStore.employeeDetail.expectedSalary) }}</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- 급여 기간 정보 -->
+            <div v-if="payrollStore.employeeDetail.cycle" class="cycle-info-card">
+              <h4>급여 산정 기간 ({{ payrollStore.employeeDetail.year }}년 {{ payrollStore.employeeDetail.month }}월)</h4>
+              <div class="cycle-details">
+                <div class="cycle-dates">
+                  <small>{{ formatDate(payrollStore.employeeDetail.cycle.start) }} ~ {{ formatDate(payrollStore.employeeDetail.cycle.end) }}</small>
+                </div>
+              </div>
+            </div>
+
             <div class="summary-grid">
               <div class="summary-card">
                 <span class="summary-label">근무 일수</span>
@@ -354,8 +442,33 @@
                 <span class="summary-value overtime">{{ formatMinutes(payrollStore.employeeDetail.extraMinutes) }}</span>
               </div>
               <div class="summary-card total">
-                <span class="summary-label">총 급여</span>
-                <span class="summary-value">{{ formatCurrency(payrollStore.employeeDetail.salary) }}</span>
+                <span class="summary-label">예상 급여</span>
+                <span class="summary-value">{{ formatCurrency(payrollStore.employeeDetail.expectedSalary) }}</span>
+              </div>
+            </div>
+            
+            <!-- 추가 정보 카드 -->
+            <div v-if="payrollStore.employeeDetail.employee" class="employee-extra-info">
+              <div class="info-grid">
+                <div class="info-card">
+                  <span class="info-label">급여 형태</span>
+                  <span class="info-value">
+                    {{ payrollStore.employeeDetail.employee.hourlyPay ? '시급제' : '월급제' }}
+                  </span>
+                </div>
+                <div class="info-card">
+                  <span class="info-label">기본급</span>
+                  <span class="info-value">
+                    {{ payrollStore.employeeDetail.employee.hourlyPay 
+                        ? formatCurrency(payrollStore.employeeDetail.employee.hourlyPay) + '/시간'
+                        : formatCurrency(payrollStore.employeeDetail.employee.monthlyPay) + '/월'
+                    }}
+                  </span>
+                </div>
+                <div class="info-card">
+                  <span class="info-label">직위</span>
+                  <span class="info-value">{{ formatPosition(payrollStore.employeeDetail.employee.position) }}</span>
+                </div>
               </div>
             </div>
           </div>
@@ -365,7 +478,17 @@
             <h4>출퇴근 기록</h4>
             <div v-if="!payrollStore.employeeDetail.logs || payrollStore.employeeDetail.logs.length === 0" class="no-logs">
               <span class="empty-icon">📅</span>
-              <p>출퇴근 기록이 없습니다</p>
+              <p>출퇴근 기록이 없습니다.</p>
+              <div class="summary-info">
+                <div class="summary-row">
+                  <span class="label">총 근무시간:</span>
+                  <span class="value">{{ formatMinutes(payrollStore.employeeDetail.workedMinutes) }}</span>
+                </div>
+                <div class="summary-row">
+                  <span class="label">연장근무시간:</span>
+                  <span class="value overtime">{{ formatMinutes(payrollStore.employeeDetail.extraMinutes) }}</span>
+                </div>
+              </div>
             </div>
             <div v-else class="logs-table-container">
               <table class="logs-table">
@@ -376,7 +499,6 @@
                     <th>퇴근시간</th>
                     <th>근무시간</th>
                     <th>연장시간</th>
-                    <th>상태</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -386,11 +508,6 @@
                     <td>{{ log.clockOutAt ? formatTime(log.clockOutAt) : '-' }}</td>
                     <td>{{ formatMinutes(log.workedMinutes) }}</td>
                     <td class="overtime-cell">{{ formatMinutes(log.extraMinutes) }}</td>
-                    <td>
-                      <span class="status-badge" :class="getAttendanceStatus(log)">
-                        {{ getAttendanceStatusText(log) }}
-                      </span>
-                    </td>
                   </tr>
                 </tbody>
               </table>
@@ -414,13 +531,11 @@
 <script>
 import { ref, computed, onMounted, watch } from 'vue'
 import { usePayrollStore } from '@/stores/payroll'
-import { useEmployeesStore } from '@/stores/employees'
 
 export default {
   name: 'AdminSalaryView',
   setup() {
     const payrollStore = usePayrollStore()
-    const employeesStore = useEmployeesStore()
     
     // 상태 관리
     const isLoadingData = ref(false)
@@ -430,10 +545,12 @@ export default {
     const selectedEmployee = ref(null)
     const searchQuery = ref('')
     const positionFilter = ref('')
+    const settlementFilter = ref('')
     const sortField = ref('name')
     const sortDirection = ref('asc')
     const currentPage = ref(1)
     const itemsPerPage = ref(10)
+    const settlingEmployeeId = ref(null)
     
     let fetchTimeout = null
     
@@ -473,11 +590,25 @@ export default {
     })
     
     const totalSettlementAmount = computed(() => {
-      return payrollStore.employeePayrolls.reduce((sum, emp) => sum + (emp.salary || 0), 0)
+      return payrollStore.employeePayrolls.reduce((sum, emp) => {
+        // 정산 대기 중인 직원만 포함
+        if (!emp.settlement || emp.settlement.status === 'PENDING') {
+          return sum + (emp.salary || 0)
+        }
+        return sum
+      }, 0)
     })
     
     const unsettledEmployeeCount = computed(() => {
-      return payrollStore.employeePayrolls.filter(emp => !emp.settled).length
+      return payrollStore.employeePayrolls.filter(emp => 
+        !emp.settlement || emp.settlement.status === 'PENDING'
+      ).length
+    })
+    
+    const settledEmployeeCount = computed(() => {
+      return payrollStore.employeePayrolls.filter(emp => 
+        emp.settlement && emp.settlement.status === 'PAID'
+      ).length
     })
     
     const nextSettlementDate = computed(() => {
@@ -518,6 +649,15 @@ export default {
         filtered = filtered.filter(emp => emp.position === positionFilter.value)
       }
       
+      // 정산 상태 필터
+      if (settlementFilter.value) {
+        if (settlementFilter.value === 'PAID') {
+          filtered = filtered.filter(emp => emp.settlement && emp.settlement.status === 'PAID')
+        } else if (settlementFilter.value === 'PENDING') {
+          filtered = filtered.filter(emp => !emp.settlement || emp.settlement.status === 'PENDING')
+        }
+      }
+      
       // 정렬
       filtered.sort((a, b) => {
         let aVal = a[sortField.value]
@@ -556,7 +696,6 @@ export default {
                            payrollStore.employeePayrolls.length > 0
       
       if (hasCurrentData) {
-        console.log(`💾 ${selectedYear.value}년 ${selectedMonth.value}월 데이터 캐시 사용`)
         return
       }
       
@@ -566,7 +705,6 @@ export default {
       
       isLoadingData.value = true
       try {
-        console.log(`🔄 급여 데이터 로딩: ${selectedYear.value}년 ${selectedMonth.value}월`)
         
         await Promise.all([
           payrollStore.fetchPayrollDashboard(selectedYear.value, selectedMonth.value),
@@ -611,14 +749,17 @@ export default {
     }
     
     const viewEmployeeDetail = async (employeeId) => {
+      // 이전 에러 상태 초기화
+      payrollStore.error = null
+      
+      selectedEmployee.value = payrollStore.employeePayrolls.find(emp => emp.employeeId === employeeId)
+      showDetailModal.value = true
+      
       try {
-        selectedEmployee.value = payrollStore.employeePayrolls.find(emp => emp.employeeId === employeeId)
-        showDetailModal.value = true
-        
         await payrollStore.fetchEmployeePayrollDetail(employeeId, selectedYear.value, selectedMonth.value)
       } catch (error) {
         console.error('직원 상세 정보 조회 실패:', error)
-        showNotification('error', '직원 상세 정보를 불러오는데 실패했습니다.')
+        // 에러는 payrollStore.error에 설정되어 모달에서 표시됨
       }
     }
     
@@ -661,12 +802,55 @@ export default {
         const result = await payrollStore.processSettlement(settlementData)
         
         if (result.success) {
-          showNotification('success', `정산이 완료되었습니다! (${formatCurrency(totalAmount)}, ${employeeCount}명)`)
+          if (result.errors && result.errors.length > 0) {
+            showNotification('warning', result.message)
+          } else {
+            showNotification('success', `정산이 완료되었습니다! (${formatCurrency(result.totalProcessedAmount || totalAmount)}, ${result.processedEmployees}명)`)
+          }
           await refreshData() // 정산 후 데이터 새로고침
         }
       } catch (error) {
         console.error('정산 처리 실패:', error)
         showNotification('error', `정산 처리에 실패했습니다: ${error.message}`)
+      }
+    }
+    
+    const processIndividualSettlement = async (employee) => {
+      if (!employee || employee.salary === 0) {
+        showNotification('warning', '정산할 급여가 없습니다.')
+        return
+      }
+      
+      const confirmed = confirm(
+        `${employee.name}님의 급여 ${formatCurrency(employee.salary)}을(를) 정산하시겠습니까?`
+      )
+      
+      if (!confirmed) return
+      
+      settlingEmployeeId.value = employee.employeeId
+      
+      try {
+        const settlementData = {
+          amount: employee.salary,
+          workedMinutes: employee.workedMinutes || 0,
+          daysWorked: employee.daysWorked || 0,
+          period: currentSettlementPeriod.value,
+          settlementDate: new Date().toISOString()
+        }
+        
+        const result = await payrollStore.processEmployeeSettlement(employee.employeeId, settlementData)
+        
+        if (result.success) {
+          showNotification('success', `${employee.name}님 정산이 완료되었습니다! (${formatCurrency(result.processedAmount || employee.salary)})`)
+          await refreshData() // 정산 후 데이터 새로고침
+        } else {
+          showNotification('error', result.message || '정산 처리에 실패했습니다.')
+        }
+      } catch (error) {
+        console.error(`${employee.name} 정산 처리 실패:`, error)
+        showNotification('error', `${employee.name}님 정산 처리에 실패했습니다: ${error.message}`)
+      } finally {
+        settlingEmployeeId.value = null
       }
     }
     
@@ -801,37 +985,50 @@ export default {
       return Math.round(workedMinutes / 480)
     }
     
+    // 근무 분수에서 일수 계산 (더 정확한 버전)
+    const calculateWorkDaysFromMinutes = (workedMinutes) => {
+      if (!workedMinutes || workedMinutes === 0) return 0
+      // 하루 8시간(480분) 기준으로 계산
+      const days = Math.round(workedMinutes / 480)
+      return days > 0 ? days : 1 // 최소 1일은 표시
+    }
+    
+    // 정산 상태 관련 헬퍼 함수들
+    const getSettlementStatusClass = (employee) => {
+      if (employee.settlement?.status === 'PAID') {
+        return 'settled'
+      }
+      return 'pending'
+    }
+    
+    const getSettlementStatusIcon = (employee) => {
+      if (employee.settlement?.status === 'PAID') {
+        return '✅'
+      }
+      return '⏳'
+    }
+    
+    const getSettlementStatusText = (employee) => {
+      if (employee.settlement?.status === 'PAID') {
+        return '정산 완료'
+      }
+      return '정산 전'
+    }
+    
     // 컴포넌트 마운트
     onMounted(() => {
-      console.log('🔍 AdminSalaryView: 마운트됨')
-      console.log('📊 payrollStore.payrollDashboard:', payrollStore.payrollDashboard)
-      console.log('👥 payrollStore.employeePayrolls:', payrollStore.employeePayrolls)
-      console.log('🔄 payrollStore.loading:', payrollStore.loading)
-      console.log('❌ payrollStore.error:', payrollStore.error)
+      // 컴포넌트 초기화
     })
     
     // 검색어 변경시 페이지 리셋
-    watch([searchQuery, positionFilter], () => {
+    watch([searchQuery, positionFilter, settlementFilter], () => {
       currentPage.value = 1
     })
     
-    // 급여 데이터 변경 감지 (디버깅용)
-    watch(() => payrollStore.employeePayrolls, (newVal, oldVal) => {
-      console.log('🔄 employeePayrolls 변경됨:', {
-        이전: oldVal?.length || 0,
-        현재: newVal?.length || 0,
-        데이터: newVal
-      })
-    }, { deep: true })
-    
-    watch(() => payrollStore.payrollDashboard, (newVal) => {
-      console.log('📊 payrollDashboard 변경됨:', newVal)
-    }, { deep: true })
     
     return {
       // Store
       payrollStore,
-      employeesStore,
       
       // State
       isLoadingData,
@@ -841,10 +1038,12 @@ export default {
       selectedEmployee,
       searchQuery,
       positionFilter,
+      settlementFilter,
       sortField,
       sortDirection,
       currentPage,
       itemsPerPage,
+      settlingEmployeeId,
       notification,
       
       // Computed
@@ -853,6 +1052,7 @@ export default {
       currentSettlementPeriod,
       totalSettlementAmount,
       unsettledEmployeeCount,
+      settledEmployeeCount,
       nextSettlementDate,
       settlementStatusClass,
       settlementStatusText,
@@ -868,6 +1068,7 @@ export default {
       viewEmployeeDetail,
       closeDetailModal,
       processSettlement,
+      processIndividualSettlement,
       sortBy,
       showNotification,
       hideNotification,
@@ -888,7 +1089,11 @@ export default {
       formatDate,
       getAttendanceStatus,
       getAttendanceStatusText,
-      calculateWorkDays
+      calculateWorkDays,
+      calculateWorkDaysFromMinutes,
+      getSettlementStatusClass,
+      getSettlementStatusIcon,
+      getSettlementStatusText
     }
   }
 }
@@ -1206,6 +1411,14 @@ export default {
   color: #059669;
 }
 
+.summary-item .value.count.pending {
+  color: #d97706;
+}
+
+.summary-item .value.count.settled {
+  color: #059669;
+}
+
 .summary-item .value.date {
   color: #7c3aed;
 }
@@ -1398,6 +1611,24 @@ export default {
   background: #f8fafc;
 }
 
+.table-row.settled-row {
+  background: #f0fdf4;
+  border-left: 3px solid #10b981;
+}
+
+.table-row.settled-row:hover {
+  background: #ecfdf5;
+}
+
+.table-row.pending-row {
+  background: #fffbeb;
+  border-left: 3px solid #f59e0b;
+}
+
+.table-row.pending-row:hover {
+  background: #fef3c7;
+}
+
 .employee-cell {
   min-width: 180px;
 }
@@ -1539,9 +1770,53 @@ export default {
   color: #dc2626;
 }
 
+.settlement-status-cell {
+  min-width: 120px;
+}
+
+.settlement-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 16px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.settlement-status-badge.settled {
+  background: #dcfce7;
+  color: #166534;
+  border: 1px solid #22c55e;
+}
+
+.settlement-status-badge.pending {
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #f59e0b;
+}
+
+.settlement-status-badge .status-icon {
+  font-size: 1rem;
+}
+
+.settlement-date {
+  margin-top: 4px;
+  font-size: 0.7rem;
+  color: #6b7280;
+}
+
 .actions-cell {
   text-align: center;
-  min-width: 100px;
+  min-width: 140px;
+}
+
+.action-buttons {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+  flex-wrap: wrap;
 }
 
 /* 페이지네이션 */
@@ -1627,6 +1902,17 @@ export default {
 
 .btn-secondary:hover:not(:disabled) {
   background: linear-gradient(135deg, #4b5563, #374151);
+}
+
+.btn-success {
+  background: linear-gradient(135deg, #10b981, #059669);
+  color: white;
+}
+
+.btn-success:hover:not(:disabled) {
+  background: linear-gradient(135deg, #059669, #047857);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
 }
 
 .btn-outline {
@@ -1756,9 +2042,155 @@ export default {
   padding: 24px;
 }
 
+.modal-error {
+  padding: 40px 24px;
+  text-align: center;
+}
+
+.modal-error .error-icon {
+  font-size: 4rem;
+  margin-bottom: 16px;
+}
+
+.modal-error h4 {
+  margin: 0 0 16px 0;
+  color: #dc2626;
+  font-size: 1.25rem;
+}
+
+.modal-error p {
+  margin: 0 0 24px 0;
+  color: #6b7280;
+  line-height: 1.5;
+}
+
 /* 상세 요약 */
 .detail-summary {
   margin-bottom: 32px;
+}
+
+/* 정산 정보 카드 */
+.settlement-info-card {
+  background: #f0f9ff;
+  border: 1px solid #0ea5e9;
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 16px;
+}
+
+.settlement-info-card.pending {
+  background: #fef3c7;
+  border-color: #f59e0b;
+}
+
+.settlement-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.settlement-header h4 {
+  margin: 0;
+  color: #0369a1;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.settlement-info-card.pending .settlement-header h4 {
+  color: #92400e;
+}
+
+.settlement-details {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.settlement-detail-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(0,0,0,0.05);
+}
+
+.settlement-detail-row:last-child {
+  border-bottom: none;
+}
+
+.settlement-detail-row .label {
+  font-weight: 500;
+  color: #374151;
+  font-size: 0.9rem;
+}
+
+.settlement-detail-row .value {
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.settlement-detail-row .value.amount {
+  color: #059669;
+  font-size: 1.1rem;
+}
+
+.settlement-detail-row .value.amount.pending {
+  color: #d97706;
+}
+
+.settlement-detail-row .value.settlement-id {
+  font-family: monospace;
+  background: #f3f4f6;
+  padding: 2px 8px;
+  border-radius: 4px;
+  color: #6b7280;
+}
+
+.settlement-detail-row .value.date {
+  color: #6366f1;
+}
+
+.settlement-detail-row .value.success {
+  color: #059669;
+}
+
+.settlement-detail-row .value.warning {
+  color: #d97706;
+}
+
+.settlement-detail-row .notice {
+  color: #6b7280;
+  font-style: italic;
+  font-size: 0.9rem;
+}
+
+/* 급여 기간 정보 카드 */
+.cycle-info-card {
+  background: #fefce8;
+  border: 1px solid #eab308;
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 16px;
+  text-align: center;
+}
+
+.cycle-info-card h4 {
+  margin: 0 0 8px 0;
+  color: #a16207;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.cycle-label {
+  font-weight: 600;
+  color: #92400e;
+  font-size: 1.1rem;
+}
+
+.cycle-dates {
+  margin-top: 4px;
+  color: #6b7280;
 }
 
 .summary-grid {
@@ -1803,6 +2235,39 @@ export default {
   font-size: 1.25rem;
 }
 
+/* 직원 추가 정보 카드 */
+.employee-extra-info {
+  margin-top: 24px;
+}
+
+.info-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+}
+
+.info-card {
+  background: #f8fafc;
+  padding: 12px 16px;
+  border-radius: 8px;
+  border-left: 3px solid #e5e7eb;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.info-label {
+  font-size: 0.85rem;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.info-value {
+  font-size: 0.9rem;
+  color: #1f2937;
+  font-weight: 600;
+}
+
 /* 출퇴근 기록 */
 .attendance-logs h4 {
   margin: 0 0 16px 0;
@@ -1823,8 +2288,43 @@ export default {
 }
 
 .no-logs p {
-  margin: 0;
+  margin: 0 0 16px 0;
   color: #6b7280;
+}
+
+.summary-info {
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 16px;
+  margin-top: 16px;
+}
+
+.summary-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.summary-row:last-child {
+  margin-bottom: 0;
+}
+
+.summary-row .label {
+  font-size: 0.9rem;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.summary-row .value {
+  font-size: 0.9rem;
+  color: #1f2937;
+  font-weight: 600;
+}
+
+.summary-row .value.overtime {
+  color: #dc2626;
 }
 
 .logs-table-container {
@@ -1887,6 +2387,15 @@ export default {
 .status-badge.absent {
   background: #f3f4f6;
   color: #6b7280;
+}
+
+.settlement-reference {
+  margin-top: 4px;
+}
+
+.settlement-reference small {
+  color: #6b7280;
+  font-size: 0.7rem;
 }
 
 /* =========================

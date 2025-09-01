@@ -76,6 +76,7 @@
               <div class="table-cell">퇴근시간</div>
               <div class="table-cell">근무시간</div>
               <div class="table-cell">상태</div>
+              <div class="table-cell">관리</div>
             </div>
           </div>
           
@@ -134,6 +135,15 @@
               <div class="table-cell status-cell">
                 <StatusBadge :status="getRecordStatus(record)" />
               </div>
+              <div class="table-cell action-cell">
+                <button 
+                  @click="editRecord(record)"
+                  class="btn btn-secondary btn-sm"
+                  title="기록 수정"
+                >
+                  수정
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -148,6 +158,62 @@
             <span v-if="attendanceStore.loading">로딩 중...</span>
             <span v-else>더 보기 ({{ attendanceStore.hasMore ? '더 있음' : '끝' }})</span>
           </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 출퇴근 기록 수정 모달 -->
+    <div v-if="showEditModal" class="modal-overlay" @click="closeEditModal">
+      <div class="modal-content edit-modal-content" @click.stop>
+        <div class="modal-header">
+          <h3>📝 출퇴근 기록 수정</h3>
+          <button @click="closeEditModal" class="modal-close">&times;</button>
+        </div>
+        <div class="edit-form" v-if="editingRecord">
+          <div class="employee-info-header">
+            <div class="employee-name">{{ editingRecord.employeeName }}</div>
+            <div class="employee-details">
+              {{ formatPosition(editingRecord.employeePosition) }} • {{ formatSection(editingRecord.employeeSection) }}
+            </div>
+            <div class="record-date">{{ formatDate(editingRecord.clockInAt || editingRecord.date) }}</div>
+          </div>
+
+          <div class="form-section">
+            <div class="form-group">
+              <label>출근 시간</label>
+              <input 
+                type="datetime-local" 
+                v-model="editForm.clockInAt"
+                class="form-input"
+              >
+            </div>
+            
+            <div class="form-group">
+              <label>퇴근 시간</label>
+              <input 
+                type="datetime-local" 
+                v-model="editForm.clockOutAt"
+                class="form-input"
+              >
+            </div>
+          </div>
+
+          <div class="calculated-info" v-if="editForm.clockInAt && editForm.clockOutAt">
+            <div class="info-item">
+              <span class="info-label">근무 시간:</span>
+              <span class="info-value">{{ calculateDisplayTime(editForm.clockInAt, editForm.clockOutAt) }}</span>
+            </div>
+          </div>
+
+          <div class="form-actions">
+            <button @click="closeEditModal" class="btn btn-secondary" :disabled="attendanceStore.loading">
+              취소
+            </button>
+            <button @click="saveEditedRecord" class="btn btn-primary" :disabled="attendanceStore.loading">
+              <span v-if="attendanceStore.loading">💾 저장 중...</span>
+              <span v-else>✏️ 수정 완료</span>
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -174,6 +240,14 @@ export default {
     const selectedEmployee = ref('')
     const selectedSection = ref('')
     const selectedStatus = ref('')
+    
+    // 수정 모달 상태
+    const showEditModal = ref(false)
+    const editingRecord = ref(null)
+    const editForm = ref({
+      clockInAt: '',
+      clockOutAt: ''
+    })
     
     // 필터링된 기록
     const filteredRecords = computed(() => {
@@ -259,7 +333,10 @@ export default {
       filteredRecords,
       applyFilters,
       retryFetchRecords,
-      loadMore
+      loadMore,
+      showEditModal,
+      editingRecord,
+      editForm
     }
   },
   methods: {
@@ -292,7 +369,7 @@ export default {
     getRecordStatus(record) {
       // Use new paired field if available
       if ('paired' in record) {
-        return record.paired ? 'completed' : 'incomplete'
+        return record.paired ? 'completed' : 'working'
       }
       // Fallback to old logic
       if (!record.clockInAt) return 'not-checked-in'
@@ -364,9 +441,88 @@ export default {
       const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' })
       const link = document.createElement('a')
       link.href = URL.createObjectURL(blob)
-      const dateStr = this.selectedDate || new Date().toISOString().split('T')[0]
+      const today = new Date()
+      const dateStr = this.selectedDate || `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
       link.download = `출퇴근기록_${dateStr}.csv`
       link.click()
+    },
+
+    // 출퇴근 기록 수정 관련 메서드
+    editRecord(record) {
+      this.editingRecord = record
+      this.editForm = {
+        clockInAt: record.clockInAt ? this.formatDatetimeLocal(record.clockInAt) : '',
+        clockOutAt: record.clockOutAt ? this.formatDatetimeLocal(record.clockOutAt) : ''
+      }
+      this.showEditModal = true
+    },
+
+    closeEditModal() {
+      this.showEditModal = false
+      this.editingRecord = null
+      this.editForm = {
+        clockInAt: '',
+        clockOutAt: ''
+      }
+    },
+
+    async saveEditedRecord() {
+      try {
+        const updateData = {}
+        
+        if (this.editForm.clockInAt) {
+          updateData.clockInAt = new Date(this.editForm.clockInAt).toISOString()
+        }
+        
+        if (this.editForm.clockOutAt) {
+          updateData.clockOutAt = new Date(this.editForm.clockOutAt).toISOString()
+        }
+
+        await this.attendanceStore.editAttendanceRecord(this.editingRecord.id, updateData)
+        
+        alert('✅ 출퇴근 기록이 성공적으로 수정되었습니다')
+        this.closeEditModal()
+        
+        // 기록 목록 새로고침
+        await this.retryFetchRecords()
+      } catch (error) {
+        alert('❌ 출퇴근 기록 수정에 실패했습니다: ' + error.message)
+      }
+    },
+
+    // datetime-local input에 맞는 형식으로 변환 (YYYY-MM-DDTHH:mm)
+    formatDatetimeLocal(timestamp) {
+      if (!timestamp) return ''
+      
+      const date = new Date(timestamp)
+      const year = date.getFullYear()
+      const month = String(date.getMonth() + 1).padStart(2, '0')
+      const day = String(date.getDate()).padStart(2, '0')
+      const hours = String(date.getHours()).padStart(2, '0')
+      const minutes = String(date.getMinutes()).padStart(2, '0')
+      
+      return `${year}-${month}-${day}T${hours}:${minutes}`
+    },
+
+    // 근무 시간 계산 표시
+    calculateDisplayTime(clockInAt, clockOutAt) {
+      if (!clockInAt || !clockOutAt) return '-'
+      
+      const start = new Date(clockInAt)
+      const end = new Date(clockOutAt)
+      const diffMs = end.getTime() - start.getTime()
+      const diffMinutes = Math.floor(diffMs / (1000 * 60))
+      
+      const hours = Math.floor(diffMinutes / 60)
+      const minutes = diffMinutes % 60
+      
+      if (hours === 0) {
+        return `${minutes}분`
+      } else if (minutes === 0) {
+        return `${hours}시간`
+      } else {
+        return `${hours}시간 ${minutes}분`
+      }
     }
   }
 }
@@ -530,7 +686,7 @@ export default {
 
 .table-row {
   display: grid;
-  grid-template-columns: 120px 140px 80px 100px 100px 100px 120px 100px;
+  grid-template-columns: 120px 140px 80px 100px 100px 100px 120px 100px 80px;
   gap: var(--space-2);
   align-items: center;
 }
@@ -746,10 +902,154 @@ export default {
   font-style: italic;
 }
 
+/* Edit Modal Styles */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 9999;
+}
+
+.edit-modal-content {
+  background: white;
+  border-radius: var(--radius-xl);
+  padding: var(--space-6);
+  max-width: 500px;
+  width: 90%;
+  max-height: 80vh;
+  overflow-y: auto;
+  box-shadow: var(--shadow-lg);
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--space-6);
+  border-bottom: 1px solid var(--color-border-light);
+  padding-bottom: var(--space-4);
+}
+
+.modal-header h3 {
+  margin: 0;
+  color: var(--color-text-primary);
+  font-size: var(--text-xl);
+}
+
+.modal-close {
+  background: none;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  color: var(--color-text-secondary);
+  padding: var(--space-2);
+}
+
+.modal-close:hover {
+  color: var(--color-text-primary);
+}
+
+.employee-info-header {
+  background: var(--color-bg-secondary);
+  padding: var(--space-4);
+  border-radius: var(--radius-base);
+  margin-bottom: var(--space-6);
+  text-align: center;
+}
+
+.employee-name {
+  font-size: var(--text-lg);
+  font-weight: var(--font-semibold);
+  color: var(--color-text-primary);
+  margin-bottom: var(--space-2);
+}
+
+.employee-details {
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+  margin-bottom: var(--space-2);
+}
+
+.record-date {
+  color: var(--color-text-tertiary);
+  font-size: var(--text-sm);
+}
+
+.form-section {
+  margin-bottom: var(--space-6);
+}
+
+.form-group {
+  margin-bottom: var(--space-4);
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: var(--space-2);
+  font-weight: var(--font-medium);
+  color: var(--color-text-primary);
+}
+
+.form-input {
+  width: 100%;
+  padding: var(--space-3);
+  border: 1px solid var(--color-border-medium);
+  border-radius: var(--radius-base);
+  font-size: var(--text-base);
+  transition: var(--transition-base);
+}
+
+.form-input:focus {
+  outline: none;
+  border-color: var(--primary-400);
+  box-shadow: 0 0 0 3px var(--primary-100);
+}
+
+.calculated-info {
+  background: var(--primary-50);
+  padding: var(--space-4);
+  border-radius: var(--radius-base);
+  margin-bottom: var(--space-6);
+}
+
+.info-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.info-label {
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+}
+
+.info-value {
+  font-weight: var(--font-semibold);
+  color: var(--primary-600);
+}
+
+.form-actions {
+  display: flex;
+  gap: var(--space-3);
+  justify-content: flex-end;
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-border-light);
+}
+
+.action-cell {
+  text-align: center;
+}
+
 /* Responsive Design */
 @media (max-width: 1200px) {
   .table-row {
-    grid-template-columns: 100px 120px 70px 80px 90px 90px 100px 80px;
+    grid-template-columns: 100px 120px 70px 80px 90px 90px 100px 80px 70px;
   }
 }
 
@@ -780,8 +1080,8 @@ export default {
   }
   
   .table-row {
-    grid-template-columns: 80px 100px 60px 70px 80px 80px 90px 70px;
-    min-width: 640px;
+    grid-template-columns: 80px 100px 60px 70px 80px 80px 90px 70px 60px;
+    min-width: 700px;
   }
   
   .data-row .table-cell {
@@ -797,8 +1097,8 @@ export default {
 
 @media (max-width: 480px) {
   .table-row {
-    grid-template-columns: 70px 90px 50px 60px 70px 70px 80px 60px;
-    min-width: 550px;
+    grid-template-columns: 70px 90px 50px 60px 70px 70px 80px 60px 50px;
+    min-width: 600px;
   }
 }
 </style>

@@ -130,7 +130,7 @@ export default {
         )
         
         weekStats.push({
-          date: date.toISOString().split('T')[0],
+          date: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`,
           dayName: days[date.getDay()],
           attendance: dayRecords.filter(r => r.clockInAt).length
         })
@@ -207,7 +207,6 @@ export default {
       }, 0)
       
       const hours = Math.floor(totalMinutes / 60)
-      const remainingMinutes = totalMinutes % 60
       
       return {
         display: totalMinutes > 0 ? `${hours}시간` : '0시간',

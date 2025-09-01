@@ -171,7 +171,7 @@ export default {
   },
   
   watch: {
-    $route(to, from) {
+    $route(to) {
       this.closeMobileMenu()
       
       const titles = {

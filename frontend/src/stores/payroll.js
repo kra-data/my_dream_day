@@ -1,7 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { useAuthStore } from './auth'
-import { useEmployeesStore } from './employees'
 
 export const usePayrollStore = defineStore('payroll', () => {
   // State
@@ -219,10 +218,38 @@ export const usePayrollStore = defineStore('payroll', () => {
       const params = { year: targetYear, month: targetMonth }
       const response = await api.get(`/admin/shops/${shopId}/payroll/employees`, { params })
       
-      // 🔧 API 응답 구조 수정: response.data.employees 배열 추출
+      // 🔧 새로운 API 응답 구조 처리
       if (response.data && Array.isArray(response.data.employees)) {
-        employeePayrolls.value = response.data.employees
+        // 새 API 구조를 기존 컴포넌트가 기대하는 구조로 변환
+        employeePayrolls.value = response.data.employees.map(emp => ({
+          ...emp,
+          // 기존 settlement 객체 구조로 변환
+          settlement: {
+            status: emp.settlementStatus || 'PENDING',
+            settlementId: null, // 새 API에는 없음
+            totalPay: emp.settlementTotalPay || null,
+            settledAt: emp.settledAt || null,
+            fullyApplied: true
+          },
+          // 호환성을 위한 필드 매핑
+          salary: emp.expectedSalary || emp.salary || 0
+        }))
+        
+        // payrollDashboard도 새 API 응답의 summary 정보로 업데이트
+        if (response.data.summary) {
+          payrollDashboard.value = {
+            ...payrollDashboard.value,
+            year: response.data.year || targetYear,
+            month: response.data.month || targetMonth,
+            expectedExpense: response.data.employees.reduce((sum, emp) => sum + (emp.salary || 0), 0),
+            employeeCount: response.data.summary.employeeCount || response.data.employees.length,
+            totalWorkedMinutes: response.data.summary.totalWorkedMinutes || 0
+          }
+        }
+        
         console.log('📊 직원 급여 목록 조회 완료:', response.data.employees.length, '건')
+        console.log('📅 정산 기간:', response.data.cycle?.label || 'N/A')
+        console.log('📈 요약:', response.data.summary)
       } else {
         employeePayrolls.value = []
         console.warn('⚠️ 직원 급여 데이터 형식이 예상과 다름:', response.data)
@@ -258,10 +285,6 @@ export const usePayrollStore = defineStore('payroll', () => {
       const api = getApiInstance()
       const shopId = getShopId()
       
-      if (!shopId) {
-        throw new Error('매장 정보를 찾을 수 없습니다')
-      }
-      
       const currentDate = new Date()
       const targetYear = year || currentDate.getFullYear()
       const targetMonth = month || (currentDate.getMonth() + 1)
@@ -269,41 +292,15 @@ export const usePayrollStore = defineStore('payroll', () => {
       const params = { year: targetYear, month: targetMonth }
       const response = await api.get(`/admin/shops/${shopId}/payroll/employees/${employeeId}`, { params })
       
-      employeeDetail.value = response.data || {
-        employee: { name: '알 수 없음', position: '알 수 없음' },
-        salary: 0,
-        daysWorked: 0,
-        workedMinutes: 0,
-        extraMinutes: 0,
-        logs: []
-      }
+      // API 응답을 그대로 저장 (간단하게!)
+      employeeDetail.value = response.data
       
       console.log('직원 급여 상세 조회 완료:', employeeDetail.value)
       return employeeDetail.value
     } catch (err) {
       console.error('직원 급여 상세 조회 실패:', err)
-      
-      if (err.response?.status === 404) {
-        // 404 에러는 데이터 없음으로 처리
-        employeeDetail.value = {
-          employee: { name: '알 수 없음', position: '알 수 없음' },
-          salary: 0,
-          daysWorked: 0,
-          workedMinutes: 0,
-          extraMinutes: 0,
-          logs: []
-        }
-        error.value = null
-        return employeeDetail.value
-      } else if (err.response?.status === 401) {
-        error.value = '인증에 실패했습니다. 다시 로그인해주세요.'
-      } else if (err.response?.status === 403) {
-        error.value = '접근 권한이 없습니다.'
-      } else if (err.response?.status >= 500) {
-        error.value = '서버에 일시적인 문제가 발생했습니다. 잠시 후 다시 시도해주세요.'
-      } else {
-        error.value = err.response?.data?.message || err.message || '직원 급여 상세 정보를 불러오는데 실패했습니다'
-      }
+      error.value = err.response?.data?.message || err.message || '직원 정보를 불러오는데 실패했습니다'
+      employeeDetail.value = null
       throw err
     } finally {
       loading.value = false
@@ -389,13 +386,7 @@ export const usePayrollStore = defineStore('payroll', () => {
     error.value = null
 
     try {
-      // TODO: API가 준비되면 실제 API 호출로 교체
-      // const api = getApiInstance()
-      // const shopId = getShopId()
-      // const response = await api.get(`/admin/shops/${shopId}/payroll/settlements`)
-      // settlements.value = response.data || []
-      
-      // Mock 정산 목록 (하드코딩)
+      // Mock 정산 목록
       settlements.value = [
         {
           id: 1,
@@ -416,7 +407,6 @@ export const usePayrollStore = defineStore('payroll', () => {
           processedBy: null
         }
       ]
-      console.log('정산 목록 조회 완료 (Mock 데이터)')
     } catch (err) {
       error.value = err.message || '정산 목록을 불러오는데 실패했습니다'
       console.error('정산 목록 오류:', err)
@@ -561,49 +551,144 @@ export const usePayrollStore = defineStore('payroll', () => {
     }
   }
 
-  const processSettlement = async (settlementData) => {
+  // 개별 직원 정산 처리 (새 API 사용)
+  const processEmployeeSettlement = async (employeeId, settlementData = {}) => {
+    // 🛡️ 보안 검증
+    validateAdminPermission()
+    
+    if (!employeeId) {
+      throw new Error('직원 ID가 필요합니다.')
+    }
+    
     loading.value = true
+    error.value = null
     
     try {
-      // TODO: 정산 API가 준비되면 실제 API 호출로 교체
-      // const api = getApiInstance()
-      // const shopId = getShopId()
-      // if (!shopId) {
-      //   throw new Error('매장 정보를 찾을 수 없습니다')
-      // }
-      // const response = await api.post(`/admin/shops/${shopId}/payroll/settlement`, settlementData)
+      const api = getApiInstance()
+      const shopId = getShopId()
       
-      // Mock 정산 처리 (하드코딩)
-      console.log('🔄 Mock 정산 처리 시작:', settlementData)
+      if (!shopId) {
+        throw new Error('매장 정보를 찾을 수 없습니다')
+      }
       
-      // 실제 정산 로직 시뮬레이션
-      await new Promise(resolve => setTimeout(resolve, 2000)) // 2초 대기
+      // 새로운 관리자 정산 API 호출
+      const response = await api.post(`/admin/shops/${shopId}/settlements/employees/${employeeId}`, settlementData)
       
-      const result = {
+      const result = response.data || {
         success: true,
         message: '정산이 완료되었습니다',
-        settlementId: `SETTLE_${Date.now()}`,
-        processedAmount: settlementData.totalAmount,
-        processedEmployees: settlementData.employees.length,
+        employeeId: employeeId,
+        settlementId: null,
+        processedAmount: 0,
+        processedAt: new Date().toISOString()
+      }
+      
+      console.log(`✅ 직원 ${employeeId} 정산 처리 완료:`, result)
+      return result
+    } catch (err) {
+      console.error(`직원 ${employeeId} 정산 처리 실패:`, err)
+      
+      if (err.response?.status === 404) {
+        error.value = '해당 직원의 정산 정보를 찾을 수 없습니다.'
+      } else if (err.response?.status === 401) {
+        error.value = '인증에 실패했습니다. 다시 로그인해주세요.'
+      } else if (err.response?.status === 403) {
+        error.value = '정산 처리 권한이 없습니다.'
+      } else if (err.response?.status === 400) {
+        error.value = err.response?.data?.message || '잘못된 정산 요청입니다.'
+      } else {
+        error.value = err.response?.data?.message || err.message || '정산 처리에 실패했습니다'
+      }
+      
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+
+  const processSettlement = async (settlementData) => {
+    // 🛡️ 보안 검증
+    validateAdminPermission()
+    
+    loading.value = true
+    error.value = null
+    
+    try {
+      if (!settlementData || !settlementData.employees || settlementData.employees.length === 0) {
+        throw new Error('정산할 직원 정보가 없습니다.')
+      }
+      
+      console.log('🔄 전체 정산 처리 시작:', settlementData)
+      
+      // 각 직원별로 개별 정산 처리
+      const results = []
+      const errors = []
+      
+      for (const employee of settlementData.employees) {
+        try {
+          const employeeSettlementData = {
+            amount: employee.amount,
+            workedMinutes: employee.workedMinutes,
+            daysWorked: employee.daysWorked,
+            period: settlementData.period,
+            settlementDate: settlementData.startDate || new Date().toISOString()
+          }
+          
+          const result = await processEmployeeSettlement(employee.employeeId, employeeSettlementData)
+          results.push({
+            employeeId: employee.employeeId,
+            name: employee.name,
+            amount: employee.amount,
+            success: true,
+            ...result
+          })
+        } catch (error) {
+          console.error(`직원 ${employee.employeeId} 정산 실패:`, error)
+          errors.push({
+            employeeId: employee.employeeId,
+            name: employee.name,
+            error: error.message
+          })
+        }
+      }
+      
+      // 전체 결과 정리
+      const totalProcessedAmount = results.reduce((sum, r) => sum + (r.processedAmount || 0), 0)
+      const successCount = results.length
+      const failureCount = errors.length
+      
+      const finalResult = {
+        success: successCount > 0,
+        message: errors.length > 0 
+          ? `${successCount}명 정산 완료, ${failureCount}명 실패`
+          : `${successCount}명 정산 완료`,
+        totalProcessedAmount,
+        processedEmployees: successCount,
+        failedEmployees: failureCount,
+        results,
+        errors,
         processedAt: new Date().toISOString(),
         processedBy: 'admin'
       }
       
-      // 정산 목록 업데이트 (임시)
-      const newSettlement = {
-        id: settlements.value.length + 1,
-        period: settlementData.period || '현재 정산 기간',
-        totalAmount: settlementData.totalAmount,
-        employeeCount: settlementData.employees.length,
-        status: 'completed',
-        settlementDate: new Date().toISOString().split('T')[0],
-        processedBy: '관리자'
+      // 정산 목록 업데이트 (성공한 경우만)
+      if (successCount > 0) {
+        const newSettlement = {
+          id: settlements.value.length + 1,
+          period: settlementData.period || '현재 정산 기간',
+          totalAmount: totalProcessedAmount,
+          employeeCount: successCount,
+          status: errors.length > 0 ? 'partial' : 'completed',
+          settlementDate: new Date().toISOString().split('T')[0],
+          processedBy: '관리자',
+          errors: errors.length > 0 ? errors : null
+        }
+        
+        settlements.value.unshift(newSettlement)
       }
       
-      settlements.value.unshift(newSettlement)
-      
-      console.log('✅ Mock 정산 처리 완료:', result)
-      return result
+      console.log('✅ 전체 정산 처리 완료:', finalResult)
+      return finalResult
     } catch (err) {
       console.error('정산 처리 실패:', err)
       error.value = err.response?.data?.message || err.message || '정산 처리에 실패했습니다'
@@ -674,6 +759,7 @@ export const usePayrollStore = defineStore('payroll', () => {
     fetchSettlements,
     getEmployeeSettlement,
     processSettlement,
+    processEmployeeSettlement,
     
     // Getters
     getAllEmployeeSalaries,

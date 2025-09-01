@@ -14,39 +14,43 @@
           <div class="info-grid">
             <div class="info-item">
               <span class="info-label">이름</span>
-              <span class="info-value">{{ currentEmployee?.name || '정보 없음' }}</span>
+              <span class="info-value">{{ settlementData?.profile?.name || '정보 없음' }}</span>
             </div>
             <div class="info-item">
               <span class="info-label">구역</span>
-              <span class="info-value">{{ formatSection(currentEmployee?.section) }}</span>
+              <span class="info-value">{{ formatSection(settlementData?.profile?.section) }}</span>
             </div>
             <div class="info-item">
               <span class="info-label">직위</span>
-              <span class="info-value">{{ formatPosition(currentEmployee?.position) }}</span>
+              <span class="info-value">{{ formatPosition(settlementData?.profile?.position) }}</span>
             </div>
             <div class="info-item">
               <span class="info-label">급여</span>
-              <span class="info-value">{{ formatPay(currentEmployee?.pay, currentEmployee?.payUnit) }}</span>
+              <span class="info-value">{{ formatPay(settlementData?.profile?.pay, settlementData?.profile?.payUnit) }}</span>
             </div>
             <div class="info-item">
               <span class="info-label">휴대폰</span>
-              <span class="info-value">{{ formatPhone(currentEmployee?.phone) }}</span>
+              <span class="info-value">{{ settlementData?.profile?.phoneMasked || '-' }}</span>
             </div>
             <div class="info-item">
               <span class="info-label">은행</span>
-              <span class="info-value">{{ currentEmployee?.bank || '정보 없음' }}</span>
+              <div class="bank-info">
+                <span class="bank-name">{{ settlementData?.profile?.bank || '정보 없음' }}</span>
+                <span v-if="!settlementData?.profile?.bankRegistered" class="bank-warning">⚠️ 계좌 등록 필요</span>
+                <span v-else class="bank-registered">✓ 등록완료</span>
+              </div>
             </div>
           </div>
         </div>
 
-        <!-- 정산 정보 (7일 기준) -->
+        <!-- 정산 정보 -->
         <div class="settlement-section">
-          <h4>💳 정산 정보 (7일 기준)</h4>
+          <h4>💳 정산 정보</h4>
           <div class="settlement-card">
             <div class="settlement-period-info">
               <div class="period-badge current">
                 <span class="period-title">현재 정산 기간</span>
-                <span class="period-date">{{ currentSettlementPeriod }}</span>
+                <span class="period-date">{{ settlementData?.cycle?.label || '-' }}</span>
               </div>
             </div>
             
@@ -54,23 +58,29 @@
               <div class="amount-row unsettled">
                 <span class="amount-icon">⏳</span>
                 <div class="amount-content">
-                  <span class="amount-label">이번달 미정산 금액</span>
-                  <span class="amount-value">{{ formatCurrency(settlementInfo.currentPeriod?.amount || 0) }}</span>
+                  <span class="amount-label">현재 사이클 미정산 금액</span>
+                  <span class="amount-value">{{ formatCurrency(settlementData?.cards?.current?.amount || 0) }}</span>
                 </div>
                 <div class="amount-status">
-                  <span class="status-badge pending">미정산</span>
+                  <span class="status-badge" :class="getStatusClass(settlementData?.cards?.current?.status)">
+                    {{ getStatusText(settlementData?.cards?.current?.status) }}
+                  </span>
                 </div>
               </div>
               
               <div class="amount-row settled">
                 <span class="amount-icon">✅</span>
                 <div class="amount-content">
-                  <span class="amount-label">지난달 정산 금액</span>
-                  <span class="amount-value">{{ formatCurrency(settlementInfo.lastSettlement?.amount || 0) }}</span>
+                  <span class="amount-label">이전 사이클 정산 금액</span>
+                  <span class="amount-value">{{ formatCurrency(settlementData?.cards?.previous?.amount || 0) }}</span>
                 </div>
                 <div class="amount-status">
-                  <span class="status-badge completed">정산완료</span>
-                  <span class="settlement-date">{{ formatSettlementDate(settlementInfo.lastSettlement?.settlementDate) }}</span>
+                  <span class="status-badge" :class="getStatusClass(settlementData?.cards?.previous?.status)">
+                    {{ getStatusText(settlementData?.cards?.previous?.status) }}
+                  </span>
+                  <span v-if="settlementData?.cards?.previous?.settledAt" class="settlement-date">
+                    {{ formatSettlementDate(settlementData?.cards?.previous?.settledAt) }}
+                  </span>
                 </div>
               </div>
             </div>
@@ -79,23 +89,23 @@
 
         <!-- 이번 달 급여 정보 -->
         <div class="salary-section">
-          <h4>💰 이번 달 급여 정보</h4>
+          <h4>💰 {{ settlementData?.month?.year }}년 {{ settlementData?.month?.month }}월 급여 정보</h4>
           <div class="salary-card">
             <div class="salary-item">
               <span class="salary-label">총 근무 시간</span>
-              <span class="salary-value">{{ monthlyStats?.totalHours || 0 }}시간</span>
+              <span class="salary-value">{{ formatWorkingHours(settlementData?.month?.workedMinutes) }}</span>
             </div>
             <div class="salary-item">
               <span class="salary-label">기본 급여</span>
-              <span class="salary-value">{{ formatCurrency(monthlyStats?.baseSalary || 0) }}</span>
+              <span class="salary-value">{{ formatCurrency(settlementData?.month?.basePay || 0) }}</span>
             </div>
             <div class="salary-item">
-              <span class="salary-label">야근 수당</span>
-              <span class="salary-value">{{ formatCurrency(monthlyStats?.overtimePay || 0) }}</span>
+              <span class="salary-label">추가 수당</span>
+              <span class="salary-value">{{ formatCurrency((settlementData?.month?.totalPay || 0) - (settlementData?.month?.basePay || 0)) }}</span>
             </div>
             <div class="salary-item total">
               <span class="salary-label">예상 총 급여</span>
-              <span class="salary-value">{{ formatCurrency(monthlyStats?.totalSalary || 0) }}</span>
+              <span class="salary-value">{{ formatCurrency(settlementData?.month?.totalPay || 0) }}</span>
             </div>
           </div>
         </div>
@@ -105,20 +115,20 @@
           <h4>📈 출근 통계</h4>
           <div class="stats-grid">
             <div class="stat-item">
-              <span class="stat-number">{{ monthlyStats?.workDays || 0 }}</span>
+              <span class="stat-number">{{ settlementData?.stats?.presentDays || 0 }}</span>
               <span class="stat-label">출근일</span>
             </div>
             <div class="stat-item">
-              <span class="stat-number">{{ monthlyStats?.lateDays || 0 }}</span>
+              <span class="stat-number">{{ settlementData?.stats?.lateCount || 0 }}</span>
               <span class="stat-label">지각</span>
             </div>
             <div class="stat-item">
-              <span class="stat-number">{{ monthlyStats?.absentDays || 0 }}</span>
+              <span class="stat-number">{{ settlementData?.stats?.absentCount || 0 }}</span>
               <span class="stat-label">결근</span>
             </div>
             <div class="stat-item">
-              <span class="stat-number">{{ monthlyStats?.overtimeDays || 0 }}</span>
-              <span class="stat-label">야근</span>
+              <span class="stat-number">{{ Math.round((settlementData?.month?.workedHours || 0) / 8) || 0 }}</span>
+              <span class="stat-label">추정 출근일</span>
             </div>
           </div>
         </div>
@@ -128,8 +138,8 @@
 </template>
 
 <script>
-import { ref, computed, watch } from 'vue'
-import { usePayrollStore } from '@/stores/payroll'
+import { ref, watch } from 'vue'
+import { useAttendanceStore } from '@/stores/attendance'
 
 export default {
   name: 'MyPageModal',
@@ -137,70 +147,58 @@ export default {
     show: {
       type: Boolean,
       default: false
-    },
-    currentEmployee: {
-      type: Object,
-      required: true
-    },
-    monthlyStats: {
-      type: Object,
-      required: true
     }
   },
   setup(props) {
-    const payrollStore = usePayrollStore()
-    const settlementInfo = ref({
-      currentPeriod: null,
-      lastSettlement: null
-    })
+    const attendanceStore = useAttendanceStore()
+    const settlementData = ref(null)
+    const loading = ref(false)
 
-
-    // 7일 기준 정산 기간 계산
-    const get7DaySettlementPeriod = () => {
-      const now = new Date()
-      const currentDate = now.getDate()
-      
-      if (currentDate >= 7) {
-        // 이번 달 7일부터 다음 달 6일까지
-        const startDate = new Date(now.getFullYear(), now.getMonth(), 7)
-        const endDate = new Date(now.getFullYear(), now.getMonth() + 1, 6)
-        return `${startDate.getMonth() + 1}월 7일 ~ ${endDate.getMonth() + 1}월 6일`
-      } else {
-        // 지난 달 7일부터 이번 달 6일까지
-        const startDate = new Date(now.getFullYear(), now.getMonth() - 1, 7)
-        const endDate = new Date(now.getFullYear(), now.getMonth(), 6)
-        return `${startDate.getMonth() + 1}월 7일 ~ ${endDate.getMonth() + 1}월 6일`
-      }
-    }
-
-    const currentSettlementPeriod = computed(() => {
-      return get7DaySettlementPeriod()
-    })
 
     // 정산 정보 로드
     const loadSettlementInfo = async () => {
-      const employeeId = props.currentEmployee?.id || props.currentEmployee?.userId || props.currentEmployee?.empId
-      if (employeeId) {
-        try {
-          const data = await payrollStore.getEmployeeSettlement(employeeId)
-          settlementInfo.value = data || {
-            currentPeriod: { amount: 0, settled: false },
-            lastSettlement: { amount: 0, settlementDate: null, settled: true }
-          }
-        } catch (error) {
-          console.error('정산 정보 로드 실패:', error)
-          // 기본값 설정
-          settlementInfo.value = {
-            currentPeriod: { amount: props.currentEmployee.pay || 0, settled: false },
-            lastSettlement: { amount: props.currentEmployee.pay || 0, settlementDate: new Date().toISOString(), settled: true }
+      loading.value = true
+      try {
+        const data = await attendanceStore.fetchMySettlement()
+        settlementData.value = data
+        console.log('정산 정보 로드 성공:', data)
+      } catch (error) {
+        console.error('정산 정보 로드 실패:', error)
+        // 기본값 설정
+        settlementData.value = {
+          profile: {
+            name: '정보 없음',
+            section: 'UNKNOWN',
+            position: 'UNKNOWN',
+            pay: 0,
+            payUnit: 'MONTHLY',
+            phoneMasked: '-',
+            bank: '정보 없음',
+            bankRegistered: false
+          },
+          cycle: {
+            label: '-'
+          },
+          cards: {
+            current: { amount: 0, status: 'PENDING' },
+            previous: { amount: 0, status: 'PAID' }
+          },
+          month: {
+            year: new Date().getFullYear(),
+            month: new Date().getMonth() + 1,
+            workedMinutes: 0,
+            workedHours: 0,
+            basePay: 0,
+            totalPay: 0
+          },
+          stats: {
+            presentDays: 0,
+            lateCount: 0,
+            absentCount: 0
           }
         }
-      } else {
-        // 직원 ID가 없는 경우 기본값 설정
-        settlementInfo.value = {
-          currentPeriod: { amount: props.currentEmployee?.pay || 0, settled: false },
-          lastSettlement: { amount: props.currentEmployee?.pay || 0, settlementDate: new Date().toISOString(), settled: true }
-        }
+      } finally {
+        loading.value = false
       }
     }
 
@@ -212,8 +210,9 @@ export default {
     })
 
     return {
-      settlementInfo,
-      currentSettlementPeriod
+      settlementData,
+      loading,
+      loadSettlementInfo
     }
   },
   methods: {
@@ -241,9 +240,31 @@ export default {
       return `${pay.toLocaleString()}원 (${unit})`
     },
 
-    formatPhone(phone) {
-      if (!phone) return '-'
-      return phone.replace(/(\d{3})(\d{4})(\d{4})/, '$1-$2-$3')
+    formatWorkingHours(workedMinutes) {
+      if (!workedMinutes) return '0시간 0분'
+      const hours = Math.floor(workedMinutes / 60)
+      const minutes = workedMinutes % 60
+      return `${hours}시간 ${minutes}분`
+    },
+
+    getStatusClass(status) {
+      const statusClasses = {
+        'PENDING': 'pending',
+        'PAID': 'completed',
+        'PROCESSING': 'processing',
+        'CANCELLED': 'cancelled'
+      }
+      return statusClasses[status] || 'pending'
+    },
+
+    getStatusText(status) {
+      const statusTexts = {
+        'PENDING': '미정산',
+        'PAID': '정산완료',
+        'PROCESSING': '정산중',
+        'CANCELLED': '취소'
+      }
+      return statusTexts[status] || '알 수 없음'
     },
 
     formatCurrency(amount) {
@@ -261,6 +282,13 @@ export default {
         month: 'long',
         day: 'numeric'
       }) + ' 정산'
+    }
+  },
+  watch: {
+    show(newShow) {
+      if (newShow) {
+        this.loadSettlementInfo()
+      }
     }
   },
   emits: ['close']
@@ -454,6 +482,38 @@ export default {
 .status-badge.completed {
   background: #d1fae5;
   color: #065f46;
+}
+
+.status-badge.processing {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.status-badge.cancelled {
+  background: #fecaca;
+  color: #b91c1c;
+}
+
+.bank-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.bank-name {
+  font-weight: 600;
+}
+
+.bank-warning {
+  font-size: 0.75rem;
+  color: #f59e0b;
+  font-weight: 500;
+}
+
+.bank-registered {
+  font-size: 0.75rem;
+  color: #10b981;
+  font-weight: 500;
 }
 
 .settlement-date {

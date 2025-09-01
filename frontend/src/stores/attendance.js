@@ -79,6 +79,30 @@ export const useAttendanceStore = defineStore('attendance', () => {
     }
   }
 
+  // 직원 마이페이지 정산 정보 조회
+  const fetchMySettlement = async (anchor = null, cycleStartDay = null) => {
+    loading.value = true
+    error.value = null
+    
+    try {
+      const api = getApiInstance()
+      const params = {}
+      if (anchor) params.anchor = anchor
+      if (cycleStartDay) params.cycleStartDay = cycleStartDay
+      
+      const response = await api.get('/my/settlement', { params })
+      
+      console.log('마이페이지 정산 정보 조회 완료:', response.data)
+      return response.data
+    } catch (error) {
+      console.error('마이페이지 정산 정보 조회 실패:', error)
+      error.value = error.response?.data?.message || error.message || '정산 정보를 불러오는데 실패했습니다'
+      throw error
+    } finally {
+      loading.value = false
+    }
+  }
+
   // 직원의 과거 출퇴근 기록 조회 (통계용)
   const fetchEmployeeRecords = async (startDate = null, endDate = null) => {
     loading.value = true
@@ -197,7 +221,7 @@ export const useAttendanceStore = defineStore('attendance', () => {
         employeeSection: record.employee?.section || 'UNKNOWN',
         // Additional computed fields
         date: record.clockInAt ? new Date(record.clockInAt).toDateString() : null,
-        status: record.paired ? 'completed' : 'incomplete'
+        status: record.paired ? 'completed' : 'working'
       }))
       
       // Handle pagination
@@ -518,6 +542,103 @@ export const useAttendanceStore = defineStore('attendance', () => {
     }
   }
 
+  // 관리자용 수동 출퇴근 처리
+  const manualAttendance = async (employeeId, type) => {
+    validateAdminPermission()
+    loading.value = true
+    error.value = null
+    try {
+      const api = getApiInstance()
+      const shopId = getShopId()
+      
+      if (!shopId) {
+        throw new Error('매장 정보를 찾을 수 없습니다.')
+      }
+
+      if (!employeeId || !['IN', 'OUT'].includes(type)) {
+        throw new Error('잘못된 매개변수입니다.')
+      }
+
+      // 현재 시간을 ISO 문자열로 생성
+      const currentTime = new Date().toISOString()
+      
+      // 새로운 API 페이로드 형식: timestamp format
+      const payload = type === 'IN' 
+        ? { clockInAt: currentTime }
+        : { clockOutAt: currentTime }
+
+      // 새로운 관리자용 수동 출퇴근 API 호출
+      try {
+        await api.post(`/attendance/admin/shops/${shopId}/attendance/employees/${employeeId}`, payload)
+      } catch (apiError) {
+        if (apiError.response?.status === 404) {
+          console.warn('수동 출퇴근 API 요청 실패')
+        } else {
+          throw apiError
+        }
+      }
+
+      // 대시보드 데이터 새로고침
+      await fetchDashboardData()
+      
+      console.log(`관리자 수동 ${type === 'IN' ? '출근' : '퇴근'} 처리 완료 - 직원 ID: ${employeeId}`)
+      return true
+    } catch (error) {
+      console.error(`관리자 수동 ${type === 'IN' ? '출근' : '퇴근'} 처리 실패:`, error)
+      error.value = error.response?.data?.message || error.message || `${type === 'IN' ? '출근' : '퇴근'} 처리에 실패했습니다`
+      throw error
+    } finally {
+      loading.value = false
+    }
+  }
+
+  // 관리자용 출퇴근 기록 수정
+  const editAttendanceRecord = async (recordId, updateData) => {
+    validateAdminPermission()
+    loading.value = true
+    error.value = null
+    
+    try {
+      const api = getApiInstance()
+      const shopId = getShopId()
+      
+      if (!shopId) {
+        throw new Error('매장 정보를 찾을 수 없습니다.')
+      }
+
+      if (!recordId) {
+        throw new Error('출퇴근 기록 ID가 필요합니다.')
+      }
+
+      // API 호출
+      const response = await api.put(`/attendance/admin/shops/${shopId}/attendance/records/${recordId}`, updateData)
+      
+      // 로컬 상태 업데이트
+      const updatedRecord = response.data
+      const recordIndex = records.value.findIndex(record => record.id === recordId)
+      if (recordIndex !== -1) {
+        records.value[recordIndex] = {
+          ...records.value[recordIndex],
+          ...updatedRecord,
+          clockInAt: updatedRecord.clockInAt,
+          clockOutAt: updatedRecord.clockOutAt
+        }
+      }
+
+      // 대시보드 데이터 새로고침
+      await fetchDashboardData()
+      
+      console.log('출퇴근 기록 수정 완료 - 기록 ID:', recordId)
+      return updatedRecord
+    } catch (error) {
+      console.error('출퇴근 기록 수정 실패:', error)
+      error.value = error.response?.data?.message || error.message || '출퇴근 기록 수정에 실패했습니다'
+      throw error
+    } finally {
+      loading.value = false
+    }
+  }
+
   // 특정 직원의 기록 삭제 (직원 삭제 시 사용)
   const deleteRecordsByEmployee = (employeeId) => {
     records.value = records.value.filter(record => record.employeeId !== employeeId)
@@ -631,6 +752,7 @@ export const useAttendanceStore = defineStore('attendance', () => {
     
     // 직원용 Actions
     fetchMyStatus,
+    fetchMySettlement,
     fetchEmployeeRecords,
     initializeEmployeeData,
     getEmployeeStatistics,
@@ -648,6 +770,8 @@ export const useAttendanceStore = defineStore('attendance', () => {
     checkIn,
     checkOut,
     processQRScan,
+    manualAttendance,
+    editAttendanceRecord,
     deleteRecordsByEmployee,
     getStatistics,
     getApiInstance,

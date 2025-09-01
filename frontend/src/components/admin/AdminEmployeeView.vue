@@ -46,6 +46,22 @@
               <td>
                 <div class="action-buttons">
                   <button 
+                    @click="clockInEmployee(employee.id)"
+                    class="btn btn-success btn-sm"
+                    :disabled="attendanceStore.loading || getEmployeeStatus(employee.id) === 'working'"
+                    title="출근 처리"
+                  >
+                    출근
+                  </button>
+                  <button 
+                    @click="clockOutEmployee(employee.id)"
+                    class="btn btn-warning btn-sm"
+                    :disabled="attendanceStore.loading || getEmployeeStatus(employee.id) !== 'working'"
+                    title="퇴근 처리"
+                  >
+                    퇴근
+                  </button>
+                  <button 
                     @click="editEmployee(employee)"
                     class="btn btn-secondary btn-sm"
                   >
@@ -188,13 +204,19 @@
                 <label>은행명 *</label>
                 <select v-model="employeeForm.bank" required class="form-select">
                   <option value="">은행을 선택하세요</option>
-                  <option value="국민">🏦 국민은행</option>
-                  <option value="토스">🎯 토스뱅크</option>
-                  <option value="신한">🔵 신한은행</option>
-                  <option value="우리">🟢 우리은행</option>
-                  <option value="하나">🟡 하나은행</option>
-                  <option value="농협">🌾 농협은행</option>
-                  <option value="기업">🏢 기업은행</option>
+                  <option value="국민">국민은행</option>
+                  <option value="신한">신한은행</option>
+                  <option value="우리">우리은행</option>
+                  <option value="하나">하나은행</option>
+                  <option value="농협">농협은행</option>
+                  <option value="기업">기업은행</option>
+                  <option value="SC">SC은행</option>
+                  <option value="새마을금고">새마을금고</option>
+                  <option value="수협">수협</option>
+                  <option value="신협">신협</option>
+                  <option value="케이">케이뱅크</option>
+                  <option value="토스">토스뱅크</option>
+                  <option value="카카오">카카오뱅크</option>
                 </select>
               </div>
               
@@ -203,11 +225,12 @@
                 <input 
                   type="text" 
                   v-model="employeeForm.accountNumber"
-                  placeholder="123-456-789012"
+                  placeholder="123456789012"
                   required
                   class="form-input"
                   @input="formatAccountNumber"
                 >
+                <span class="field-help-text">숫자만 입력해주세요</span>
               </div>
             </div>
           </div>
@@ -467,6 +490,9 @@ export default {
       this.editingEmployeeId = employee.id
       this.employeeForm = {
         ...employee,
+        // 수정 시 포맷된 형태로 표시
+        phone: employee.phone ? employee.phone.replace(/(\d{3})(\d{4})(\d{4})/, '$1-$2-$3') : '',
+        nationalId: employee.nationalId ? employee.nationalId.replace(/(\d{6})(\d{7})/, '$1-$2') : '',
         schedule: {
           mon: employee.schedule?.mon || { start: '', end: '' },
           tue: employee.schedule?.tue || { start: '', end: '' },
@@ -537,12 +563,9 @@ export default {
     },
 
     formatAccountNumber() {
-      // 계좌번호는 은행별로 다르지만 일반적인 형식으로 포맷팅
+      // 계좌번호는 숫자만 허용 (하이픈 제거)
       let value = this.employeeForm.accountNumber.replace(/\D/g, '')
-      if (value.length <= 14) {
-        value = value.replace(/(\d{3})(\d{6})(\d{5})/, '$1-$2-$3')
-        this.employeeForm.accountNumber = value
-      }
+      this.employeeForm.accountNumber = value
     },
 
     formatPayAmount() {
@@ -632,7 +655,7 @@ export default {
           nationalId: this.employeeForm.nationalId.replace(/-/g, ''),
           accountNumber: this.employeeForm.accountNumber.replace(/-/g, ''),
           schedule: Object.fromEntries(
-            Object.entries(this.employeeForm.schedule).filter(([day, times]) => 
+            Object.entries(this.employeeForm.schedule).filter(([, times]) => 
               times.start && times.end
             )
           )
@@ -650,6 +673,28 @@ export default {
         this.emit('retry-fetch')
       } catch (error) {
         alert('❌ 저장에 실패했습니다: ' + error.message)
+      }
+    },
+
+    // 관리자용 수동 출근 처리
+    async clockInEmployee(employeeId) {
+      try {
+        await this.attendanceStore.manualAttendance(employeeId, 'IN')
+        alert('✅ 출근 처리가 완료되었습니다')
+        this.emit('retry-fetch')
+      } catch (error) {
+        alert('❌ 출근 처리에 실패했습니다: ' + error.message)
+      }
+    },
+
+    // 관리자용 수동 퇴근 처리  
+    async clockOutEmployee(employeeId) {
+      try {
+        await this.attendanceStore.manualAttendance(employeeId, 'OUT')
+        alert('✅ 퇴근 처리가 완료되었습니다')
+        this.emit('retry-fetch')
+      } catch (error) {
+        alert('❌ 퇴근 처리에 실패했습니다: ' + error.message)
       }
     }
   }
@@ -754,6 +799,16 @@ th {
 
 .btn-danger {
   background: #ef4444;
+  color: white;
+}
+
+.btn-success {
+  background: #10b981;
+  color: white;
+}
+
+.btn-warning {
+  background: #f59e0b;
   color: white;
 }
 
@@ -1113,6 +1168,13 @@ th {
   gap: 12px;
   justify-content: flex-end;
   margin-top: 20px;
+}
+
+.field-help-text {
+  font-size: 0.8rem;
+  color: #64748b;
+  margin-top: 4px;
+  font-style: italic;
 }
 
 @media (max-width: 768px) {

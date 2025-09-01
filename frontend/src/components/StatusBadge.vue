@@ -16,23 +16,43 @@ export default {
   computed: {
     statusText() {
       const statusMap = {
+        // 출근 관련 상태
         'not-checked-in': '🕰️ 미출근',
         'working': '💼 근무중',
         'completed': '✅ 퇴근완료',
         'late': '⚠️ 지각',
         'early': '🌅 조기출근',
-        'overtime': '🌙 연장근무'
+        'overtime': '🌙 연장근무',
+        'incomplete': '💼 근무중',
+        
+        // 근무 일정 상태
+        'SCHEDULED': '⏰ 출근 전',
+        'UPCOMING': '⏰ 출근 전',
+        'ACTIVE': '💼 근무중',
+        'IN_PROGRESS': '💼 근무중',
+        'COMPLETED': '✅ 퇴근',
+        'CANCELLED': '❌ 취소됨'
       }
       return statusMap[this.status] || '❓ 알수없음'
     },
     badgeClass() {
       const classMap = {
+        // 출근 관련 상태
         'not-checked-in': 'badge-gray',
         'working': 'badge-success', 
         'completed': 'badge-primary',
         'late': 'badge-warning',
         'early': 'badge-success',
-        'overtime': 'badge-danger'
+        'overtime': 'badge-danger',
+        'incomplete': 'badge-success',
+        
+        // 근무 일정 상태
+        'SCHEDULED': 'badge-gray',
+        'UPCOMING': 'badge-gray',
+        'ACTIVE': 'badge-success',
+        'IN_PROGRESS': 'badge-success',
+        'COMPLETED': 'badge-primary',
+        'CANCELLED': 'badge-danger'
       }
       return classMap[this.status] || 'badge-gray'
     }

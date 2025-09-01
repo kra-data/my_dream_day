@@ -222,37 +222,8 @@ export default {
       this.processingEmployeeId = employee.id
 
       try {
-        const user = JSON.parse(localStorage.getItem('user'))
-        const shopId = user ? user.shopId : null
-        
-        if (!shopId) {
-          throw new Error('매장 정보를 찾을 수 없습니다.')
-        }
-
-        // 관리자용 수동 출근 API 호출
-        const api = this.attendanceStore.getApiInstance()
-        
-        try {
-          await api.post(`/admin/shops/${shopId}/attendance/manual`, {
-            employeeId: employee.id,
-            type: 'IN'
-          })
-        } catch (apiError) {
-          // 관리자용 수동 출퇴근 API가 구현되지 않은 경우 일반 출퇴근 API 사용
-          if (apiError.response?.status === 404) {
-            console.warn('관리자용 수동 출퇴근 API가 구현되지 않음. 일반 출퇴근 API 사용')
-            await api.post('/attendance', {
-              shopId: parseInt(shopId),
-              type: 'IN'
-            })
-          } else {
-            throw apiError
-          }
-        }
-
-        // 대시보드 데이터 새로고침
-        await this.attendanceStore.fetchDashboardData()
-        
+        // store의 manualAttendance 함수 사용
+        await this.attendanceStore.manualAttendance(employee.id, 'IN')
         alert(`${employee.name}님이 출근 처리되었습니다.`)
       } catch (error) {
         console.error('수동 출근 처리 실패:', error)
@@ -275,37 +246,8 @@ export default {
       this.processingEmployeeId = employee.id
 
       try {
-        const user = JSON.parse(localStorage.getItem('user'))
-        const shopId = user ? user.shopId : null
-        
-        if (!shopId) {
-          throw new Error('매장 정보를 찾을 수 없습니다.')
-        }
-
-        // 관리자용 수동 퇴근 API 호출
-        const api = this.attendanceStore.getApiInstance()
-        
-        try {
-          await api.post(`/admin/shops/${shopId}/attendance/manual`, {
-            employeeId: employee.id,
-            type: 'OUT'
-          })
-        } catch (apiError) {
-          // 관리자용 수동 출퇴근 API가 구현되지 않은 경우 일반 출퇴근 API 사용
-          if (apiError.response?.status === 404) {
-            console.warn('관리자용 수동 출퇴근 API가 구현되지 않음. 일반 출퇴근 API 사용')
-            await api.post('/attendance', {
-              shopId: parseInt(shopId),
-              type: 'OUT'
-            })
-          } else {
-            throw apiError
-          }
-        }
-
-        // 대시보드 데이터 새로고침
-        await this.attendanceStore.fetchDashboardData()
-        
+        // store의 manualAttendance 함수 사용
+        await this.attendanceStore.manualAttendance(employee.id, 'OUT')
         alert(`${employee.name}님이 퇴근 처리되었습니다.`)
       } catch (error) {
         console.error('수동 퇴근 처리 실패:', error)

@@ -2,10 +2,8 @@
   <div class="admin-view">
     <div class="admin-container">
       <!-- 관리자 헤더 -->
-      <div class="admin-header">
-        <h1>🛠️ 관리자 대시보드</h1>
-        <p>직원 출퇴근 현황을 관리하고 통계를 확인하세요</p>
-      </div>
+      <!-- <div class="admin-header">
+      </div> -->
 
       <!-- 로딩 상태 -->
       <div v-if="isLoading" class="loading-container">
@@ -47,13 +45,15 @@
 </template>
 
 <script>
-import { onMounted, computed, ref } from 'vue'
+import { onMounted, computed } from 'vue'
 import { useEmployeesStore } from '@/stores/employees'
 import { useAttendanceStore } from '@/stores/attendance'
 import { usePayrollStore } from '@/stores/payroll'
 import { useAuthStore } from '@/stores/auth'
+import { useWorkshiftStore } from '@/stores/workshift'
 
 // 탭 컴포넌트들 import
+import AdminWorkshiftView from '@/components/admin/AdminWorkshiftView.vue'
 import AdminDashboardView from '@/components/admin/AdminDashboardView.vue'
 import AdminEmployeeView from '@/components/admin/AdminEmployeeView.vue'
 import AdminSalaryView from '@/components/admin/AdminSalaryView.vue'
@@ -63,6 +63,7 @@ import AdminAnalyticsView from '@/components/admin/AdminAnalyticsView.vue'
 export default {
   name: 'AdminView',
   components: {
+    AdminWorkshiftView,
     AdminDashboardView,
     AdminEmployeeView,
     AdminSalaryView,
@@ -74,16 +75,17 @@ export default {
     const attendanceStore = useAttendanceStore()
     const payrollStore = usePayrollStore()
     const authStore = useAuthStore()
+    const workshiftStore = useWorkshiftStore()
     
     // 로딩 및 에러 상태 관리
     const isLoading = computed(() => 
-      employeesStore.loading || attendanceStore.loading || payrollStore.loading
+      employeesStore.loading || attendanceStore.loading || payrollStore.loading || workshiftStore.loading
     )
     const hasError = computed(() => 
-      !!employeesStore.error || !!attendanceStore.error || !!payrollStore.error
+      !!employeesStore.error || !!attendanceStore.error || !!payrollStore.error || !!workshiftStore.error
     )
     const errorMessage = computed(() => 
-      employeesStore.error || attendanceStore.error || payrollStore.error
+      employeesStore.error || attendanceStore.error || payrollStore.error || workshiftStore.error
     )
     
     // 데이터 초기화
@@ -109,6 +111,11 @@ export default {
         console.log(`Loading data for tab: ${tabId}`)
         
         switch (tabId) {
+          case 'workshift':
+            // 근무 일정 캘린더 데이터 로드 (전체 직원)
+            await workshiftStore.fetchCalendarWorkshifts(authStore.user?.shopId, null)
+            break
+            
           case 'dashboard':
             // 대시보드 데이터는 이미 로드됨
             break
@@ -118,7 +125,7 @@ export default {
             await attendanceStore.fetchRecords()
             break
             
-          case 'payroll':
+          case 'payroll': {
             // 급여 데이터 로드 (rate limit 방지를 위한 순차 실행)
             const currentDate = new Date()
             const year = currentDate.getFullYear()
@@ -133,6 +140,7 @@ export default {
             
             console.log('✅ AdminView: 급여 데이터 로딩 완료')
             break
+          }
             
           case 'analytics':
             // 통계 데이터 로드 (필요시)
@@ -162,6 +170,7 @@ export default {
       attendanceStore,
       payrollStore,
       authStore,
+      workshiftStore,
       isLoading,
       hasError,
       errorMessage,
@@ -175,11 +184,12 @@ export default {
       activeTab: 'dashboard',
       loadedTabs: new Set(['dashboard']), // 이미 로드된 탭 추적
       tabs: [
+        { id: 'workshift', name: '근무 일정', icon: '📅', component: 'AdminWorkshiftView' },
         { id: 'dashboard', name: '대시보드', icon: '📊', component: 'AdminDashboardView' },
         { id: 'employees', name: '직원 관리', icon: '👥', component: 'AdminEmployeeView' },
         { id: 'payroll', name: '급여 관리', icon: '💰', component: 'AdminSalaryView' },
         { id: 'records', name: '출퇴근 기록', icon: '📋', component: 'AdminRecordsView' },
-        { id: 'analytics', name: '통계', icon: '📈', component: 'AdminAnalyticsView' }
+        // { id: 'analytics', name: '통계', icon: '📈', component: 'AdminAnalyticsView' }
       ]
     }
   },

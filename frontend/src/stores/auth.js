@@ -149,15 +149,9 @@ export const useAuthStore = defineStore('auth', () => {
         throw new Error('사용자 기본 정보가 없습니다')
       }
 
-      // 직원 상세 정보 조회
-      const response = await api.get(`/admin/shops/${user.value.shopId}/employees`)
-      const employees = response.data || []
-      
-      // 현재 로그인한 사용자 정보 찾기
-      const currentEmployee = employees.find(emp => 
-        emp.id === user.value.userId || 
-        (emp.name === user.value.name && emp.phone?.slice(-4) === user.value.phoneLastFour)
-      )
+      // 직원 본인 정보 조회 (관리자 권한 없이)
+      const response = await api.get('/employees/me')
+      const currentEmployee = response.data
 
       if (currentEmployee) {
         // 사용자 정보 업데이트
