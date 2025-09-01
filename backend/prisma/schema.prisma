@@ -93,7 +93,6 @@ model AttendanceRecord {
   employee      Employee  @relation("EmployeeAttendance", fields: [employeeId], references: [id], onDelete: Cascade)
   shop          Shop      @relation("ShopAttendance", fields: [shopId], references: [id], onDelete: Cascade)
 
-  // 🔹 추가: WorkShift 연결(옵션)
   shiftId       Int?
   shift         WorkShift? @relation(fields: [shiftId], references: [id])
 

@@ -313,7 +313,7 @@ export const adminUpdateAttendance = async (req: AuthRequiredRequest, res: Respo
   res.json(updated);
 };
 
-/** 직원: QR로 출근/퇴근 (지급 인정 기준 반영) */
+/** 직원: QR로 출근/퇴근 (WorkShift 연동 + 지급 인정 기준 반영) */
 export const recordAttendance = async (req: AuthRequiredRequest, res: Response) => {
   const parsed = recordAttendanceSchema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: 'Invalid payload' }); return; }
@@ -324,45 +324,157 @@ export const recordAttendance = async (req: AuthRequiredRequest, res: Response) 
   const employeeId = req.user.userId;
   const now = new Date();
 
+  // ── 오늘(KST) 범위 계산
+  const kst = toKst(now);
+  const y = kst.getUTCFullYear(), m = kst.getUTCMonth() + 1, d = kst.getUTCDate();
+  const dayStartUtc = fromKstParts(y, m - 1, d, 0, 0, 0, 0);
+  const dayEndUtc   = fromKstParts(y, m - 1, d, 23, 59, 59, 999);
+
+  // 상태 문자열 혼용 대비 (스키마는 PLANNED/IN_PROGRESS/COMPLETED, 기존 컨트롤러는 SCHEDULED 사용)
+  const SHIFT_STATUSES_PLANNED = ['PLANNED', 'SCHEDULED'] as const;
+
+  // 오늘 사용할 “해당 시프트” 찾기:
+  //  - 동일 직원/매장
+  //  - 오늘(KST) 시작~끝 사이에 시작하는 시프트
+  //  - 아직 끝나지 않은(endAt >= now) 시프트를 우선
+  const findTodaysShift = async () => {
+    const s1 = await prisma.workShift.findFirst({
+      where: {
+        shopId, employeeId,
+        startAt: { gte: dayStartUtc, lte: dayEndUtc },
+        endAt:   { gte: now },
+        status:  { in: [...SHIFT_STATUSES_PLANNED, 'IN_PROGRESS'] }
+      },
+      orderBy: { startAt: 'asc' }
+    });
+    if (s1) return s1;
+    // 그래도 못 찾으면 “오늘 시작한 시프트” 중 아무거나 (이미 끝난 경우)
+    return prisma.workShift.findFirst({
+      where: {
+        shopId, employeeId,
+        startAt: { gte: dayStartUtc, lte: dayEndUtc },
+        status:  { in: [...SHIFT_STATUSES_PLANNED, 'IN_PROGRESS'] }
+      },
+      orderBy: { startAt: 'asc' }
+    });
+  };
+
   if (type === 'IN') {
+    // 이미 열린 IN이 있으면 방지
     const openIn = await prisma.attendanceRecord.findFirst({ where: { employeeId, paired: false } });
     if (openIn) { res.status(400).json({ error: '이미 출근 상태입니다.' }); return; }
-    const rec = await prisma.attendanceRecord.create({
-      data: { shopId, employeeId, type: 'IN', clockInAt: now, paired: false }
+
+    // 오늘 시프트 필수
+    const shift = await findTodaysShift();
+    if (!shift) {
+      res.status(409).json({
+        error: '오늘 근무일정이 없습니다. 먼저 근무일정을 생성하세요.',
+        code: 'NO_SHIFT_TODAY',
+        hint: 'POST /api/my/workshifts (date, start, end)로 생성 후 다시 시도하세요.'
+      });
+      return;
+    }
+
+    // 시프트의 지각 유예(graceInMin) 반영해 지각 여부 판단(정보용)
+    const graceMs = (shift.graceInMin ?? 0) * 60000;
+    const isLate  = now.getTime() > (shift.startAt.getTime() + graceMs);
+
+    await prisma.$transaction(async (tx) => {
+      // 출근 레코드 생성(시프트 연결)
+      await tx.attendanceRecord.create({
+        data: {
+          shopId, employeeId,
+          type: 'IN',
+          clockInAt: now,
+          paired: false,
+          shiftId: shift.id
+        }
+      });
+      // 시프트 상태/실측 갱신
+      await tx.workShift.update({
+        where: { id: shift.id },
+        data: {
+          status: 'IN_PROGRESS',
+          actualInAt: now,
+          late: isLate
+        }
+      });
     });
-    res.json({ ok: true, message: '출근 완료', clockInAt: rec.clockInAt });
+
+    res.json({
+      ok: true,
+      message: '출근 완료',
+      clockInAt: now,
+      shift: {
+        id: shift.id,
+        plannedStart: shift.startAt,
+        plannedEnd: shift.endAt,
+        graceInMin: shift.graceInMin ?? 0,
+        late: isLate
+      }
+    });
     return;
   }
 
   if (type === 'OUT') {
     const inRecord = await prisma.attendanceRecord.findFirst({
-      where: { employeeId, paired: false }, orderBy: { clockInAt: 'desc' }
+      where: { employeeId, paired: false },
+      orderBy: { clockInAt: 'desc' },
+      include: { shift: true }
     });
-    if (!inRecord || !inRecord.clockInAt) { res.status(400).json({ error: '출근 기록이 없습니다.' }); return; }
-    if (now <= inRecord.clockInAt) { res.status(400).json({ error: '퇴근 시각이 출근 시각보다 빠릅니다.' }); return; }
+    if (!inRecord || !inRecord.clockInAt) {
+      res.status(400).json({ error: '출근 기록이 없습니다.' });
+      return;
+    }
+    if (now <= inRecord.clockInAt) {
+      res.status(400).json({ error: '퇴근 시각이 출근 시각보다 빠릅니다.' });
+      return;
+    }
 
-    const emp = await prisma.employee.findFirst({ where: { id: employeeId }, select: { schedule: true } });
-    const planned = getPlannedShiftFor(inRecord.clockInAt, emp?.schedule);
+    // 시프트 연결이 없다면 오늘 시프트 탐색해 연결
+    let shift = inRecord.shift ?? null;
+    if (!shift) {
+      shift = await findTodaysShift();
+      // OUT 시에도 시프트가 없을 수 있음(무스케줄 근무) → payable은 actual과 동일
+    }
+
+    const planned = shift ? { startAt: shift.startAt, endAt: shift.endAt } : undefined;
     const { actual, payable } = calcActualAndPayable(inRecord.clockInAt, now, planned);
 
-    await prisma.attendanceRecord.update({
-      where: { id: inRecord.id },
-      data: {
-        type: 'OUT',
-        clockOutAt: now,
-        workedMinutes: payable, // ✅ 지급 인정 분 저장
-        extraMinutes: 0,
-        paired: true
+    await prisma.$transaction(async (tx) => {
+      // 출퇴근 레코드 마감(지급 인정 분 저장 + 시프트 연결)
+      await tx.attendanceRecord.update({
+        where: { id: inRecord.id },
+        data: {
+          type: 'OUT',
+          clockOutAt: now,
+          workedMinutes: payable, // ✅ 지급 인정(시프트 교집합)만
+          extraMinutes: 0,
+          paired: true,
+          ...(shift ? { shiftId: shift.id } : {})
+        }
+      });
+
+      // 시프트가 있으면 상태/실측/조퇴 여부 갱신
+      if (shift) {
+        await tx.workShift.update({
+          where: { id: shift.id },
+          data: {
+            status: 'COMPLETED',
+            actualOutAt: now,
+            leftEarly: now < shift.endAt
+          }
+        });
       }
     });
 
     res.json({
       ok: true,
-      message: '퇴근 완료',
+      message: shift && now < shift.endAt ? '퇴근(예정보다 이른 퇴근)' : '퇴근 완료',
       clockOutAt: now,
-      workedMinutes: payable,
-      actualMinutes: actual,
-      planned: planned ? { startAt: planned.startAt, endAt: planned.endAt } : null
+      workedMinutes: payable,      // 지급 인정
+      actualMinutes: actual,       // 실제 체류
+      planned: shift ? { startAt: shift.startAt, endAt: shift.endAt } : null
     });
     return;
   }
