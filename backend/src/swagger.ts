@@ -535,20 +535,6 @@ AttendanceCreateRequest: {
         responses: { '200': { description: 'Token info' }, '401': { description: 'Invalid' } }
       }
     },
-
-    '/api/attendance/me': {
-      get: {
-        tags: ['Attendance'],
-        summary: '내 출퇴근 기록(커서 기반) 조회',
-        parameters: [
-          { name: 'start', in: 'query', schema: { type: 'string', format: 'date' } },
-          { name: 'end',   in: 'query', schema: { type: 'string', format: 'date' } },
-          { name: 'cursor',in: 'query', schema: { type: 'integer' } },
-          { name: 'limit', in: 'query', schema: { type: 'integer', default: 10 } }
-        ],
-        responses: { '200': { description: 'OK', content: { 'application/json': { schema: { type: 'object', properties: { records: { type: 'array', items: { $ref: '#/components/schemas/AttendanceRecord' } }, nextCursor: { type: 'integer', nullable: true } } } } } } }
-      }
-    },
     '/api/attendance/me/status': {
       get: {
         tags: ['Attendance'],
@@ -992,7 +978,7 @@ responses: {
                       {
                         id: 201, shopId: 1, employeeId: 42,
                         startAt: '2025-09-01T02:00:00.000Z', endAt: '2025-09-01T10:00:00.000Z', status: 'SCHEDULED',
-                        employee: { name: '김직원', position: 'STAFF', section: 'HALL' }
+                        employee: { name: '김직원', position: 'STAFF', section: 'HALL',pay:20000,payUnit:"HOURLY"  }
                       }
                     ]
                   }

@@ -116,9 +116,10 @@ export const myListShifts = async (req: AuthRequiredRequest, res: Response): Pro
 };
 
 /* ───────────────── 관리자/점주: 가게 내 모든 직원 일정 목록 ───────────────── */
- export const adminListShifts = async (req: AuthRequiredRequest, res: Response): Promise<void> => {
+export const adminListShifts = async (req: AuthRequiredRequest, res: Response): Promise<void> => {
   const shopId = Number(req.params.shopId);
   if (req.user.shopId !== shopId) { res.status(403).json({ error: '다른 가게는 조회할 수 없습니다.' }); return; }
+
   const parsed = listQuerySchema.safeParse(req.query);
   if (!parsed.success) { res.status(400).json({ error: 'Invalid query' }); return; }
   const { from, to, employeeId, status } = parsed.data;
@@ -134,10 +135,30 @@ export const myListShifts = async (req: AuthRequiredRequest, res: Response): Pro
   const rows = await prisma.workShift.findMany({
     where,
     orderBy: [{ startAt: 'asc' }, { employeeId: 'asc' }],
-    include: { employee: { select: { name: true, position: true, section: true } } }
+    // ✅ 필요한 컬럼만 반환 (select 사용)
+    select: {
+      id: true,
+      employeeId: true,
+      startAt: true,
+      endAt: true,
+      status: true,
+      // 필요 시 아래 주석 해제
+      // graceInMin: true,
+      employee: {
+        select: {
+          name: true,
+          position: true,
+          section: true,
+          pay: true,       // 금액 (시급/월급)
+          payUnit: true,   // 'HOURLY' | 'MONTHLY'
+        }
+      }
+    }
   });
+
   res.json(rows);
 };
+
 
 /* ───────────────── 관리자/점주: 특정 직원 일정 생성 ───────────────── */
  export const adminCreateShift = async (req: AuthRequiredRequest, res: Response): Promise<void> => {
