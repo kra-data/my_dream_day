@@ -56,5 +56,4 @@ router.get(
   withUser((req: AuthRequiredRequest, res, _next) => myListShifts(req, res))
 );
 
-
 export default router;
