@@ -14,21 +14,14 @@ const startOfKstDay = (d: Date) => fromKstParts(toKst(d).getUTCFullYear(), toKst
 const endOfKstDay = (d: Date) => fromKstParts(toKst(d).getUTCFullYear(), toKst(d).getUTCMonth(), toKst(d).getUTCDate(), 23, 59, 59, 999);
 
 /* ───────── 라운딩 유틸 ───────── */
-/** 반올림: 가장 가까운 30분 경계(:00 / :30)로 반올림 */
-const roundToNearestHalfHour = (d: Date) => {
+/** 올림: 다음 30분 경계(:00 / :30)로 올림 (경계면 그대로) */
+const ceilToNextHalfHour = (d: Date) => {
   const t = new Date(d.getTime());
   const mins = t.getUTCMinutes();
-  const secs = t.getUTCSeconds();
-  const ms = t.getUTCMilliseconds();
-  // 초/밀리초 버림
   t.setUTCSeconds(0, 0);
-  // 0~14 => 0, 15~44 => 30, 45~59 => +1h:00
-  if (mins < 15) t.setUTCMinutes(0);
-  else if (mins < 45) t.setUTCMinutes(30);
-  else {
-    t.setUTCMinutes(0);
-    t.setUTCHours(t.getUTCHours() + 1);
-  }
+  const r = mins % 30;
+  if (r === 0) return t;
+  t.setUTCMinutes(mins + (30 - r));
   return t;
 };
 
@@ -53,7 +46,6 @@ const toMin = (hhmm: string) => {
 /* ───────── 직원 schedule(JSON) → 요일별 시프트 파싱 ───────── */
 const parseSchedule = (schedule: any) => {
   // 기대 포맷 예: { mon:{start:'09:00',end:'18:00'}, tue:{...}, ... }
-  // 실제 DB 구조가 다르면 이 부분만 맞게 수정하세요.
   const map: (null | { startMin: number; endMin: number })[] = new Array(7).fill(null);
   if (!schedule || typeof schedule !== 'object') return map;
 
@@ -170,9 +162,8 @@ const adminUpdateAttendanceSchema = z.object({
 const recordAttendanceSchema = z.object({
   shopId: z.coerce.number().int().positive(),
   type: z.enum(['IN', 'OUT']),
-  // 미리보기/확정 공통
-  preview: z.coerce.boolean().optional().default(false),
-  selectedAt: z.string().datetime().optional(),         // 확정 시 사용(없으면 preview 동작)
+  // ✅ preview 제거: selectedAt 유무로 미리보기/확정 분기
+  selectedAt: z.string().datetime().optional(),         // 확정 시 사용(없으면 제안 응답)
   // IN 전용: 시프트 시작도 변경할지
   updateShiftStart: z.coerce.boolean().optional().default(false),
 });
@@ -309,11 +300,11 @@ export const adminUpdateAttendance = async (req: AuthRequiredRequest, res: Respo
   res.json(updated);
 };
 
-/** 직원: QR로 출퇴근 (IN=반올림/시프트맞춤, OUT=반내림/시프트맞춤) + 미리보기 지원 */
+/** 직원: QR로 출퇴근 (IN=올림·시프트맞춤, OUT=반내림·시프트맞춤) — selectedAt 유무로 미리보기/확정 */
 export const recordAttendance = async (req: AuthRequiredRequest, res: Response) => {
   const parsed = recordAttendanceSchema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: 'Invalid payload' }); return; }
-  const { shopId, type, preview, selectedAt, updateShiftStart } = parsed.data;
+  const { shopId, type, selectedAt, updateShiftStart } = parsed.data;
 
   if (req.user.shopId !== shopId) { res.status(403).json({ error: '다른 가게 QR입니다.' }); return; }
   const employeeId = req.user.userId;
@@ -330,29 +321,25 @@ export const recordAttendance = async (req: AuthRequiredRequest, res: Response) 
 
     // 오늘/가까운 WorkShift(있으면 우선)
     const workShift = await findNearestShiftForNow(shopId, employeeId, now);
-    // "시프트 맞춤" 규칙:
-    // - 시프트가 있고, 제안값이 시프트보다 이르면 시프트 시작으로 끌어올림
-    // - 시프트가 있고, 제안값이 시프트 범위 밖이면 시프트 경계 내로 clamp
-    let suggested: Date;
-    let suggestionReason: 'round_nearest_half_hour' | 'align_to_shift_start' | 'clamp_into_shift';
 
-    // 우선 "반올림" 기본값
-    let candidate = roundToNearestHalfHour(now);
+    // ① 제안 계산: 기본은 30분 단위 올림, 시프트 맞춤
+    let suggested: Date;
+    let suggestionReason: 'ceil_next_half_hour' | 'align_to_shift_start' | 'clamp_into_shift';
+
+    let candidate = ceilToNextHalfHour(now); // ✅ 올림
 
     if (workShift) {
       if (candidate < workShift.startAt) {
         suggested = new Date(workShift.startAt);
         suggestionReason = 'align_to_shift_start';
       } else if (candidate >= workShift.endAt) {
-        // 시프트 끝을 넘겼으면 끝-1분? 대신 안전하게 시프트 시작으로 제안
-        suggested = new Date(workShift.startAt);
+        suggested = new Date(workShift.startAt); // 시프트 밖이면 시작으로 클램프
         suggestionReason = 'clamp_into_shift';
       } else {
         suggested = candidate;
-        suggestionReason = 'round_nearest_half_hour';
+        suggestionReason = 'ceil_next_half_hour';
       }
     } else {
-      // WorkShift가 없으면, 직원 주간 schedule(있으면)로 시프트 경계 clamp
       const planned = getPlannedShiftFor(now, emp.schedule);
       if (planned) {
         if (candidate < planned.startAt) {
@@ -363,16 +350,16 @@ export const recordAttendance = async (req: AuthRequiredRequest, res: Response) 
           suggestionReason = 'clamp_into_shift';
         } else {
           suggested = candidate;
-          suggestionReason = 'round_nearest_half_hour';
+          suggestionReason = 'ceil_next_half_hour';
         }
       } else {
         suggested = candidate;
-        suggestionReason = 'round_nearest_half_hour';
+        suggestionReason = 'ceil_next_half_hour';
       }
     }
 
-    // 미리보기 또는 selectedAt 미제공 → 제안만
-    if (preview || !selectedAt) {
+    // ② selectedAt 미제공 → 미리보기 응답
+    if (!selectedAt) {
       res.json({
         ok: true,
         requiresConfirmation: true,
@@ -391,7 +378,7 @@ export const recordAttendance = async (req: AuthRequiredRequest, res: Response) 
       return;
     }
 
-    // 확정 저장
+    // ③ 확정 저장
     const chosenAt = new Date(selectedAt);
 
     await prisma.$transaction(async (tx) => {
@@ -459,21 +446,17 @@ export const recordAttendance = async (req: AuthRequiredRequest, res: Response) 
 
     const workShift = inRecord.shift ?? await findNearestShiftForNow(shopId, employeeId, now);
 
-    // 기본: 반내림
+    // ① 제안 계산: 기본은 30분 단위 반내림, 시프트 맞춤 + 출근 이전 방지
     let candidate = floorToPrevHalfHour(now);
-    // 출근보다 빠를 수 없음
     if (candidate < inRecord.clockInAt) candidate = new Date(inRecord.clockInAt);
 
-    // "시프트 맞춤" 규칙: 시프트가 있으면, 시프트 종료를 넘기지 않도록 clamp
     let suggested: Date;
     let suggestionReason: 'floor_prev_half_hour' | 'clamp_into_shift';
     if (workShift) {
       const endClamp = candidate > workShift.endAt ? workShift.endAt : candidate;
-      // 출근보다 앞서면 출근으로
       suggested = endClamp < inRecord.clockInAt ? inRecord.clockInAt : endClamp;
       suggestionReason = endClamp !== candidate ? 'clamp_into_shift' : 'floor_prev_half_hour';
     } else {
-      // schedule 기준으로도 clamp 시도
       const planned = getPlannedShiftFor(now, emp.schedule);
       if (planned) {
         const endClamp = candidate > planned.endAt ? planned.endAt : candidate;
@@ -485,8 +468,8 @@ export const recordAttendance = async (req: AuthRequiredRequest, res: Response) 
       }
     }
 
-    // 미리보기 또는 selectedAt 미제공 → 제안만
-    if (preview || !selectedAt) {
+    // ② selectedAt 미제공 → 미리보기 응답
+    if (!selectedAt) {
       res.json({
         ok: true,
         requiresConfirmation: true,
@@ -505,7 +488,7 @@ export const recordAttendance = async (req: AuthRequiredRequest, res: Response) 
       return;
     }
 
-    // 확정 저장
+    // ③ 확정 저장
     const chosenAt = new Date(selectedAt);
     if (!(chosenAt > inRecord.clockInAt && chosenAt <= now)) {
       res.status(400).json({ error: '퇴근 시각은 출근 이후이면서 현재 이전이어야 합니다.' });

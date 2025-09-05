@@ -254,9 +254,6 @@ PayrollEmployeeDetailResponse: {
         type: 'array',
         items: { $ref: '#/components/schemas/WorkShiftWithEmployee' }
       },
-
-
-      // ... 기존 components.schemas 아래에 이어서 추가
       DashboardTodaySummary: {
         type: 'object',
         properties: {
@@ -370,18 +367,18 @@ MyPageSettlementResponse: {
     month:   { $ref: '#/components/schemas/MyPageMonth' },
     stats:   { $ref: '#/components/schemas/MyPageStats' }
   }
-},AttendanceCreateRequest: {
+},
+AttendanceCreateRequest: {
         type: 'object',
         required: ['shopId', 'type'],
         properties: {
           shopId: { type: 'integer', example: 123 },
           type: { type: 'string', enum: ['IN', 'OUT'] },
-          preview: { type: 'boolean', example: true, description: 'true면 저장하지 않고 제안만 반환' },
-          selectedAt: { type: 'string', format: 'date-time', example: '2025-09-05T12:00:00.000Z', description: '사용자가 확정한 시각(미지정 시 preview 동작)' },
+          selectedAt: { type: 'string', format: 'date-time', example: '2025-09-05T12:00:00.000Z', description: '확정 저장할 시각(미지정 시 제안 응답)' },
           updateShiftStart: { type: 'boolean', example: false, description: 'IN에서 시프트 시작을 selectedAt으로 수정(겹침 없을 때만)' }
         }
       },
-      AttendancePreviewInResponse: {
+     AttendancePreviewInResponse: {
         type: 'object',
         properties: {
           ok: { type: 'boolean' },
@@ -389,7 +386,7 @@ MyPageSettlementResponse: {
           type: { type: 'string', enum: ['IN'] },
           now: { type: 'string', format: 'date-time' },
           suggestedClockInAt: { type: 'string', format: 'date-time' },
-          suggestionReason: { type: 'string', enum: ['round_nearest_half_hour', 'align_to_shift_start', 'clamp_into_shift'] },
+          suggestionReason: { type: 'string', enum: ['ceil_next_half_hour', 'align_to_shift_start', 'clamp_into_shift'] },
           allowAdjust: { type: 'boolean' },
           shift: {
             type: 'object',
@@ -411,7 +408,7 @@ MyPageSettlementResponse: {
           type: { type: 'string', enum: ['OUT'] },
           now: { type: 'string', format: 'date-time' },
           suggestedClockOutAt: { type: 'string', format: 'date-time' },
-          suggestionReason: { type: 'string', enum: ['floor_prev_half_hour', 'clamp_into_shift'] },
+          suggestionReason: { type: 'string', enum: ['ceil_next_half_hour','floor_prev_half_hour', 'clamp_into_shift'] },
           allowAdjust: { type: 'boolean' },
           shift: {
             type: 'object',
@@ -424,7 +421,43 @@ MyPageSettlementResponse: {
             }
           }
         }
-      }
+      },
+      AttendanceConfirmInResponse: {
+        type: 'object',
+        properties: {
+          ok: { type: 'boolean' },
+          message: { type: 'string', example: '출근 완료' },
+          clockInAt: { type: 'string', format: 'date-time' },
+          shift: {
+            type: 'object',
+            nullable: true,
+            properties: {
+              id: { type: 'integer' },
+              plannedStart: { type: 'string', format: 'date-time' },
+              plannedEnd: { type: 'string', format: 'date-time' }
+            }
+          }
+        }
+      },
+      AttendanceConfirmOutResponse: {
+        type: 'object',
+        properties: {
+          ok: { type: 'boolean' },
+          message: { type: 'string', example: '퇴근 완료' },
+          clockOutAt: { type: 'string', format: 'date-time' },
+          workedMinutes: { type: 'integer' },
+          actualMinutes: { type: 'integer' },
+          planned: {
+            type: 'object',
+            nullable: true,
+            properties: { startAt: { type:'string',format:'date-time' }, endAt: { type:'string',format:'date-time' } }
+          }
+        }
+      },
+
+
+
+
     }
   },
   security: [{ bearerAuth: [] }],
@@ -500,19 +533,6 @@ MyPageSettlementResponse: {
           }
         ],
         responses: { '200': { description: 'Token info' }, '401': { description: 'Invalid' } }
-      }
-    },
-    '/api/attendance/me': {
-      get: {
-        tags: ['Attendance'],
-        summary: '내 출퇴근 기록(커서 기반) 조회',
-        parameters: [
-          { name: 'start', in: 'query', schema: { type: 'string', format: 'date' } },
-          { name: 'end',   in: 'query', schema: { type: 'string', format: 'date' } },
-          { name: 'cursor',in: 'query', schema: { type: 'integer' } },
-          { name: 'limit', in: 'query', schema: { type: 'integer', default: 10 } }
-        ],
-        responses: { '200': { description: 'OK', content: { 'application/json': { schema: { type: 'object', properties: { records: { type: 'array', items: { $ref: '#/components/schemas/AttendanceRecord' } }, nextCursor: { type: 'integer', nullable: true } } } } } } }
       }
     },
     '/api/attendance/me/status': {
@@ -971,6 +991,46 @@ responses: {
         }
       }
     },
+    '/api/attendance': {
+      post: {
+        tags: ['Attendance'],
+       summary: '출퇴근 기록 생성/확정 (IN=올림·시프트맞춤, OUT=반내림·시프트맞춤). selectedAt 없으면 제안만 반환',
+        security: [{ bearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: { $ref: '#/components/schemas/AttendanceCreateRequest' }
+            }
+          }
+        },
+        responses: {
+          '200': {
+            description: 'OK (제안 또는 확정)',
+            content: {
+              'application/json': {
+                schema: {
+                  oneOf: [
+                    { $ref: '#/components/schemas/AttendancePreviewInResponse' },
+                    { $ref: '#/components/schemas/AttendancePreviewOutResponse' },
+                    { $ref: '#/components/schemas/AttendanceConfirmInResponse' },
+                    { $ref: '#/components/schemas/AttendanceConfirmOutResponse' }
+                  ]
+                },
+                                examples: {
+                  suggestIn:  { value: { ok:true, requiresConfirmation:true, type:'IN',  now:'2025-09-05T08:05:00.000Z', suggestedClockInAt:'2025-09-05T08:30:00.000Z', suggestionReason:'ceil_next_half_hour', allowAdjust:true, shift:null } },
+                  suggestOut: { value: { ok:true, requiresConfirmation:true, type:'OUT', now:'2025-09-05T13:05:00.000Z', suggestedClockOutAt:'2025-09-05T13:00:00.000Z', suggestionReason:'floor_prev_half_hour',   allowAdjust:true, shift:null } },
+                  confirmIn:  { value: { ok:true, message:'출근 완료', clockInAt:'2025-09-05T08:30:00.000Z', shift:null } },
+                  confirmOut: { value: { ok:true, message:'퇴근 완료', clockOutAt:'2025-09-05T13:00:00.000Z', workedMinutes:480, actualMinutes:505, planned:{ startAt:'2025-09-05T00:00:00.000Z', endAt:'2025-09-05T09:00:00.000Z' } } }
+                }
+             }
+            }
+          },
+          '400': { description: 'Bad Request (잘못된 selectedAt, 순서 위반 등)' },
+          '403': { description: 'Forbidden (다른 가게 QR)' }
+        }
+      }
+    },
 
     '/api/admin/shops/{shopId}/employees/{employeeId}/workshifts': {
       post: {
@@ -1005,38 +1065,6 @@ responses: {
           '403': { description: 'Forbidden' },
           '404': { description: 'Not Found' },
           '409': { description: 'Conflict (overlap)' }
-        }
-      }
-    },
-    '/api/attendance': {
-      post: {
-        tags: ['Attendance'],
-        summary: '출퇴근 기록 생성/확정 (IN=반올림·시프트맞춤, OUT=반내림·시프트맞춤). preview=true면 제안만 반환',
-        security: [{ bearerAuth: [] }],
-        requestBody: {
-          required: true,
-          content: {
-            'application/json': {
-              schema: { $ref: '#/components/schemas/AttendanceCreateRequest' }
-            }
-          }
-        },
-        responses: {
-          '200': {
-            description: 'OK (preview 또는 확정)',
-            content: {
-              'application/json': {
-                schema: {
-                  oneOf: [
-                    { $ref: '#/components/schemas/AttendancePreviewInResponse' },
-                    { $ref: '#/components/schemas/AttendancePreviewOutResponse' }
-                  ]
-                }
-              }
-            }
-          },
-          '400': { description: 'Bad Request' },
-          '403': { description: 'Forbidden' }
         }
       }
     },
