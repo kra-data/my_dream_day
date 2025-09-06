@@ -978,63 +978,35 @@ responses: {
           '403': { description: 'Forbidden (다른 가게 QR/권한 없음)' }
         }
       }
-    },
-// swaggerDocument.paths 에 추가
-'/api/my/workshifts/today': {
-  get: {
-    tags: ['Shifts'],
-    summary: '오늘 내 근무일정',
-    description: 'KST 기준 오늘과 교집합이 있는 내 근무일정을 조회합니다. activeOnly=1|true 이면 COMPLETED/CANCELED 제외.',
-    security: [{ bearerAuth: [] }],
-    parameters: [
-      {
-        name: 'activeOnly',
-        in: 'query',
-        required: false,
-        schema: { type: 'boolean' },
-        description: 'true/1 이면 완료·취소 일정 제외'
-      }
-    ],
-    responses: {
-      '200': {
-        description: 'OK',
-        content: {
-          'application/json': {
-            schema: { $ref: '#/components/schemas/WorkShiftListResponse' },
-            examples: {
-              sample: {
-                value: [
-                  {
-                    id: 101,
-                    shopId: 1,
-                    employeeId: 42,
-                    startAt: '2025-09-01T00:30:00.000Z',
-                    endAt:   '2025-09-01T09:30:00.000Z',
-                    status: 'SCHEDULED',
-                    actualInAt: null,
-                    actualOutAt: null,
-                    late: null,
-                    leftEarly: null,
-                    actualMinutes: null,
-                    workedMinutes: null,
-                    settlementId: null,
-                    createdBy: 42,
-                    updatedBy: 42,
-                    createdAt: '2025-08-31T12:00:00.000Z',
-                    updatedAt: '2025-08-31T12:00:00.000Z',
-                    notes: null
-                  }
-                ]
+    }},
+    '/api/my/workshifts/today': {
+      get: {
+        tags: ['Shifts'],
+        summary: '오늘 내 근무일정',
+        description: 'KST 기준 오늘과 교집합이 있는 내 근무일정을 조회합니다. activeOnly=1|true 이면 COMPLETED/CANCELED 제외.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          {
+            name: 'activeOnly',
+            in: 'query',
+            required: false,
+            schema: { type: 'boolean' },
+            description: 'true/1 이면 완료·취소 일정 제외'
+          }
+        ],
+        responses: {
+          '200': {
+            description: 'OK',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/WorkShiftListResponse' }
               }
             }
-          }
+          },
+          '401': { description: 'Unauthorized' }
         }
-      },
-      '401': { description: 'Unauthorized' }
-    }
-  }
-},
-
+      }
+    },
     '/api/admin/shops/{shopId}/employees/{employeeId}/workshifts': {
       post: {
         tags: ['Shifts (Admin)'],
@@ -1144,7 +1116,6 @@ responses: {
       }
     },
   }
-}
 };
 
 export const swaggerServe: RequestHandler[] = swaggerUi.serve;
