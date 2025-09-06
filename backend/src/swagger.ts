@@ -568,54 +568,6 @@ AttendanceCreateRequest: {
         responses: { '200': { description: 'OK' } }
       }
     },
-    // swaggerDocument.paths['/api/attendance/me/overdue'] = (추가)
-'/api/attendance/me/overdue': {
-  get: {
-    tags: ['Shifts'],
-    summary: '내 OVERDUE 근무일정(커서)',
-    security: [{ bearerAuth: [] }],
-    parameters: [
-      { name: 'from', in: 'query', required: false, schema: { type: 'string', format: 'date-time' } },
-      { name: 'to',   in: 'query', required: false, schema: { type: 'string', format: 'date-time' } },
-      { name: 'cursor', in: 'query', required: false, schema: { type: 'integer' } },
-      { name: 'limit',  in: 'query', required: false, schema: { type: 'integer', minimum: 1, maximum: 50, default: 20 } }
-    ],
-    responses: {
-      '200': {
-        description: 'OK',
-        content: {
-          'application/json': { schema: { $ref: '#/components/schemas/CursorWorkShiftPage' } }
-        }
-      },
-      '401': { description: 'Unauthorized' }
-    }
-  }
-},// swaggerDocument.paths['/api/admin/shops/{shopId}/workshifts/overdue'] = (추가)
-'/api/admin/shops/{shopId}/workshifts/overdue': {
-  get: {
-    tags: ['Shifts (Admin)'],
-    summary: '가게 OVERDUE 근무일정(커서)',
-    security: [{ bearerAuth: [] }],
-    parameters: [
-      { name: 'shopId', in: 'path', required: true, schema: { type: 'integer' } },
-      { name: 'employeeId', in: 'query', required: false, schema: { type: 'integer' } },
-      { name: 'from', in: 'query', required: false, schema: { type: 'string', format: 'date-time' } },
-      { name: 'to',   in: 'query', required: false, schema: { type: 'string', format: 'date-time' } },
-      { name: 'cursor', in: 'query', required: false, schema: { type: 'integer' } },
-      { name: 'limit',  in: 'query', required: false, schema: { type: 'integer', minimum: 1, maximum: 50, default: 20 } }
-    ],
-    responses: {
-      '200': {
-        description: 'OK',
-        content: {
-          'application/json': { schema: { $ref: '#/components/schemas/CursorWorkShiftWithEmployeePage' } }
-        }
-      },
-      '401': { description: 'Unauthorized' },
-      '403': { description: 'Forbidden' }
-    }
-  }
-},
 
 
     '/api/admin/shops': {
@@ -1027,6 +979,61 @@ responses: {
         }
       }
     },
+// swaggerDocument.paths 에 추가
+'/api/my/workshifts/today': {
+  get: {
+    tags: ['Shifts'],
+    summary: '오늘 내 근무일정',
+    description: 'KST 기준 오늘과 교집합이 있는 내 근무일정을 조회합니다. activeOnly=1|true 이면 COMPLETED/CANCELED 제외.',
+    security: [{ bearerAuth: [] }],
+    parameters: [
+      {
+        name: 'activeOnly',
+        in: 'query',
+        required: false,
+        schema: { type: 'boolean' },
+        description: 'true/1 이면 완료·취소 일정 제외'
+      }
+    ],
+    responses: {
+      '200': {
+        description: 'OK',
+        content: {
+          'application/json': {
+            schema: { $ref: '#/components/schemas/WorkShiftListResponse' },
+            examples: {
+              sample: {
+                value: [
+                  {
+                    id: 101,
+                    shopId: 1,
+                    employeeId: 42,
+                    startAt: '2025-09-01T00:30:00.000Z',
+                    endAt:   '2025-09-01T09:30:00.000Z',
+                    status: 'SCHEDULED',
+                    actualInAt: null,
+                    actualOutAt: null,
+                    late: null,
+                    leftEarly: null,
+                    actualMinutes: null,
+                    workedMinutes: null,
+                    settlementId: null,
+                    createdBy: 42,
+                    updatedBy: 42,
+                    createdAt: '2025-08-31T12:00:00.000Z',
+                    updatedAt: '2025-08-31T12:00:00.000Z',
+                    notes: null
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      '401': { description: 'Unauthorized' }
+    }
+  }
+},
 
     '/api/admin/shops/{shopId}/employees/{employeeId}/workshifts': {
       post: {
