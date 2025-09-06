@@ -104,41 +104,131 @@ const recordAttendanceSchema = z.object({
   shiftId: z.coerce.number().int().positive(),
   type: z.enum(['IN', 'OUT']),
 });
-
+// ───── [수정] zod enum에 OVERDUE 추가 ─────
 const adminUpdateWorkShiftSchema = z.object({
   startAt: z.string().datetime().optional(),
   endAt: z.string().datetime().optional(),
-  status: z.enum(['SCHEDULED', 'IN_PROGRESS', 'COMPLETED', 'CANCELED']).optional(),
-  actualInAt: z.string().datetime().nullable().optional(),   // null로 지우기 허용
-  actualOutAt: z.string().datetime().nullable().optional(),  // null로 지우기 허용
+  status: z.enum(['SCHEDULED', 'IN_PROGRESS', 'COMPLETED', 'CANCELED', 'OVERDUE']).optional(), // ← 추가
+  actualInAt: z.string().datetime().nullable().optional(),
+  actualOutAt: z.string().datetime().nullable().optional(),
   late: z.boolean().optional(),
   leftEarly: z.boolean().optional(),
 }).refine(
   (v) => !!v.startAt || !!v.endAt || !!v.status || 'actualInAt' in v || 'actualOutAt' in v || 'late' in v || 'leftEarly' in v,
   { message: '수정할 필드를 최소 1개 이상 제공하세요.' }
 );
+
+// ───── [추가] OVERDUE 목록용 공통 쿼리 ─────
+const overdueListQuery = z.object({
+  from: z.string().datetime().optional(),
+  to:   z.string().datetime().optional(),
+  employeeId: z.coerce.number().int().positive().optional(), // admin용
+  cursor: z.coerce.number().int().positive().optional(),
+  limit:  z.coerce.number().int().min(1).max(50).optional().default(20),
+});
+
+// ───── [추가] 직원: OVERDUE 목록 ─────
+// GET /api/attendance/me/overdue
+export const getMyOverdueWorkShifts = async (req: AuthRequiredRequest, res: Response) => {
+  const employeeId = req.user.userId;
+  const { from, to, cursor, limit } = overdueListQuery.parse(req.query);
+
+  const where: Prisma.WorkShiftWhereInput = {
+    employeeId,
+    status: 'OVERDUE' as any,
+    ...(from || to
+      ? { startAt: { ...(from ? { gte: new Date(from) } : {}), ...(to ? { lte: new Date(to) } : {}) } }
+      : {}
+    ),
+  };
+
+  const rows = await prisma.workShift.findMany({
+    where,
+    orderBy: [{ id: 'desc' }],
+    ...(cursor ? { cursor: { id: Number(cursor) }, skip: 1 } : {}),
+    take: limit,
+  });
+
+  res.json({
+    items: rows,
+    nextCursor: rows.length === (limit ?? 20) ? rows[rows.length - 1].id : null,
+  });
+};
+
+// ───── [추가] 관리자/점주: OVERDUE 목록 ─────
+// GET /api/admin/shops/:shopId/workshifts/overdue
+export const getShopOverdueWorkShifts = async (req: AuthRequiredRequest, res: Response) => {
+  const shopId = Number(req.params.shopId);
+  if (req.user.shopId !== shopId) { res.status(403).json({ error: '다른 가게는 조회할 수 없습니다.' }); return; }
+
+  const { from, to, employeeId, cursor, limit } = overdueListQuery.parse(req.query);
+
+  const where: Prisma.WorkShiftWhereInput = {
+    shopId,
+    status: 'OVERDUE' as any,
+    ...(employeeId ? { employeeId } : {}),
+    ...(from || to
+      ? { startAt: { ...(from ? { gte: new Date(from) } : {}), ...(to ? { lte: new Date(to) } : {}) } }
+      : {}
+    ),
+  };
+
+  const rows = await prisma.workShift.findMany({
+    where,
+    include: { employee: { select: { name: true, position: true, section: true, pay: true, payUnit: true } } },
+    orderBy: [{ id: 'desc' }],
+    ...(cursor ? { cursor: { id: Number(cursor) }, skip: 1 } : {}),
+    take: limit,
+  });
+
+  // 기존 WorkShiftWithEmployee 형태로 맞춰서 응답(필요시 그대로 rows 반환해도 됨)
+  const items = rows.map(r => ({
+    id: r.id,
+    shopId: r.shopId,
+    employeeId: r.employeeId,
+    startAt: r.startAt,
+    endAt: r.endAt,
+    status: r.status,
+    actualInAt: r.actualInAt,
+    actualOutAt: r.actualOutAt,
+    late: r.late,
+    leftEarly: r.leftEarly,
+    workedMinutes: r.workedMinutes,
+    actualMinutes: r.actualMinutes,
+    settlementId: r.settlementId,
+    createdBy: r.createdBy,
+    updatedBy: r.updatedBy,
+    createdAt: r.createdAt,
+    updatedAt: r.updatedAt,
+    employee: {
+      name: r.employee.name,
+      position: r.employee.position,
+      section: r.employee.section,
+      // 필요하면 지급단가/단위도 내려보내기
+      pay: r.employee.pay,
+      payUnit: r.employee.payUnit,
+    }
+  }));
+
+  res.json({
+    items,
+    nextCursor: rows.length === (limit ?? 20) ? rows[rows.length - 1].id : null,
+  });
+};
 export const adminUpdateWorkShift = async (req: AuthRequiredRequest, res: Response) => {
   const shopId = Number(req.params.shopId);
   const shiftId = Number(req.params.shiftId);
-
-  // 매장 권한 체크(점주/관리자 권한 상세 체크가 있다면 여기서 추가)
-  if (req.user.shopId !== shopId) {
-    res.status(403).json({ error: '다른 가게는 관리할 수 없습니다.' });
-    return;
-  }
+  if (req.user.shopId !== shopId) { res.status(403).json({ error: '다른 가게는 관리할 수 없습니다.' }); return; }
 
   const parsed = adminUpdateWorkShiftSchema.safeParse(req.body);
   if (!parsed.success) {
-    res.status(400).json({ error: 'Invalid payload', detail: parsed.error.flatten() });
-    return;
+    res.status(400).json({ error: 'Invalid payload', detail: parsed.error.flatten() }); return;
   }
   const payload = parsed.data;
 
-  // 대상 시프트 로드
   const shift = await prisma.workShift.findFirst({ where: { id: shiftId, shopId } });
   if (!shift) { res.status(404).json({ error: '시프트를 찾을 수 없습니다.' }); return; }
 
-  // 1) next 값 산출(미전달 시 기존값 유지, null 명시 시 null 적용)
   const nextStartAt = payload.startAt ? new Date(payload.startAt) : shift.startAt;
   const nextEndAt   = payload.endAt   ? new Date(payload.endAt)   : shift.endAt;
 
@@ -150,17 +240,13 @@ export const adminUpdateWorkShift = async (req: AuthRequiredRequest, res: Respon
     payload.actualOutAt === undefined ? shift.actualOutAt
     : (payload.actualOutAt === null ? null : new Date(payload.actualOutAt));
 
-  // 2) 논리 검증
   if (nextStartAt && nextEndAt && !(nextStartAt < nextEndAt)) {
-    res.status(400).json({ error: 'endAt은 startAt 이후여야 합니다.' });
-    return;
+    res.status(400).json({ error: 'endAt은 startAt 이후여야 합니다.' }); return;
   }
   if (nextActualInAt && nextActualOutAt && !(nextActualInAt < nextActualOutAt)) {
-    res.status(400).json({ error: 'actualOutAt은 actualInAt 이후여야 합니다.' });
-    return;
+    res.status(400).json({ error: 'actualOutAt은 actualInAt 이후여야 합니다.' }); return;
   }
 
-  // 3) 겹침(Overlap) 방지 — 스케줄(예정) 시간이 바뀌는 경우에만 체크
   const scheduleChanged = !!payload.startAt || !!payload.endAt;
   if (scheduleChanged && nextStartAt && nextEndAt) {
     const overlap = await prisma.workShift.findFirst({
@@ -168,46 +254,40 @@ export const adminUpdateWorkShift = async (req: AuthRequiredRequest, res: Respon
         shopId,
         employeeId: shift.employeeId,
         id: { not: shiftId },
-        // [start, end) 교집합 존재하면 겹침
         startAt: { lt: nextEndAt },
         endAt:   { gt: nextStartAt },
       },
       select: { id: true, startAt: true, endAt: true },
     });
-    if (overlap) {
-      res.status(409).json({ error: 'Overlap with another shift', overlap });
-      return;
-    }
+    if (overlap) { res.status(409).json({ error: 'Overlap with another shift', overlap }); return; }
   }
 
-  // 4) status/late/leftEarly 자동 산출(입력값이 있으면 우선)
+  // 상태 산출: 입력값 우선, 다만 in/out 모두 있으면 강제 COMPLETED
   let nextStatus = payload.status ?? shift.status;
-  if (!payload.status) {
-    // 상태 자동 유추
-    if (nextActualInAt && nextActualOutAt) nextStatus = 'COMPLETED';
-    else if (nextActualInAt && !nextActualOutAt) nextStatus = 'IN_PROGRESS';
-    else nextStatus = 'SCHEDULED';
+  if (nextActualInAt && nextActualOutAt) {
+    nextStatus = 'COMPLETED' as any; // ← OVERDUE 였어도 실제 보정되면 완료 처리
+  } else if (!payload.status) {
+    if (nextActualInAt && !nextActualOutAt) nextStatus = 'IN_PROGRESS' as any;
+    else nextStatus = 'SCHEDULED' as any;
   }
 
-  // late 자동 계산(지각 유예 적용). 명시값이 없고 in/out, start가 있으면 계산
-  let nextLate = payload.late ?? shift.late ?? null;
+  // 지각/조퇴, 분 계산
+  let nextLate: boolean | null | undefined = payload.late ?? shift.late ?? null;
   if (payload.late === undefined && nextActualInAt && nextStartAt) {
-    const graceMs = 1* 60_000;
+    const graceMs = 1 * 60_000; // 필요시 환경변수/DB 유예분 반영
     nextLate = nextActualInAt.getTime() > (nextStartAt.getTime() + graceMs);
   }
 
-  // leftEarly 자동 계산(예정 종료 대비). 명시값이 없고 out/end가 있으면 계산
-  let nextLeftEarly = payload.leftEarly ?? shift.leftEarly ?? null;
+  let nextLeftEarly: boolean | null | undefined = payload.leftEarly ?? shift.leftEarly ?? null;
   if (payload.leftEarly === undefined && nextActualOutAt && nextEndAt) {
     nextLeftEarly = nextActualOutAt < nextEndAt;
   }
-  // 5) 산출값(있을 때만) 미리 계산
+
   const computedActualMinutes =
     (nextActualInAt && nextActualOutAt) ? diffMinutes(nextActualInAt, nextActualOutAt) : null;
   const computedWorkedMinutes =
     (nextActualInAt && nextActualOutAt) ? intersectMinutes(nextActualInAt, nextActualOutAt, nextStartAt, nextEndAt) : null;
 
-  // 5) 업데이트
   const updated = await prisma.workShift.update({
     where: { id: shiftId },
     data: {
@@ -216,7 +296,7 @@ export const adminUpdateWorkShift = async (req: AuthRequiredRequest, res: Respon
       actualInAt: nextActualInAt,
       actualOutAt: nextActualOutAt,
       status: nextStatus,
-      late: nextLate as any,        // (boolean|null 허용 스키마면 그대로, boolean?면 boolean만)
+      late: nextLate as any,
       leftEarly: nextLeftEarly as any,
       updatedBy: req.user.userId,
       actualMinutes: computedActualMinutes,
@@ -224,22 +304,12 @@ export const adminUpdateWorkShift = async (req: AuthRequiredRequest, res: Respon
     },
   });
 
-  // 6) 부가 계산(응답 편의): 실제/지급 분
-  let workedMinutes: number | null = null;
-  let actualMinutes: number | null = null;
-  if (updated.actualInAt && updated.actualOutAt) {
-    actualMinutes = diffMinutes(updated.actualInAt, updated.actualOutAt);
-    workedMinutes = (updated.startAt && updated.endAt)
-      ? intersectMinutes(updated.actualInAt, updated.actualOutAt, updated.startAt, updated.endAt)
-      : actualMinutes;
-  }
-
   res.json({
     ok: true,
     shift: updated,
     summary: {
-      actualMinutes,
-      workedMinutes,
+      actualMinutes: computedActualMinutes,
+      workedMinutes: computedWorkedMinutes,
       late: updated.late ?? null,
       leftEarly: updated.leftEarly ?? null,
     }

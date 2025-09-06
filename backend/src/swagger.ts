@@ -172,26 +172,37 @@ PayrollEmployeeDetailResponse: {
         enum: ['SCHEDULED', 'IN_PROGRESS', 'COMPLETED', 'CANCELED','OVERDUE'],
         example: 'SCHEDULED'
       },
-      WorkShift: {
-        type: 'object',
-        properties: {
-          id:          { type: 'integer', example: 101 },
-          shopId:      { type: 'integer', example: 1 },
-          employeeId:  { type: 'integer', example: 42 },
-          startAt:     { type: 'string', format: 'date-time', example: '2025-09-01T02:00:00.000Z' },
-          endAt:       { type: 'string', format: 'date-time', example: '2025-09-01T10:00:00.000Z' },
-          status:      { $ref: '#/components/schemas/WorkShiftStatus' },
-          // 아래 필드는 선택(DB에 존재하는 경우 문서화)
-          createdBy:   { type: 'integer', nullable: true, example: 42 },
-          updatedBy:   { type: 'integer', nullable: true, example: 1 },
-          createdAt:   { type: 'string', format: 'date-time', nullable: true },
-          updatedAt:   { type: 'string', format: 'date-time', nullable: true },
-          actualInAt:  { type: 'string', format: 'date-time', nullable: true },
-          actualOutAt: { type: 'string', format: 'date-time', nullable: true },
-          leftEarly:   { type: 'boolean', nullable: true, example: false },
-          notes:       { type: 'string', nullable: true }
-        }
-      },
+WorkShift: {
+  type: 'object',
+  properties: {
+    id:          { type: 'integer', example: 101 },
+    shopId:      { type: 'integer', example: 1 },
+    employeeId:  { type: 'integer', example: 42 },
+    startAt:     { type: 'string', format: 'date-time', example: '2025-09-01T02:00:00.000Z' },
+    endAt:       { type: 'string', format: 'date-time', example: '2025-09-01T10:00:00.000Z' },
+    status:      { $ref: '#/components/schemas/WorkShiftStatus' },
+
+    // ✅ 실적 필드
+    actualInAt:  { type: 'string', format: 'date-time', nullable: true },
+    actualOutAt: { type: 'string', format: 'date-time', nullable: true },
+    late:        { type: 'boolean', nullable: true, example: false },
+    leftEarly:   { type: 'boolean', nullable: true, example: false },
+
+    // ✅ 산출값(OUT 시 저장)
+    actualMinutes: { type: 'integer', nullable: true, example: 505, description: '실제 근무 분' },
+    workedMinutes: { type: 'integer', nullable: true, example: 480, description: '지급 인정 분(시프트 교집합)' },
+
+    // ✅ 정산 연결
+    settlementId: { type: 'integer', nullable: true, example: 123, description: 'PayrollSettlement.id' },
+
+    // 메타
+    createdBy:   { type: 'integer', nullable: true, example: 42 },
+    updatedBy:   { type: 'integer', nullable: true, example: 1 },
+    createdAt:   { type: 'string', format: 'date-time', nullable: true },
+    updatedAt:   { type: 'string', format: 'date-time', nullable: true },
+    notes:       { type: 'string', nullable: true }
+  }
+},
       WorkShiftEmployeeLite: {
         type: 'object',
         properties: {
@@ -252,6 +263,44 @@ PayrollEmployeeDetailResponse: {
           leftEarly:   { type: 'boolean', description: '관리자 보정용: 조퇴 여부' }
         }
       },
+      // swaggerDocument.components.schemas 에 추가
+WorkShiftUpdateSummary: {
+  type: 'object',
+  properties: {
+    actualMinutes: { type: 'integer', nullable: true, example: 505 },
+    workedMinutes: { type: 'integer', nullable: true, example: 480 },
+    late:          { type: 'boolean', nullable: true, example: false },
+    leftEarly:     { type: 'boolean', nullable: true, example: false }
+  }
+},
+WorkShiftUpdateResponse: {
+  type: 'object',
+  properties: {
+    ok:    { type: 'boolean', example: true },
+    shift: { $ref: '#/components/schemas/WorkShift' },
+    summary: { $ref: '#/components/schemas/WorkShiftUpdateSummary' }
+  }
+},CursorWorkShiftPage: {
+  type: 'object',
+  properties: {
+    items: {
+      type: 'array',
+      items: { $ref: '#/components/schemas/WorkShift' }
+    },
+    nextCursor: { type: ['integer', 'null'], example: 123 }
+  }
+},
+CursorWorkShiftWithEmployeePage: {
+  type: 'object',
+  properties: {
+    items: {
+      type: 'array',
+      items: { $ref: '#/components/schemas/WorkShiftWithEmployee' }
+    },
+    nextCursor: { type: ['integer', 'null'], example: 987 }
+  }
+},
+
       WorkShiftListResponse: {
         type: 'array',
         items: { $ref: '#/components/schemas/WorkShift' }
@@ -311,6 +360,29 @@ MyPageProfile: {
     bankRegistered: { type: 'boolean', example: false }
   }
 },
+PayrollSettlement: {
+  type: 'object',
+  properties: {
+    id:           { type: 'integer', example: 10 },
+    shopId:       { type: 'integer', example: 1 },
+    employeeId:   { type: 'integer', example: 42 },
+    cycleStart:   { type: 'string', format: 'date-time' },
+    cycleEnd:     { type: 'string', format: 'date-time' },
+    workedMinutes:{ type: 'integer', example: 14982 },
+    basePay:      { type: 'integer', example: 2500000 },
+    totalPay:     { type: 'integer', example: 2500000 },
+    settledAt:    { type: 'string', format: 'date-time', nullable: true },
+    processedBy:  { type: 'integer', nullable: true, example: 1 }
+  }
+},
+SettlePreviousResponse: {
+  type: 'object',
+  properties: {
+    ok: { type: 'boolean', example: true },
+    settlement: { $ref: '#/components/schemas/PayrollSettlement' }
+  }
+},
+
 MyPageCycle: {
   type: 'object',
   properties: {
@@ -496,6 +568,56 @@ AttendanceCreateRequest: {
         responses: { '200': { description: 'OK' } }
       }
     },
+    // swaggerDocument.paths['/api/attendance/me/overdue'] = (추가)
+'/api/attendance/me/overdue': {
+  get: {
+    tags: ['Shifts'],
+    summary: '내 OVERDUE 근무일정(커서)',
+    security: [{ bearerAuth: [] }],
+    parameters: [
+      { name: 'from', in: 'query', required: false, schema: { type: 'string', format: 'date-time' } },
+      { name: 'to',   in: 'query', required: false, schema: { type: 'string', format: 'date-time' } },
+      { name: 'cursor', in: 'query', required: false, schema: { type: 'integer' } },
+      { name: 'limit',  in: 'query', required: false, schema: { type: 'integer', minimum: 1, maximum: 50, default: 20 } }
+    ],
+    responses: {
+      '200': {
+        description: 'OK',
+        content: {
+          'application/json': { schema: { $ref: '#/components/schemas/CursorWorkShiftPage' } }
+        }
+      },
+      '401': { description: 'Unauthorized' }
+    }
+  }
+},// swaggerDocument.paths['/api/admin/shops/{shopId}/workshifts/overdue'] = (추가)
+'/api/admin/shops/{shopId}/workshifts/overdue': {
+  get: {
+    tags: ['Shifts (Admin)'],
+    summary: '가게 OVERDUE 근무일정(커서)',
+    security: [{ bearerAuth: [] }],
+    parameters: [
+      { name: 'shopId', in: 'path', required: true, schema: { type: 'integer' } },
+      { name: 'employeeId', in: 'query', required: false, schema: { type: 'integer' } },
+      { name: 'from', in: 'query', required: false, schema: { type: 'string', format: 'date-time' } },
+      { name: 'to',   in: 'query', required: false, schema: { type: 'string', format: 'date-time' } },
+      { name: 'cursor', in: 'query', required: false, schema: { type: 'integer' } },
+      { name: 'limit',  in: 'query', required: false, schema: { type: 'integer', minimum: 1, maximum: 50, default: 20 } }
+    ],
+    responses: {
+      '200': {
+        description: 'OK',
+        content: {
+          'application/json': { schema: { $ref: '#/components/schemas/CursorWorkShiftWithEmployeePage' } }
+        }
+      },
+      '401': { description: 'Unauthorized' },
+      '403': { description: 'Forbidden' }
+    }
+  }
+},
+
+
     '/api/admin/shops': {
       get: { tags: ['Admin'], summary: '매장 목록', responses: { '200': { description: 'OK' } } },
       post: { tags: ['Admin'], summary: '매장 생성', responses: { '201': { description: 'Created' }, '400': { description: 'Invalid payload' } } }
@@ -965,13 +1087,38 @@ responses: {
           }
         },
         responses: {
-          '200': { description: 'Updated', content: { 'application/json': { schema: { $ref: '#/components/schemas/WorkShift' } } } },
-          '400': { description: 'Invalid payload' },
-          '401': { description: 'Unauthorized' },
-          '403': { description: 'Forbidden' },
-          '404': { description: 'Not Found' },
-          '409': { description: 'Conflict (overlap)' }
+  '200': {
+    description: 'Updated',
+    content: {
+      'application/json': {
+        schema: { $ref: '#/components/schemas/WorkShiftUpdateResponse' },
+        examples: {
+          completed: {
+            value: {
+              ok: true,
+              shift: {
+                id: 123, shopId: 1, employeeId: 42,
+                startAt: '2025-09-01T02:00:00.000Z', endAt: '2025-09-01T10:00:00.000Z',
+                status: 'COMPLETED',
+                actualInAt: '2025-09-01T02:58:00.000Z',
+                actualOutAt:'2025-09-01T11:07:00.000Z',
+                late: false, leftEarly: false,
+                actualMinutes: 489, workedMinutes: 480,
+                settlementId: null
+              },
+              summary: { actualMinutes: 489, workedMinutes: 480, late: false, leftEarly: false }
+            }
+          }
         }
+      }
+    }
+  },
+  '400': { description: 'Invalid payload' },
+  '401': { description: 'Unauthorized' },
+  '403': { description: 'Forbidden' },
+  '404': { description: 'Not Found' },
+  '409': { description: 'Conflict (overlap)' }
+}
       },
       delete: {
         tags: ['Shifts (Admin)'],

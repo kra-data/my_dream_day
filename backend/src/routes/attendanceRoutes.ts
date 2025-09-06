@@ -11,6 +11,8 @@ import {
   getMyAttendance,
   getMyCurrentStatus,
   adminUpdateWorkShift,
+    getMyOverdueWorkShifts,
+  getShopOverdueWorkShifts,
 } from '../controllers/attendanceController';
 import {
   requireUser,
@@ -86,5 +88,21 @@ router.put(
   requireRoles('admin', 'owner'),
   withUser((req: AuthRequiredRequest, res) => adminUpdateWorkShift(req, res))
 );
+// 직원: OVERDUE 시프트 목록
+router.get(
+  '/me/overdue',
+  authenticateJWT,
+  requireUser,
+  requireRoles('employee'),
+  withUser((req: AuthRequiredRequest, res, next) => getMyOverdueWorkShifts(req, res))
+);
 
+// 관리자/점주: OVERDUE 시프트 목록
+router.get(
+  '/admin/shops/:shopId/workshifts/overdue',
+  authenticateJWT,
+  requireUser,
+  requireRoles('admin', 'owner'),
+  withUser((req: AuthRequiredRequest, res, next) => getShopOverdueWorkShifts(req, res))
+);
 export default router;
