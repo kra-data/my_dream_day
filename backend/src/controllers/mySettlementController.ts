@@ -4,9 +4,9 @@ import { prisma } from '../db/prisma';
 import { AuthRequiredRequest } from '../middlewares/requireUser';
 import { z } from 'zod';
 
-/** ───────── 설정값 (필요 시 .env로 분리) ───────── */
+/** ───────── 설정값 ───────── */
 const DEFAULT_CYCLE_START_DAY = Number(process.env.SETTLEMENT_CYCLE_START_DAY ?? 7); // 매월 7일 시작 ~ 다음달 6일 종료
-const DEFAULT_LATE_GRACE_MIN = Number(process.env.LATE_GRACE_MIN ?? '5'); // 지각 유예
+const DEFAULT_LATE_GRACE_MIN  = Number(process.env.LATE_GRACE_MIN ?? '5');          // 지각 유예 (분)
 
 /** 유틸: 휴대폰 마스킹 */
 const maskPhone = (phone?: string | null) => {
@@ -21,6 +21,15 @@ const maskPhone = (phone?: string | null) => {
 const toKst = (d: Date) => new Date(d.getTime() + 9 * 60 * 60 * 1000);
 const fromKstParts = (y: number, m1: number, d: number, hh=0, mm=0, ss=0, ms=0) =>
   new Date(Date.UTC(y, m1, d, hh - 9, mm, ss, ms));
+
+const startOfKstDay = (anchor: Date) => {
+  const k = toKst(anchor);
+  return fromKstParts(k.getUTCFullYear(), k.getUTCMonth(), k.getUTCDate(), 0, 0, 0, 0);
+};
+const endOfKstDay = (anchor: Date) => {
+  const k = toKst(anchor);
+  return fromKstParts(k.getUTCFullYear(), k.getUTCMonth(), k.getUTCDate(), 23, 59, 59, 999);
+};
 
 const kstRangeForMonth = (year: number, month: number) => {
   const start = fromKstParts(year, month - 1, 1);
@@ -47,16 +56,26 @@ const formatKstLabel = (d: Date) => {
   return `${dd.getUTCMonth() + 1}월 ${dd.getUTCDate()}일`;
 };
 
+/** ───────── 분 계산 유틸 ───────── */
+const diffMinutes = (a: Date, b: Date) => Math.max(0, Math.floor((b.getTime() - a.getTime()) / 60000));
+const intersectMinutes = (a0: Date, a1: Date, b0: Date, b1: Date) => {
+  const st = a0 > b0 ? a0 : b0;
+  const en = a1 < b1 ? a1 : b1;
+  if (en <= st) return 0;
+  return diffMinutes(st, en);
+};
+
 /** Shop.payday(1~28)를 우선 사용 */
 const resolveCycleStartDay = async (shopId: number) => {
   const shop = await prisma.shop.findUnique({ where: { id: shopId }, select: { payday: true } });
   return shop?.payday ?? DEFAULT_CYCLE_START_DAY;
 };
 
-
+/** 지난 사이클 정산 여부 */
 type PaidInfo = { status: 'PAID' | 'PENDING'; settledAt: Date | null };
 
 const findPaidInfoForCycle = async (shopId: number, employeeId: number, start: Date, end: Date): Promise<PaidInfo> => {
+  // Prisma 모델이 있으면 정식 사용
   if ((prisma as any).payrollSettlement?.findFirst) {
     const row = await (prisma as any).payrollSettlement.findFirst({
       where: { shopId, employeeId, cycleStart: start, cycleEnd: end },
@@ -64,7 +83,7 @@ const findPaidInfoForCycle = async (shopId: number, employeeId: number, start: D
     });
     return row ? { status: 'PAID', settledAt: row.settledAt } : { status: 'PENDING', settledAt: null };
   }
-  // 모델 없을 때는 기존 $queryRaw 방식 유지 (당신 코드 그대로 두셔도 됩니다)
+  // 없으면 존재 여부 확인 후 RAW
   const reg: Array<{ exists: boolean }> = await prisma.$queryRaw`
     SELECT to_regclass('public."PayrollSettlement"') IS NOT NULL AS exists
   `;
@@ -82,42 +101,13 @@ const findPaidInfoForCycle = async (shopId: number, employeeId: number, start: D
   return rows.length ? { status: 'PAID', settledAt: rows[0].settledAt } : { status: 'PENDING', settledAt: null };
 };
 
-
-/** 스케줄 파서 */
-type DaySpec = { startMin: number; endMin: number; graceMin: number } | null;
-const WKEYS: Array<'sun'|'mon'|'tue'|'wed'|'thu'|'fri'|'sat'> = ['sun','mon','tue','wed','thu','fri','sat'];
-const toMin = (hhmm: string) => {
-  const m = /^(\d{1,2}):(\d{2})$/.exec(hhmm); if (!m) return null;
-  const hh = +m[1], mm = +m[2];
-  if (hh<0 || hh>23 || mm<0 || mm>59) return null;
-  return hh*60 + mm;
-};
-const parseSchedule = (schedule: any): Record<number, DaySpec> => {
-  const out: Record<number, DaySpec> = {0:null,1:null,2:null,3:null,4:null,5:null,6:null};
-  if (!schedule || typeof schedule !== 'object') return out;
-  for (let i=0;i<7;i++) {
-    const key = WKEYS[i];
-    const v = schedule[key];
-    if (!v) { out[i] = null; continue; }
-    const pick = Array.isArray(v) ? v[0] : v;
-    if (pick?.off) { out[i] = null; continue; }
-    const startMin = typeof pick?.start === 'string' ? toMin(pick.start) : null;
-    const endMin   = typeof pick?.end   === 'string' ? toMin(pick.end)   : null;
-    if (startMin==null || endMin==null) { out[i]=null; continue; }
-    const grace = Number.isFinite(pick?.graceMin) ? Number(pick.graceMin) : DEFAULT_LATE_GRACE_MIN;
-    out[i] = { startMin, endMin, graceMin: grace };
-  }
-  return out;
-};
-
-const kstDow = (d: Date) => toKst(d).getUTCDay();
-const minutesOfDayKst = (d: Date) => { const t = toKst(d); return t.getUTCHours()*60 + t.getUTCMinutes(); };
-
+/** ───────── Zod ───────── */
 const schema = z.object({
   anchor: z.string().datetime().optional(),
   cycleStartDay: z.coerce.number().int().min(1).max(28).optional(),
 });
 
+/** ───────── Controller: /api/my/settlement ───────── */
 export const mySettlementSummary = async (req: AuthRequiredRequest, res: Response) => {
   const parsed = schema.safeParse(req.query);
   if (!parsed.success) {
@@ -132,15 +122,15 @@ export const mySettlementSummary = async (req: AuthRequiredRequest, res: Respons
   const cycleStartDay = parsed.data.cycleStartDay ?? await resolveCycleStartDay(shopId);
 
   // ── 사이클 계산 (현재/직전)
-  const currentCycle = kstCycleRange(anchor, cycleStartDay);
-  const prevAnchor   = new Date(currentCycle.start.getTime() - 24*60*60*1000);
-  const previousCycle= kstCycleRange(prevAnchor, cycleStartDay);
+  const currentCycle  = kstCycleRange(anchor, cycleStartDay);
+  const prevAnchor    = new Date(currentCycle.start.getTime() - 24*60*60*1000);
+  const previousCycle = kstCycleRange(prevAnchor, cycleStartDay);
 
   // ── 달력 기준 월 범위
-  const kstAnchor = toKst(anchor);
-  const monthY = kstAnchor.getUTCFullYear();
-  const monthM = kstAnchor.getUTCMonth() + 1;
-  const monthRange = kstRangeForMonth(monthY, monthM);
+  const kstAnchor   = toKst(anchor);
+  const monthY      = kstAnchor.getUTCFullYear();
+  const monthM      = kstAnchor.getUTCMonth() + 1;
+  const monthRange  = kstRangeForMonth(monthY, monthM);
 
   // ── 직원 정보
   const emp = await prisma.employee.findFirst({
@@ -148,8 +138,7 @@ export const mySettlementSummary = async (req: AuthRequiredRequest, res: Respons
     select: {
       name: true, section: true, position: true,
       pay: true, payUnit: true,
-      phone: true, bank: true, accountNumber: true,
-      schedule: true
+      phone: true, bank: true, accountNumber: true
     }
   });
   if (!emp) {
@@ -159,35 +148,62 @@ export const mySettlementSummary = async (req: AuthRequiredRequest, res: Respons
 
   const perMinute = emp.payUnit === 'HOURLY' ? (emp.pay / 60) : 0;
 
-  // ── Prisma 조회(모두 paired = true만 집계) — overtime 관련 컬럼/로직 제거
-  const [curLogs, prevLogs, monthLogs] = await Promise.all([
-    prisma.attendanceRecord.findMany({
-      where: { shopId, employeeId, paired: true, clockInAt: { gte: currentCycle.start,  lte: currentCycle.end } },
-      select: { workedMinutes: true }
+  // ── WorkShift 기반 집계
+  // 기준: actualInAt & actualOutAt(완결된 시프트)만 금액·분 집계
+  const [curShifts, prevShifts, monthShiftsCompleted, monthShiftsAll] = await Promise.all([
+    prisma.workShift.findMany({
+      where: {
+        shopId, employeeId,
+        actualInAt:  { gte: currentCycle.start,  lte: currentCycle.end },
+        actualOutAt: { not: null }
+      },
+      select: { startAt: true, endAt: true, actualInAt: true, actualOutAt: true }
     }),
-    prisma.attendanceRecord.findMany({
-      where: { shopId, employeeId, paired: true, clockInAt: { gte: previousCycle.start, lte: previousCycle.end } },
-      select: { workedMinutes: true }
+    prisma.workShift.findMany({
+      where: {
+        shopId, employeeId,
+        actualInAt:  { gte: previousCycle.start, lte: previousCycle.end },
+        actualOutAt: { not: null }
+      },
+      select: { startAt: true, endAt: true, actualInAt: true, actualOutAt: true }
     }),
-    prisma.attendanceRecord.findMany({
-      where: { shopId, employeeId, /*paired: true,*/ clockInAt: { gte: monthRange.start, lte: monthRange.end } },
-      select: { workedMinutes: true, clockInAt: true }
+    prisma.workShift.findMany({
+      where: {
+        shopId, employeeId,
+        actualInAt:  { gte: monthRange.start, lte: monthRange.end },
+        actualOutAt: { not: null }
+      },
+      select: { startAt: true, endAt: true, actualInAt: true, actualOutAt: true }
+    }),
+    // 지각/결근 판정을 위해 월 내 "모든" 시프트(취소 제외)
+    prisma.workShift.findMany({
+      where: {
+        shopId, employeeId,
+        startAt: { lt: endOfKstDay(monthRange.end) },
+        endAt:   { gt: startOfKstDay(monthRange.start) },
+        // 취소된 시프트는 제외(있다면)
+        NOT: [{ status: 'CANCELED' as any }]
+      },
+      select: { startAt: true, endAt: true, actualInAt: true, status: true }
     })
   ]);
 
-  const sumMinutes = (arr: { workedMinutes: number | null }[]) =>
-    arr.reduce((s, r) => s + (r.workedMinutes ?? 0), 0);
+  const sumPayable = (rows: Array<{ startAt: Date; endAt: Date; actualInAt: Date | null; actualOutAt: Date | null }>) =>
+    rows.reduce((acc, r) => {
+      if (!r.actualInAt || !r.actualOutAt) return acc;
+      return acc + intersectMinutes(r.actualInAt, r.actualOutAt, r.startAt, r.endAt);
+    }, 0);
 
-  const curMinutes = sumMinutes(curLogs);
-  const prvMinutes = sumMinutes(prevLogs);
-  const monMinutes = sumMinutes(monthLogs);
+  const curMinutes  = sumPayable(curShifts);
+  const prvMinutes  = sumPayable(prevShifts);
+  const monMinutes  = sumPayable(monthShiftsCompleted);
 
-  // ── 급여 계산 (연장/야근 제거 → 순수 근무시간만)
+  // ── 급여 계산 (연장/야근 가산 없음 — 순수 인정분)
   const calcPay = (workedMinutes: number) => {
     if (emp.payUnit === 'MONTHLY') {
       return { basePay: emp.pay, totalPay: emp.pay };
     }
-    const basePay = Math.round(perMinute * workedMinutes);
+    const basePay  = Math.round(perMinute * workedMinutes);
     const totalPay = basePay;
     return { basePay, totalPay };
   };
@@ -196,56 +212,29 @@ export const mySettlementSummary = async (req: AuthRequiredRequest, res: Respons
   const prvPay = calcPay(prvMinutes);
   const monPay = calcPay(monMinutes);
 
-  // ── 월 통계(출근일만; 야근 제거)
+  // ── 월 통계: 출근일(실제 IN 있는 날)
   const presentDays = new Set<string>();
-  for (const l of monthLogs) {
-    if (!l.clockInAt) continue;
-    const kst = toKst(l.clockInAt);
+  for (const s of monthShiftsCompleted) {
+    if (!s.actualInAt) continue;
+    const kst = toKst(s.actualInAt);
     const key = `${kst.getUTCFullYear()}-${String(kst.getUTCMonth() + 1).padStart(2, '0')}-${String(kst.getUTCDate()).padStart(2, '0')}`;
     presentDays.add(key);
   }
 
-  // ── 지각/결근 계산(스케줄 기반)
-  const weekly = parseSchedule(emp.schedule as any);
-
-  // 날짜별 최조 출근시각(분)
-  const earliestInByDate = new Map<string, number>(); // 'YYYY-MM-DD' -> minutesOfDayKst
-  for (const l of monthLogs) {
-    if (!l.clockInAt) continue;
-    const kst = toKst(l.clockInAt);
-    const y = kst.getUTCFullYear(), m = kst.getUTCMonth()+1, d = kst.getUTCDate();
-    const key = `${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-    const minOfDay = minutesOfDayKst(l.clockInAt);
-    const curMin = earliestInByDate.get(key);
-    if (curMin == null || minOfDay < curMin) earliestInByDate.set(key, minOfDay);
-  }
-
+  // ── 월 통계: 지각/결근 (시프트 기준)
+  //   · 결근: 월 내 시프트인데 actualInAt 없음
+  //   · 지각: actualInAt > (startAt + graceInMin(시프트별) or DEFAULT_LATE_GRACE_MIN)
   let lateCount = 0;
   let absentCount = 0;
-
-  // 월 범위 KST day-by-day 스캔
-  for (let t = monthRange.start.getTime(); t <= monthRange.end.getTime(); ) {
-    const d = new Date(t);
-    const dK = toKst(d);
-    const y = dK.getUTCFullYear(), m = dK.getUTCMonth()+1, day = dK.getUTCDate();
-    const key = `${y}-${String(m).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
-
-    const dow = kstDow(d);
-    const spec = weekly[dow];
-    if (spec) {
-      const plannedStart = spec.startMin;
-      const plannedGrace = spec.graceMin ?? DEFAULT_LATE_GRACE_MIN;
-      const cutoff = plannedStart + plannedGrace;
-      const firstIn = earliestInByDate.get(key);
-      if (firstIn == null) {
-        absentCount += 1;
-      } else if (firstIn > cutoff) {
-        lateCount += 1;
-      }
+  for (const s of monthShiftsAll) {
+    if (!s.actualInAt) {
+      absentCount += 1;
+      continue;
     }
-    // 다음 날짜 (KST 자정)
-    const next = fromKstParts(y, m-1, day+1).getTime();
-    t = next;
+    const graceMs = (1) * 60_000;
+    if (s.actualInAt.getTime() > s.startAt.getTime() + graceMs) {
+      lateCount += 1;
+    }
   }
 
   /** (선택) 지난 사이클 정산 여부 조회 */
@@ -290,7 +279,7 @@ export const mySettlementSummary = async (req: AuthRequiredRequest, res: Respons
       }
     },
 
-    /** 💰 이번 달 급여 정보(달력 기준, 연장 제거) */
+    /** 💰 이번 달 급여 정보(달력 기준, 인정분 합산) */
     month: {
       year: monthY, month: monthM,
       workedMinutes: monMinutes,
@@ -299,7 +288,7 @@ export const mySettlementSummary = async (req: AuthRequiredRequest, res: Respons
       totalPay: monPay.totalPay
     },
 
-    /** 📈 출근 통계(달력 기준, 야근 제거) */
+    /** 📈 출근 통계(달력 기준, 시프트 기준) */
     stats: {
       presentDays: presentDays.size,
       lateCount,

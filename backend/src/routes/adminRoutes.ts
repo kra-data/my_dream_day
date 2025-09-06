@@ -15,7 +15,6 @@ import {
 } from '../controllers/dashboardController';
 import { employeePayrollSummary } from '../controllers/payrollSummaryController';
 import { getShopQrPng } from '../controllers/qrController';
-import { getAttendanceRecords, adminCreateOrCloseAttendance, adminUpdateAttendance } from '../controllers/attendanceController';
 import {
   adminListShifts,
   adminCreateShift,

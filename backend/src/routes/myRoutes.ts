@@ -13,7 +13,8 @@ import {
 } from '../middlewares/requireUser';
 import {
   myCreateShift,
-  myListShifts
+  myListShifts,
+  getMyTodayWorkshifts
 } from '../controllers/workShiftController';
 import { mySettlementSummary } from '../controllers/mySettlementController';
 
@@ -54,6 +55,14 @@ router.get(
   requireUser,
   requireRoles('employee'),
   withUser((req: AuthRequiredRequest, res, _next) => myListShifts(req, res))
+);
+// (직원) 오늘 내 근무일정
+router.get(
+  '/my/workshifts/today',
+  authenticateJWT,
+  requireUser,
+  requireRoles('employee'),
+  withUser((req: AuthRequiredRequest, res) => getMyTodayWorkshifts(req, res))
 );
 
 export default router;

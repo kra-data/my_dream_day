@@ -169,35 +169,48 @@ PayrollEmployeeDetailResponse: {
       // ───────────────────────────────
       WorkShiftStatus: {
         type: 'string',
-        enum: ['SCHEDULED', 'COMPLETED', 'CANCELED'],
+        enum: ['SCHEDULED', 'IN_PROGRESS', 'COMPLETED', 'CANCELED','OVERDUE'],
         example: 'SCHEDULED'
       },
-      WorkShift: {
-        type: 'object',
-        properties: {
-          id:          { type: 'integer', example: 101 },
-          shopId:      { type: 'integer', example: 1 },
-          employeeId:  { type: 'integer', example: 42 },
-          startAt:     { type: 'string', format: 'date-time', example: '2025-09-01T02:00:00.000Z' },
-          endAt:       { type: 'string', format: 'date-time', example: '2025-09-01T10:00:00.000Z' },
-          status:      { $ref: '#/components/schemas/WorkShiftStatus' },
-          // 아래 필드는 선택(DB에 존재하는 경우 문서화)
-          createdBy:   { type: 'integer', nullable: true, example: 42 },
-          updatedBy:   { type: 'integer', nullable: true, example: 1 },
-          createdAt:   { type: 'string', format: 'date-time', nullable: true },
-          updatedAt:   { type: 'string', format: 'date-time', nullable: true },
-          actualInAt:  { type: 'string', format: 'date-time', nullable: true },
-          actualOutAt: { type: 'string', format: 'date-time', nullable: true },
-          leftEarly:   { type: 'boolean', nullable: true, example: false },
-          notes:       { type: 'string', nullable: true }
-        }
-      },
+WorkShift: {
+  type: 'object',
+  properties: {
+    id:          { type: 'integer', example: 101 },
+    shopId:      { type: 'integer', example: 1 },
+    employeeId:  { type: 'integer', example: 42 },
+    startAt:     { type: 'string', format: 'date-time', example: '2025-09-01T02:00:00.000Z' },
+    endAt:       { type: 'string', format: 'date-time', example: '2025-09-01T10:00:00.000Z' },
+    status:      { $ref: '#/components/schemas/WorkShiftStatus' },
+
+    // ✅ 실적 필드
+    actualInAt:  { type: 'string', format: 'date-time', nullable: true },
+    actualOutAt: { type: 'string', format: 'date-time', nullable: true },
+    late:        { type: 'boolean', nullable: true, example: false },
+    leftEarly:   { type: 'boolean', nullable: true, example: false },
+
+    // ✅ 산출값(OUT 시 저장)
+    actualMinutes: { type: 'integer', nullable: true, example: 505, description: '실제 근무 분' },
+    workedMinutes: { type: 'integer', nullable: true, example: 480, description: '지급 인정 분(시프트 교집합)' },
+
+    // ✅ 정산 연결
+    settlementId: { type: 'integer', nullable: true, example: 123, description: 'PayrollSettlement.id' },
+
+    // 메타
+    createdBy:   { type: 'integer', nullable: true, example: 42 },
+    updatedBy:   { type: 'integer', nullable: true, example: 1 },
+    createdAt:   { type: 'string', format: 'date-time', nullable: true },
+    updatedAt:   { type: 'string', format: 'date-time', nullable: true },
+    notes:       { type: 'string', nullable: true }
+  }
+},
       WorkShiftEmployeeLite: {
         type: 'object',
         properties: {
           name:     { type: 'string', example: '김직원' },
           position: { type: 'string', example: 'STAFF' },
-          section:  { type: 'string', example: 'HALL' }
+          section:  { type: 'string', example: 'HALL' },
+          pay:      { type: 'integer', nullable: true, example: 20000 },
+          payUnit:  { type: 'string', nullable: true, enum: ['HOURLY','MONTHLY'], example: 'HOURLY' }
         }
       },
       WorkShiftWithEmployee: {
@@ -243,9 +256,51 @@ PayrollEmployeeDetailResponse: {
         properties: {
           startAt: { type: 'string', format: 'date-time' },
           endAt:   { type: 'string', format: 'date-time' },
-          status:  { $ref: '#/components/schemas/WorkShiftStatus' }
+          status:  { $ref: '#/components/schemas/WorkShiftStatus' },
+          actualInAt:  { type: 'string', format: 'date-time', description: '관리자 보정용: 실제 출근 시각' },
+          actualOutAt: { type: 'string', format: 'date-time', description: '관리자 보정용: 실제 퇴근 시각' },
+          late:        { type: 'boolean', description: '관리자 보정용: 지각 여부' },
+          leftEarly:   { type: 'boolean', description: '관리자 보정용: 조퇴 여부' }
         }
       },
+      // swaggerDocument.components.schemas 에 추가
+WorkShiftUpdateSummary: {
+  type: 'object',
+  properties: {
+    actualMinutes: { type: 'integer', nullable: true, example: 505 },
+    workedMinutes: { type: 'integer', nullable: true, example: 480 },
+    late:          { type: 'boolean', nullable: true, example: false },
+    leftEarly:     { type: 'boolean', nullable: true, example: false }
+  }
+},
+WorkShiftUpdateResponse: {
+  type: 'object',
+  properties: {
+    ok:    { type: 'boolean', example: true },
+    shift: { $ref: '#/components/schemas/WorkShift' },
+    summary: { $ref: '#/components/schemas/WorkShiftUpdateSummary' }
+  }
+},CursorWorkShiftPage: {
+  type: 'object',
+  properties: {
+    items: {
+      type: 'array',
+      items: { $ref: '#/components/schemas/WorkShift' }
+    },
+    nextCursor: { type: ['integer', 'null'], example: 123 }
+  }
+},
+CursorWorkShiftWithEmployeePage: {
+  type: 'object',
+  properties: {
+    items: {
+      type: 'array',
+      items: { $ref: '#/components/schemas/WorkShiftWithEmployee' }
+    },
+    nextCursor: { type: ['integer', 'null'], example: 987 }
+  }
+},
+
       WorkShiftListResponse: {
         type: 'array',
         items: { $ref: '#/components/schemas/WorkShift' }
@@ -305,6 +360,29 @@ MyPageProfile: {
     bankRegistered: { type: 'boolean', example: false }
   }
 },
+PayrollSettlement: {
+  type: 'object',
+  properties: {
+    id:           { type: 'integer', example: 10 },
+    shopId:       { type: 'integer', example: 1 },
+    employeeId:   { type: 'integer', example: 42 },
+    cycleStart:   { type: 'string', format: 'date-time' },
+    cycleEnd:     { type: 'string', format: 'date-time' },
+    workedMinutes:{ type: 'integer', example: 14982 },
+    basePay:      { type: 'integer', example: 2500000 },
+    totalPay:     { type: 'integer', example: 2500000 },
+    settledAt:    { type: 'string', format: 'date-time', nullable: true },
+    processedBy:  { type: 'integer', nullable: true, example: 1 }
+  }
+},
+SettlePreviousResponse: {
+  type: 'object',
+  properties: {
+    ok: { type: 'boolean', example: true },
+    settlement: { $ref: '#/components/schemas/PayrollSettlement' }
+  }
+},
+
 MyPageCycle: {
   type: 'object',
   properties: {
@@ -370,56 +448,11 @@ MyPageSettlementResponse: {
 },
 AttendanceCreateRequest: {
         type: 'object',
-        required: ['shopId', 'type'],
+        required: ['shopId', 'shiftId', 'type'],
         properties: {
-          shopId: { type: 'integer', example: 123 },
-          type: { type: 'string', enum: ['IN', 'OUT'] },
-          selectedAt: { type: 'string', format: 'date-time', example: '2025-09-05T12:00:00.000Z', description: '확정 저장할 시각(미지정 시 제안 응답)' },
-          updateShiftStart: { type: 'boolean', example: false, description: 'IN에서 시프트 시작을 selectedAt으로 수정(겹침 없을 때만)' }
-        }
-      },
-     AttendancePreviewInResponse: {
-        type: 'object',
-        properties: {
-          ok: { type: 'boolean' },
-          requiresConfirmation: { type: 'boolean' },
-          type: { type: 'string', enum: ['IN'] },
-          now: { type: 'string', format: 'date-time' },
-          suggestedClockInAt: { type: 'string', format: 'date-time' },
-          suggestionReason: { type: 'string', enum: ['ceil_next_half_hour', 'align_to_shift_start', 'clamp_into_shift'] },
-          allowAdjust: { type: 'boolean' },
-          shift: {
-            type: 'object',
-            nullable: true,
-            properties: {
-              id: { type: 'integer' },
-              plannedStart: { type: 'string', format: 'date-time' },
-              plannedEnd: { type: 'string', format: 'date-time' },
-              graceInMin: { type: 'integer' }
-            }
-          }
-        }
-      },
-      AttendancePreviewOutResponse: {
-        type: 'object',
-        properties: {
-          ok: { type: 'boolean' },
-          requiresConfirmation: { type: 'boolean' },
-          type: { type: 'string', enum: ['OUT'] },
-          now: { type: 'string', format: 'date-time' },
-          suggestedClockOutAt: { type: 'string', format: 'date-time' },
-          suggestionReason: { type: 'string', enum: ['ceil_next_half_hour','floor_prev_half_hour', 'clamp_into_shift'] },
-          allowAdjust: { type: 'boolean' },
-          shift: {
-            type: 'object',
-            nullable: true,
-            properties: {
-              id: { type: 'integer' },
-              plannedStart: { type: 'string', format: 'date-time' },
-              plannedEnd: { type: 'string', format: 'date-time' },
-              graceInMin: { type: 'integer' }
-            }
-          }
+          shopId:  { type: 'integer', example: 123 },
+          shiftId: { type: 'integer', example: 456 },
+          type:    { type: 'string', enum: ['IN', 'OUT'] }
         }
       },
       AttendanceConfirmInResponse: {
@@ -428,15 +461,7 @@ AttendanceCreateRequest: {
           ok: { type: 'boolean' },
           message: { type: 'string', example: '출근 완료' },
           clockInAt: { type: 'string', format: 'date-time' },
-          shift: {
-            type: 'object',
-            nullable: true,
-            properties: {
-              id: { type: 'integer' },
-              plannedStart: { type: 'string', format: 'date-time' },
-              plannedEnd: { type: 'string', format: 'date-time' }
-            }
-          }
+          shiftId: { type: 'integer', example: 456 }
         }
       },
       AttendanceConfirmOutResponse: {
@@ -447,6 +472,7 @@ AttendanceCreateRequest: {
           clockOutAt: { type: 'string', format: 'date-time' },
           workedMinutes: { type: 'integer' },
           actualMinutes: { type: 'integer' },
+          shiftId: { type: 'integer', example: 456 },
           planned: {
             type: 'object',
             nullable: true,
@@ -542,81 +568,8 @@ AttendanceCreateRequest: {
         responses: { '200': { description: 'OK' } }
       }
     },
-    '/api/attendance/admin/shops/{shopId}/attendance': {
-      get: {
-        tags: ['Attendance (Admin)'],
-        summary: '가게 출퇴근 기록 조회(커서 기반)',
-        parameters: [
-          { name: 'shopId', in: 'path', required: true, schema: { type: 'integer' } },
-          { name: 'start', in: 'query', schema: { type: 'string', format: 'date' } },
-          { name: 'end',   in: 'query', schema: { type: 'string', format: 'date' } },
-          { name: 'employeeId', in: 'query', schema: { type: 'integer' } },
-          { name: 'cursor', in: 'query', schema: { type: 'integer' } },
-          { name: 'limit', in: 'query', schema: { type: 'integer', default: 10 } }
-        ],
-        responses: { '200': { description: 'OK' } }
-      }
-    },
-    '/api/attendance/admin/shops/{shopId}/attendance/employees/{employeeId}': {
-      post: {
-        tags: ['Attendance (Admin)'],
-        summary: '관리자 출퇴근 생성/마감',
-        parameters: [
-          { name: 'shopId', in: 'path', required: true, schema: { type: 'integer' } },
-          { name: 'employeeId', in: 'path', required: true, schema: { type: 'integer' } }
-        ],
-        requestBody: {
-          required: true,
-          content: {
-            'application/json': {
-              schema: {
-                type: 'object',
-                properties: {
-                  clockInAt: { type: 'string', format: 'date-time' },
-                  clockOutAt: { type: 'string', format: 'date-time' }
-                }
-              }
-            }
-          }
-        },
-        responses: {
-          '201': { description: 'Created or closed' },
-          '400': { description: 'Invalid payload' },
-          '403': { description: 'Forbidden' },
-          '404': { description: 'Not Found' }
-        }
-      }
-    },
-    '/api/attendance/admin/shops/{shopId}/attendance/records/{id}': {
-      put: {
-        tags: ['Attendance (Admin)'],
-        summary: '관리자 출퇴근 기록 수정',
-        parameters: [
-          { name: 'shopId', in: 'path', required: true, schema: { type: 'integer' } },
-          { name: 'id', in: 'path', required: true, schema: { type: 'integer' } }
-        ],
-        requestBody: {
-          required: true,
-          content: {
-            'application/json': {
-              schema: {
-                type: 'object',
-                properties: {
-                  clockInAt: { type: 'string', format: 'date-time' },
-                  clockOutAt: { type: 'string', format: 'date-time' }
-                }
-              }
-            }
-          }
-        },
-        responses: {
-          '200': { description: 'Updated' },
-          '400': { description: 'Invalid payload' },
-          '403': { description: 'Forbidden' },
-          '404': { description: 'Not Found' }
-        }
-      }
-    },
+
+
     '/api/admin/shops': {
       get: { tags: ['Admin'], summary: '매장 목록', responses: { '200': { description: 'OK' } } },
       post: { tags: ['Admin'], summary: '매장 생성', responses: { '201': { description: 'Created' }, '400': { description: 'Invalid payload' } } }
@@ -994,7 +947,7 @@ responses: {
     '/api/attendance': {
       post: {
         tags: ['Attendance'],
-       summary: '출퇴근 기록 생성/확정 (IN=올림·시프트맞춤, OUT=반내림·시프트맞춤). selectedAt 없으면 제안만 반환',
+        summary: '출퇴근 기록 생성/마감 (Shift 1:1 매칭)',
         security: [{ bearerAuth: [] }],
         requestBody: {
           required: true,
@@ -1006,31 +959,81 @@ responses: {
         },
         responses: {
           '200': {
-            description: 'OK (제안 또는 확정)',
+            description: 'OK',
             content: {
               'application/json': {
                 schema: {
                   oneOf: [
-                    { $ref: '#/components/schemas/AttendancePreviewInResponse' },
-                    { $ref: '#/components/schemas/AttendancePreviewOutResponse' },
                     { $ref: '#/components/schemas/AttendanceConfirmInResponse' },
                     { $ref: '#/components/schemas/AttendanceConfirmOutResponse' }
                   ]
                 },
-                                examples: {
-                  suggestIn:  { value: { ok:true, requiresConfirmation:true, type:'IN',  now:'2025-09-05T08:05:00.000Z', suggestedClockInAt:'2025-09-05T08:30:00.000Z', suggestionReason:'ceil_next_half_hour', allowAdjust:true, shift:null } },
-                  suggestOut: { value: { ok:true, requiresConfirmation:true, type:'OUT', now:'2025-09-05T13:05:00.000Z', suggestedClockOutAt:'2025-09-05T13:00:00.000Z', suggestionReason:'floor_prev_half_hour',   allowAdjust:true, shift:null } },
-                  confirmIn:  { value: { ok:true, message:'출근 완료', clockInAt:'2025-09-05T08:30:00.000Z', shift:null } },
-                  confirmOut: { value: { ok:true, message:'퇴근 완료', clockOutAt:'2025-09-05T13:00:00.000Z', workedMinutes:480, actualMinutes:505, planned:{ startAt:'2025-09-05T00:00:00.000Z', endAt:'2025-09-05T09:00:00.000Z' } } }
+                examples: {
+                  in:  { value: { ok:true, message:'출근 완료', clockInAt:'2025-09-05T08:30:00.000Z', shiftId:456 } },
+                  out: { value: { ok:true, message:'퇴근 완료', clockOutAt:'2025-09-05T13:00:00.000Z', workedMinutes:480, actualMinutes:505, planned:null, shiftId:456 } }
                 }
-             }
             }
           },
-          '400': { description: 'Bad Request (잘못된 selectedAt, 순서 위반 등)' },
-          '403': { description: 'Forbidden (다른 가게 QR)' }
+          '400': { description: 'Bad Request (순서 위반 등)' },
+          '403': { description: 'Forbidden (다른 가게 QR/권한 없음)' }
         }
       }
     },
+// swaggerDocument.paths 에 추가
+'/api/my/workshifts/today': {
+  get: {
+    tags: ['Shifts'],
+    summary: '오늘 내 근무일정',
+    description: 'KST 기준 오늘과 교집합이 있는 내 근무일정을 조회합니다. activeOnly=1|true 이면 COMPLETED/CANCELED 제외.',
+    security: [{ bearerAuth: [] }],
+    parameters: [
+      {
+        name: 'activeOnly',
+        in: 'query',
+        required: false,
+        schema: { type: 'boolean' },
+        description: 'true/1 이면 완료·취소 일정 제외'
+      }
+    ],
+    responses: {
+      '200': {
+        description: 'OK',
+        content: {
+          'application/json': {
+            schema: { $ref: '#/components/schemas/WorkShiftListResponse' },
+            examples: {
+              sample: {
+                value: [
+                  {
+                    id: 101,
+                    shopId: 1,
+                    employeeId: 42,
+                    startAt: '2025-09-01T00:30:00.000Z',
+                    endAt:   '2025-09-01T09:30:00.000Z',
+                    status: 'SCHEDULED',
+                    actualInAt: null,
+                    actualOutAt: null,
+                    late: null,
+                    leftEarly: null,
+                    actualMinutes: null,
+                    workedMinutes: null,
+                    settlementId: null,
+                    createdBy: 42,
+                    updatedBy: 42,
+                    createdAt: '2025-08-31T12:00:00.000Z',
+                    updatedAt: '2025-08-31T12:00:00.000Z',
+                    notes: null
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      '401': { description: 'Unauthorized' }
+    }
+  }
+},
 
     '/api/admin/shops/{shopId}/employees/{employeeId}/workshifts': {
       post: {
@@ -1072,7 +1075,7 @@ responses: {
     '/api/admin/shops/{shopId}/workshifts/{shiftId}': {
       put: {
         tags: ['Shifts (Admin)'],
-        summary: '근무일정 수정',
+        summary: '근무일정/출퇴근 수정(관리자 보정)',
         security: [{ bearerAuth: [] }],
         parameters: [
           { name: 'shopId', in: 'path', required: true, schema: { type: 'integer' } },
@@ -1083,18 +1086,46 @@ responses: {
           content: {
             'application/json': {
               schema: { $ref: '#/components/schemas/WorkShiftUpdateRequest' },
-              example: { startAt: '2025-09-01T03:00:00.000Z', endAt: '2025-09-01T11:00:00.000Z', status: 'SCHEDULED' }
+              examples: {
+                scheduleOnly: { value: { startAt: '2025-09-01T03:00:00.000Z', endAt: '2025-09-01T11:00:00.000Z', status: 'SCHEDULED' } },
+                fixAttendance: { value: { actualInAt: '2025-09-01T02:58:00.000Z', actualOutAt: '2025-09-01T11:07:00.000Z', late: false, leftEarly: false, status: 'COMPLETED' } }
+              }
             }
           }
         },
         responses: {
-          '200': { description: 'Updated', content: { 'application/json': { schema: { $ref: '#/components/schemas/WorkShift' } } } },
-          '400': { description: 'Invalid payload' },
-          '401': { description: 'Unauthorized' },
-          '403': { description: 'Forbidden' },
-          '404': { description: 'Not Found' },
-          '409': { description: 'Conflict (overlap)' }
+  '200': {
+    description: 'Updated',
+    content: {
+      'application/json': {
+        schema: { $ref: '#/components/schemas/WorkShiftUpdateResponse' },
+        examples: {
+          completed: {
+            value: {
+              ok: true,
+              shift: {
+                id: 123, shopId: 1, employeeId: 42,
+                startAt: '2025-09-01T02:00:00.000Z', endAt: '2025-09-01T10:00:00.000Z',
+                status: 'COMPLETED',
+                actualInAt: '2025-09-01T02:58:00.000Z',
+                actualOutAt:'2025-09-01T11:07:00.000Z',
+                late: false, leftEarly: false,
+                actualMinutes: 489, workedMinutes: 480,
+                settlementId: null
+              },
+              summary: { actualMinutes: 489, workedMinutes: 480, late: false, leftEarly: false }
+            }
+          }
         }
+      }
+    }
+  },
+  '400': { description: 'Invalid payload' },
+  '401': { description: 'Unauthorized' },
+  '403': { description: 'Forbidden' },
+  '404': { description: 'Not Found' },
+  '409': { description: 'Conflict (overlap)' }
+}
       },
       delete: {
         tags: ['Shifts (Admin)'],
@@ -1112,10 +1143,8 @@ responses: {
         }
       }
     },
-
-
-
   }
+}
 };
 
 export const swaggerServe: RequestHandler[] = swaggerUi.serve;
@@ -1125,6 +1154,4 @@ export const swaggerSetup = swaggerUi.setup(swaggerDocument, {
     persistAuthorization: true, // 🔐 브라우저 새로고침해도 Authorization 유지
   },
 });
-
-
 

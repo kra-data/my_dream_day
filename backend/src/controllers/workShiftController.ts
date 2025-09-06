@@ -6,8 +6,17 @@ import { AuthRequiredRequest } from '../middlewares/requireUser';
 
 // ───────── KST ⇄ UTC 유틸 ─────────
 const toKst = (d: Date) => new Date(d.getTime() + 9 * 60 * 60 * 1000);
-const fromKstParts = (y: number, m1: number, d: number, hh = 0, mm = 0) =>
-  new Date(Date.UTC(y, m1, d, hh - 9, mm, 0, 0));
+const fromKstParts = (y: number, m1: number, d: number, hh = 0, mm = 0, ss = 0, ms = 0) =>
+  new Date(Date.UTC(y, m1, d, hh - 9, mm, ss, ms));
+const startOfKstDay = (base: Date) => {
+  const k = toKst(base);
+  return fromKstParts(k.getUTCFullYear(), k.getUTCMonth(), k.getUTCDate(), 0, 0, 0, 0);
+};
+const endOfKstDay = (base: Date) => {
+  const k = toKst(base);
+  return fromKstParts(k.getUTCFullYear(), k.getUTCMonth(), k.getUTCDate(), 23, 59, 59, 999);
+};
+const parseBool = (v?: string) => v === '1' || v === 'true';
 const parseHHMM = (s: string) => {
   const m = /^(\d{1,2}):(\d{2})$/.exec(s);
   if (!m) return null;
@@ -32,13 +41,13 @@ const listQuerySchema = z.object({
   from: z.string().datetime().optional(),
   to:   z.string().datetime().optional(),
   employeeId: z.coerce.number().int().positive().optional(), // admin 전용
-  status: z.enum(['SCHEDULED','COMPLETED','CANCELED']).optional(),
+  status: z.enum(['SCHEDULED','IN_PROGRESS','COMPLETED','CANCELED','OVERDUE']).optional(),
 });
 
 const updateShiftSchema = z.object({
   startAt: z.string().datetime().optional(),
   endAt:   z.string().datetime().optional(),
-  status:  z.enum(['SCHEDULED','COMPLETED','CANCELED']).optional(),
+  status:  z.enum(['SCHEDULED','IN_PROGRESS','COMPLETED','CANCELED','OVERDUE']).optional(),
 });
 
 // ───────── 공통 파서 ─────────
@@ -154,6 +163,28 @@ export const adminListShifts = async (req: AuthRequiredRequest, res: Response): 
         }
       }
     }
+  });
+
+  res.json(rows);
+};
+/** (직원) 오늘 내 시프트 */
+export const getMyTodayWorkshifts = async (req: AuthRequiredRequest, res: Response) => {
+  const employeeId = req.user.userId;
+  const activeOnly = parseBool(req.query.activeOnly as string | undefined);
+  const now = new Date();
+  const start = startOfKstDay(now);
+  const end   = endOfKstDay(now);
+
+  const where: any = {
+    employeeId,
+    startAt: { lt: end },
+    endAt:   { gt: start },
+  };
+  if (activeOnly) where.status = { notIn: ['COMPLETED', 'CANCELED'] };
+
+  const rows = await prisma.workShift.findMany({
+    where,
+    orderBy: { startAt: 'asc' },
   });
 
   res.json(rows);
