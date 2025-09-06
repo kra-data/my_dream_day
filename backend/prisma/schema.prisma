@@ -29,6 +29,15 @@ enum PayUnit {
   MONTHLY // 월급제
   HOURLY // 시급제
 }
+
+enum WorkShiftStatus {
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  CANCELED
+  MISSED
+  OVERDUE
+}
 model Shop {
   id                 Int                 @id @default(autoincrement())
   name               String
@@ -39,7 +48,6 @@ model Shop {
   updatedAt          DateTime            @updatedAt
 
   employees          Employee[]
-  attendanceRecords  AttendanceRecord[]  @relation("ShopAttendance")
   payrollSettlements PayrollSettlement[]
   // 🔹 추가
   workShifts         WorkShift[]
@@ -62,7 +70,6 @@ model Employee {
   updatedAt     DateTime @updatedAt
 
   shop                 Shop                @relation(fields: [shopId], references: [id], onDelete: Cascade)
-  attendanceRecords    AttendanceRecord[]  @relation("EmployeeAttendance")
   payrollSettlements   PayrollSettlement[] @relation("SettlementEmployee")
   processedSettlements PayrollSettlement[] @relation("SettlementProcessedBy")
 
@@ -79,59 +86,39 @@ model Employee {
   @@index([nationalIdHash], name: "idx_employee_nationalIdHash") // 우선 일반 인덱스
 }
 
-model AttendanceRecord {
-  id            Int       @id @default(autoincrement())
+model WorkShift {
+  id            Int             @id @default(autoincrement())
   shopId        Int
   employeeId    Int
-  type          String
-  clockInAt     DateTime?
-  clockOutAt    DateTime?
-  workedMinutes Int?
-  extraMinutes  Int?
-  paired        Boolean   @default(false)
 
-  employee      Employee  @relation("EmployeeAttendance", fields: [employeeId], references: [id], onDelete: Cascade)
-  shop          Shop      @relation("ShopAttendance", fields: [shopId], references: [id], onDelete: Cascade)
+  // 계획
+  startAt       DateTime
+  endAt         DateTime
+  status        WorkShiftStatus @default(SCHEDULED)
 
-  shiftId       Int?
-  shift         WorkShift? @relation(fields: [shiftId], references: [id])
+  // 실적
+  actualInAt    DateTime?
+  actualOutAt   DateTime?
+  late          Boolean?        @default(false)
+  leftEarly     Boolean?        @default(false)
 
-  // 이미 있는 정산 연결(있다면 유지)
+  // 정산 스냅샷용
+  workedMinutes Int?            // payable(시프트 교집합)
+  actualMinutes Int?            // 실제 근무 분
   settlementId  Int?
   settlement    PayrollSettlement? @relation(fields: [settlementId], references: [id])
 
-  @@index([employeeId, clockInAt])
-  @@index([shiftId])
-  @@index([settlementId])
-}
+  shop          Shop            @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  employee      Employee        @relation(fields: [employeeId], references: [id], onDelete: Cascade)
 
-// 🔹 신규 테이블: 스케줄에서 생성되는 근무일정
-model WorkShift {
-  id            Int      @id @default(autoincrement())
-  shopId        Int
-  employeeId    Int
-  startAt       DateTime  // 예정 시작 (KST 기준 UTC 시각)
-  endAt         DateTime  // 예정 종료
-  graceInMin    Int?      // 지각 유예 (분)
-  status        String    @default("PLANNED") // PLANNED | IN_PROGRESS | COMPLETED | MISSED
-
-  // 실측 기록(선택)
-  actualInAt    DateTime?
-  actualOutAt   DateTime?
-  late          Boolean?  // 지각 여부
-  leftEarly     Boolean?  // 조퇴 여부
-
-  shop          Shop      @relation(fields: [shopId], references: [id], onDelete: Cascade)
-  employee      Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  attendance    AttendanceRecord[]
-
-  createdBy   Int?
-  updatedBy   Int?
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
+  createdBy     Int?
+  updatedBy     Int?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
 
   @@index([shopId, employeeId, startAt])
-  @@index([employeeId, startAt])
+  @@index([employeeId, status])
+  @@index([settlementId])
 }
 
 
@@ -152,8 +139,7 @@ model PayrollSettlement {
   employee        Employee  @relation("SettlementEmployee", fields: [employeeId], references: [id], onDelete: Cascade)
   processedByUser Employee? @relation("SettlementProcessedBy", fields: [processedBy], references: [id], onDelete: SetNull)
 
-  // 🔽🔽 역관계: 정산에 묶인 근무 레코드들
-  attendanceRecords AttendanceRecord[]
+  workShifts      WorkShift[]
 
   @@unique([employeeId, cycleStart, cycleEnd])
   @@index([shopId])

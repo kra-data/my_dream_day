@@ -4,45 +4,34 @@ export type AutoCheckoutResult = {
   processedCount: number;
 };
 
+/* ───── KST 자정 계산 유틸 ───── */
+const toKst = (d: Date) => new Date(d.getTime() + 9 * 60 * 60 * 1000);
+const fromKstParts = (y: number, m1: number, d: number, hh=0, mm=0, ss=0, ms=0) =>
+  new Date(Date.UTC(y, m1, d, hh - 9, mm, ss, ms));
+const startOfKstDay = (anchor: Date) => {
+  const k = toKst(anchor);
+  return fromKstParts(k.getUTCFullYear(), k.getUTCMonth(), k.getUTCDate(), 0, 0, 0, 0);
+};
+
 /**
- * Auto close any open (paired=false) attendance records whose clock-in day has ended.
- * Runs typically at local midnight. Sets clockOutAt to 23:59:59.999 of the clock-in date.
+ * 전날(또는 그 이전)에 출근했지만 아직 퇴근이 없는 시프트를 OVERDUE로 마킹.
+ * 강제 OUT/시간 계산은 하지 않는다.
+ * (보정은 관리자 화면/보정 API에서 수행)
  */
 export async function autoCheckoutOpenAttendances(now: Date = new Date()): Promise<AutoCheckoutResult> {
-  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+  const startOfTodayKst = startOfKstDay(now);
 
-  const openRecords = await prisma.attendanceRecord.findMany({
+  // actualInAt < 오늘 00:00(KST) && actualOutAt IS NULL && 상태가 이미 OVERDUE가 아닌 것
+  const result = await prisma.workShift.updateMany({
     where: {
-      paired: false,
-      clockInAt: { lt: startOfToday },
+      actualInAt: { lt: startOfTodayKst },
+      actualOutAt: null,
+      status: { not: 'OVERDUE' }
     },
-    select: { id: true, clockInAt: true },
+    data: {
+      status: 'OVERDUE'
+    }
   });
 
-  let processedCount = 0;
-
-  for (const rec of openRecords) {
-    if (!rec.clockInAt) continue;
-    const inAt = rec.clockInAt;
-    const endOfDay = new Date(inAt.getFullYear(), inAt.getMonth(), inAt.getDate(), 23, 59, 59, 999);
-
-    const workedMinutes = Math.floor((endOfDay.getTime() - inAt.getTime()) / 60000);
-    const extraMinutes = workedMinutes > 480 ? Math.floor((workedMinutes - 480) / 30) * 30 : 0;
-
-    await prisma.attendanceRecord.update({
-      where: { id: rec.id },
-      data: {
-        type: 'OUT',
-        clockOutAt: endOfDay,
-        workedMinutes,
-        extraMinutes,
-        paired: true,
-      },
-    });
-    processedCount += 1;
-  }
-
-  return { processedCount };
+  return { processedCount: result.count };
 }
-
-

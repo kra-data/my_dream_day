@@ -1,3 +1,4 @@
+// src/routes/attendance.ts
 import { Router } from 'express';
 import {
   authenticateJWT,
@@ -9,8 +10,7 @@ import {
   getAttendanceRecords,
   getMyAttendance,
   getMyCurrentStatus,
-  adminCreateOrCloseAttendance,
-  adminUpdateAttendance,
+  adminUpdateWorkShift,
 } from '../controllers/attendanceController';
 import {
   requireUser,
@@ -34,15 +34,13 @@ const requireRoles =
 
 /* ───────────────── 직원 전용 ───────────────── */
 
-/** 출퇴근 기록 생성(출근/퇴근) */
+/** 출퇴근 기록 생성(출근/퇴근) — WorkShift 1:1 */
 router.post(
   '/',
   authenticateJWT,
-  requireUser,                  // req.user 존재 보장 (런타임)
+  requireUser,                  // req.user 보장
   requireRoles('employee'),     // 직원만
-  withUser(                     // 컨트롤러에 AuthRequiredRequest 타입 보장
-    (req: AuthRequiredRequest, res, next) => recordAttendance(req, res)
-  )
+  withUser((req: AuthRequiredRequest, res) => recordAttendance(req, res))
 );
 
 /** 현재 출근 상태 조회 */
@@ -51,7 +49,7 @@ router.get(
   authenticateJWT,
   requireUser,
   requireRoles('employee'),
-  withUser((req: AuthRequiredRequest, res, next) => getMyCurrentStatus(req, res))
+  withUser((req: AuthRequiredRequest, res) => getMyCurrentStatus(req, res))
 );
 
 /** 자신의 출퇴근 기록 조회(커서 기반) */
@@ -60,36 +58,33 @@ router.get(
   authenticateJWT,
   requireUser,
   requireRoles('employee'),
-  withUser((req: AuthRequiredRequest, res, next) => getMyAttendance(req, res))
+  withUser((req: AuthRequiredRequest, res) => getMyAttendance(req, res))
 );
 
 /* ───────────────── 관리자/점주 전용 ───────────────── */
 
-/** 가게의 출퇴근 기록 조회(커서 기반) */
+/** 가게의 출퇴근 기록 조회(커서 기반)
+ *  내부적으로 WorkShift를 조회해 AttendanceRecord 형태로 매핑해서 반환
+ */
 router.get(
   '/admin/shops/:shopId/attendance',
   authenticateJWT,
   requireUser,
-  requireRoles('admin', 'owner'),   // ✅ 점주(owner)도 허용
-  withUser((req: AuthRequiredRequest, res, next) => getAttendanceRecords(req, res))
+  requireRoles('admin', 'owner'),   // 점주(owner) 허용
+  withUser((req: AuthRequiredRequest, res) => getAttendanceRecords(req, res))
 );
 
-/** 임의 출근/퇴근 생성 또는 열린 IN 닫기 */
-router.post(
-  '/admin/shops/:shopId/attendance/employees/:employeeId',
-  authenticateJWT,
-  requireUser,
-  requireRoles('admin', 'owner'),
-  withUser((req: AuthRequiredRequest, res, next) => adminCreateOrCloseAttendance(req, res))
-);
-
-/** 기존 기록 수정 */
+/** (확장) 관리자 근무일정 보정
+ *  PUT /api/attendance/admin/shops/:shopId/workshifts/:shiftId
+ *  - 예정/실측(startAt,endAt,actualInAt,actualOutAt,late,leftEarly,status) 보정
+ *  - 겹침/일관성 검증은 컨트롤러에서 처리
+ */
 router.put(
-  '/admin/shops/:shopId/attendance/records/:id',
+  '/admin/shops/:shopId/workshifts/:shiftId',
   authenticateJWT,
   requireUser,
   requireRoles('admin', 'owner'),
-  withUser((req: AuthRequiredRequest, res, next) => adminUpdateAttendance(req, res))
+  withUser((req: AuthRequiredRequest, res) => adminUpdateWorkShift(req, res))
 );
 
 export default router;
