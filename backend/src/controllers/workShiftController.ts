@@ -390,3 +390,75 @@ export const adminGetShiftDetail = async (req: AuthRequiredRequest, res: Respons
     }
   });
 };
+
+// ───────────────── 직원 전용: 내 근무일정 수정(항상 REVIEW로)
+const myUpdateShiftSchema = z.object({
+  startAt: z.string().datetime().optional(),
+  endAt:   z.string().datetime().optional(),
+  reviewNote: z.string().max(500).optional(),
+}).refine(v => !!v.startAt || !!v.endAt || !!v.reviewNote, {
+  message: 'startAt / endAt / reviewNote 중 최소 1개는 필요합니다.'
+});
+
+export const myUpdateShift = async (req: AuthRequiredRequest, res: Response): Promise<void> => {
+  const shiftId = Number(req.params.shiftId);
+  if (!Number.isFinite(shiftId)) { res.status(400).json({ error: 'shiftId must be a number' }); return; }
+
+  const parsed = myUpdateShiftSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: 'Invalid payload', detail: parsed.error.flatten() });
+    return;
+  }
+  const { startAt, endAt, reviewNote } = parsed.data;
+
+  const employeeId = req.user.userId;
+  const shopId     = req.user.shopId;
+
+  const shift = await prisma.workShift.findFirst({ where: { id: shiftId, shopId, employeeId } });
+  if (!shift) { res.status(404).json({ error: '내 근무일정이 아니거나 존재하지 않습니다.' }); return; }
+
+  // 완료/취소된 일정은 직원이 수정 불가 (정책에 맞게 조정 가능)
+  if (shift.status === 'COMPLETED' || shift.status === 'CANCELED') {
+    res.status(409).json({ error: '완료되었거나 취소된 일정은 수정할 수 없습니다.' });
+    return;
+  }
+
+  const nextStart = startAt ? new Date(startAt) : shift.startAt;
+  const nextEnd   = endAt   ? new Date(endAt)   : shift.endAt;
+  if (!(nextStart < nextEnd)) {
+    res.status(400).json({ error: 'endAt은 startAt 이후여야 합니다.' });
+    return;
+  }
+
+  // 동일 직원/매장 내 겹침 방지
+  const overlap = await prisma.workShift.findFirst({
+    where: overlapWhere(employeeId, shopId, nextStart, nextEnd, shiftId),
+    select: { id: true }
+  });
+  if (overlap) {
+    res.status(409).json({ error: '다른 근무일정과 시간이 겹칩니다.', overlapId: overlap.id });
+    return;
+  }
+
+  const updated = await prisma.workShift.update({
+    where: { id: shiftId },
+    data: {
+      startAt: startAt ? nextStart : undefined,
+      endAt:   endAt   ? nextEnd   : undefined,
+      // ✅ 직원 수정 시 항상 리뷰 필요
+      status: 'REVIEW',
+      needsReview: true,
+      reviewNote: reviewNote ?? shift.reviewNote,
+      reviewResolvedAt: null,
+      updatedBy: employeeId,
+    },
+    select: {
+      id: true, shopId: true, employeeId: true,
+      startAt: true, endAt: true, status: true,
+      needsReview: true, reviewReason: true, reviewNote: true,
+      updatedAt: true
+    }
+  });
+
+  res.json({ ok: true, shift: updated });
+};

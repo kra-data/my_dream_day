@@ -14,7 +14,8 @@ import {
 import {
   myCreateShift,
   myListShifts,
-  getMyTodayWorkshifts
+  getMyTodayWorkshifts,
+  myUpdateShift
 } from '../controllers/workShiftController';
 import { mySettlementSummary } from '../controllers/mySettlementController';
 
@@ -48,7 +49,13 @@ router.post(
   requireRoles('employee'),
   withUser((req: AuthRequiredRequest, res, _next) => myCreateShift(req, res))
 );
-
+router.put(
+  '/my/workshifts/:shiftId',
+  authenticateJWT,
+  requireUser,
+  requireRoles('employee'),
+  withUser((req: AuthRequiredRequest, res) => myUpdateShift(req, res))
+);
 router.get(
   '/my/workshifts',
   authenticateJWT,
