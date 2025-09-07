@@ -220,7 +220,85 @@ export const getMyTodayWorkshifts = async (req: AuthRequiredRequest, res: Respon
   });
   res.status(201).json(created);
 };
+const reviewListQuery = z.object({
+  from: z.string().datetime().optional(),
+  to: z.string().datetime().optional(),
+  employeeId: z.coerce.number().int().positive().optional(),
+  cursor: z.coerce.number().int().positive().optional(),
+  limit: z.coerce.number().int().min(1).max(100).optional().default(20),
+  unresolvedOnly: z
+    .union([z.literal('1'), z.literal('0'), z.literal('true'), z.literal('false')])
+    .optional()
+});
 
+export const adminListReviewShifts = async (req: AuthRequiredRequest, res: Response): Promise<void> => {
+  const shopId = Number(req.params.shopId);
+  if (req.user.shopId !== shopId) {
+    res.status(403).json({ error: '다른 가게는 조회할 수 없습니다.' });
+    return;
+  }
+
+  const parsed = reviewListQuery.safeParse(req.query);
+  if (!parsed.success) {
+    res.status(400).json({ error: 'Invalid query', detail: parsed.error.flatten() });
+    return;
+  }
+  const { from, to, employeeId, cursor, limit, unresolvedOnly } = parsed.data;
+
+  const where: any = {
+    shopId,
+    status: 'REVIEW',
+    ...(employeeId ? { employeeId } : {}),
+    ...(from || to
+      ? { startAt: { ...(from ? { gte: new Date(from) } : {}), ...(to ? { lte: new Date(to) } : {}) } }
+      : {}),
+  };
+
+  // 기본은 미해결만 노출(needsReview=true). unresolvedOnly=0/false면 전체 REVIEW 노출
+  const unresolved =
+    unresolvedOnly === undefined ? true :
+    (unresolvedOnly === '1' || unresolvedOnly === 'true');
+  if (unresolved) where.needsReview = true;
+
+  const rows = await prisma.workShift.findMany({
+    where,
+    include: {
+      employee: { select: { name: true, position: true, section: true } }
+    },
+    orderBy: [{ id: 'desc' }],
+    ...(cursor ? { cursor: { id: Number(cursor) }, skip: 1 } : {}),
+    take: limit,
+  });
+
+  const items = rows.map(r => ({
+    id: r.id,
+    shopId: r.shopId,
+    employeeId: r.employeeId,
+    startAt: r.startAt,
+    endAt: r.endAt,
+    status: r.status,              // 'REVIEW'
+    needsReview: r.needsReview,    // 보통 true
+    reviewReason: r.reviewReason,  // 'LATE_IN' | 'EARLY_OUT' | 'LATE_OUT' | 'EXTENDED' | 'EARLY_IN'
+    reviewNote: r.reviewNote ?? null,
+    reviewResolvedAt: r.reviewResolvedAt ?? null,
+    actualInAt: r.actualInAt ?? null,
+    actualOutAt: r.actualOutAt ?? null,
+    late: r.late ?? null,
+    leftEarly: r.leftEarly ?? null,
+    actualMinutes: r.actualMinutes ?? null,
+    workedMinutes: r.workedMinutes ?? null,
+    employee: {
+      name: r.employee.name,
+      position: r.employee.position,
+      section: r.employee.section,
+    }
+  }));
+
+  res.json({
+    items,
+    nextCursor: rows.length === (limit ?? 20) ? rows[rows.length - 1].id : null
+  });
+};
 /* ───────────────── 관리자/점주: 일정 수정 ───────────────── */
  export const adminUpdateShift = async (req: AuthRequiredRequest, res: Response): Promise<void> => {
   const shopId  = Number(req.params.shopId);

@@ -169,8 +169,11 @@ PayrollEmployeeDetailResponse: {
       // ───────────────────────────────
       WorkShiftStatus: {
         type: 'string',
-        enum: ['SCHEDULED', 'IN_PROGRESS', 'COMPLETED', 'CANCELED','OVERDUE'],
-        example: 'SCHEDULED'
+        enum: ['SCHEDULED','IN_PROGRESS','COMPLETED','CANCELED','MISSED','OVERDUE','REVIEW']
+      },
+      ShiftReviewReason: {
+        type: 'string',
+        enum: ['LATE_IN','EARLY_OUT','LATE_OUT','EXTENDED']
       },
 WorkShift: {
   type: 'object',
@@ -452,7 +455,8 @@ AttendanceCreateRequest: {
         properties: {
           shopId:  { type: 'integer', example: 123 },
           shiftId: { type: 'integer', example: 456 },
-          type:    { type: 'string', enum: ['IN', 'OUT'] }
+          type:    { type: 'string', enum: ['IN', 'OUT'] },
+          memo:   { type: 'string', maxLength: 500, nullable: true, description: '리뷰 사유 메모(지각>10분/조퇴 시)' }
         }
       },
       AttendanceConfirmInResponse: {
@@ -683,7 +687,6 @@ responses: {
                 fullyApplied: true
               },
               employee: {
-                id: 1, name: '김철수', position: 'STAFF',
                 hourlyPay: null, monthlyPay: 2500000
               },
               daysWorked: 12,
@@ -953,7 +956,12 @@ responses: {
           required: true,
           content: {
             'application/json': {
-              schema: { $ref: '#/components/schemas/AttendanceCreateRequest' }
+                            schema: { $ref: '#/components/schemas/AttendanceCreateRequest' },
+              examples: {
+                clockInLateWithin10: { value: { shopId: 1, shiftId: 123, type: 'IN' } },
+                clockInLateOver10:   { value: { shopId: 1, shiftId: 123, type: 'IN', memo: '버스 지연으로 15분 지각' } },
+                earlyOutWithin10:    { value: { shopId: 1, shiftId: 123, type: 'OUT', memo: '컨디션 저하로 조퇴' } }
+              }
             }
           }
         },
@@ -979,6 +987,73 @@ responses: {
         }
       }
     }},
+    '/api/admin/shops/{shopId}/workshifts/review': {
+  get: {
+    tags: ['Shifts (Admin)'],
+    summary: 'REVIEW 상태 근무일정 목록',
+    security: [{ bearerAuth: [] }],
+    parameters: [
+      { name: 'shopId', in: 'path', required: true, schema: { type: 'integer' } },
+      { name: 'employeeId', in: 'query', schema: { type: 'integer' } },
+      { name: 'from', in: 'query', schema: { type: 'string', format: 'date-time' } },
+      { name: 'to', in: 'query', schema: { type: 'string', format: 'date-time' } },
+      { name: 'cursor', in: 'query', schema: { type: 'integer' } },
+      { name: 'limit', in: 'query', schema: { type: 'integer', default: 20, minimum: 1, maximum: 100 } },
+      { name: 'unresolvedOnly', in: 'query', schema: { type: 'string', enum: ['0','1','true','false'], default: '1' },
+        description: '기본 true(미해결만). 0/false면 모든 REVIEW 노출' }
+    ],
+    responses: {
+      '200': {
+        description: 'OK',
+        content: {
+          'application/json': {
+            schema: {
+              type: 'object',
+              properties: {
+                items: {
+                  type: 'array',
+                  items: {
+                    type: 'object',
+                    properties: {
+                      id: { type: 'integer' },
+                      shopId: { type: 'integer' },
+                      employeeId: { type: 'integer' },
+                      startAt: { type: 'string', format: 'date-time' },
+                      endAt: { type: 'string', format: 'date-time' },
+                      status: { $ref: '#/components/schemas/WorkShiftStatus' },
+                      needsReview: { type: 'boolean' },
+                      reviewReason: { $ref: '#/components/schemas/ShiftReviewReason' },
+                      reviewNote: { type: 'string', nullable: true },
+                      userAlertAckAt: { type: 'string', format: 'date-time', nullable: true },
+                      reviewResolvedAt:{ type: 'string', format: 'date-time', nullable: true },
+                      actualInAt: { type: 'string', format: 'date-time', nullable: true },
+                      actualOutAt:{ type: 'string', format: 'date-time', nullable: true },
+                      late: { type: 'boolean', nullable: true },
+                      leftEarly: { type: 'boolean', nullable: true },
+                      actualMinutes: { type: 'integer', nullable: true },
+                      workedMinutes: { type: 'integer', nullable: true },
+                      employee: {
+                        type: 'object',
+                        properties: {
+                          name: { type: 'string' },
+                          position: { type: 'string' },
+                          section: { type: 'string' }
+                        }
+                      }
+                    }
+                  }
+                },
+                nextCursor: { type: 'integer', nullable: true }
+              }
+            }
+          }
+        }
+      },
+      '401': { description: 'Unauthorized' },
+      '403': { description: 'Forbidden' }
+    }
+  }
+},
     '/api/my/workshifts/today': {
       get: {
         tags: ['Shifts'],

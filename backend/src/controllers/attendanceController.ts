@@ -13,6 +13,9 @@ const kstDow = (d: Date) => toKst(d).getUTCDay(); // 0~6 (일~토)
 const startOfKstDay = (d: Date) => fromKstParts(toKst(d).getUTCFullYear(), toKst(d).getUTCMonth(), toKst(d).getUTCDate(), 0, 0, 0, 0);
 const endOfKstDay = (d: Date) => fromKstParts(toKst(d).getUTCFullYear(), toKst(d).getUTCMonth(), toKst(d).getUTCDate(), 23, 59, 59, 999);
 
+/* ───────── 정책 상수 ───────── */
+const REVIEW_TOLERANCE_MIN = Number(process.env.REVIEW_TOLERANCE_MIN ?? '10'); // ±10 정책
+const LATE_GRACE_MIN_FOR_PAYABLE = Number(process.env.LATE_GRACE_MIN_FOR_PAYABLE ?? '10'); // ≤10 지각 인정(정산 삭감 없음)
 /* ───────── 'HH:MM' -> 분 ───────── */
 const toMin = (hhmm: string) => {
   const m = /^(\d{1,2}):(\d{2})$/.exec(hhmm);
@@ -103,8 +106,9 @@ const recordAttendanceSchema = z.object({
   shopId: z.coerce.number().int().positive(),
   shiftId: z.coerce.number().int().positive(),
   type: z.enum(['IN', 'OUT']),
+  memo: z.string().max(500).optional(),
 });
-// ───── [수정] zod enum에 OVERDUE 추가 ─────
+
 const adminUpdateWorkShiftSchema = z.object({
   startAt: z.string().datetime().optional(),
   endAt: z.string().datetime().optional(),
@@ -288,6 +292,31 @@ export const adminUpdateWorkShift = async (req: AuthRequiredRequest, res: Respon
   const computedWorkedMinutes =
     (nextActualInAt && nextActualOutAt) ? intersectMinutes(nextActualInAt, nextActualOutAt, nextStartAt, nextEndAt) : null;
 
+  // ✅ 관리자 수정 규칙
+  // - admin이 수정하는 경우에는 REVIEW로 "새로" 전환하지 않음.
+  // - 이미 REVIEW 상태였다면 이번 수정으로 "해결 처리"한다(승인 개념).
+  // - 연장( endAt 증가 )도 admin이 하면 '해결 처리 + 사유 기록'으로 남긴다.
+  const extendedByAdmin = scheduleChanged && nextEndAt.getTime() > shift.endAt.getTime();
+
+  // 리뷰 관련 패치(관리자 수정 = resolve)
+  const reviewPatch: Prisma.WorkShiftUpdateInput = {};
+  if (shift.needsReview || shift.status === ('REVIEW' as any)) {
+    // 기존 리뷰를 이번 수정으로 해소
+    (reviewPatch as any).needsReview = false;
+    (reviewPatch as any).reviewResolvedAt = new Date();
+    (reviewPatch as any).reviewedBy = req.user.userId;
+    // admin이 명시적으로 status를 REVIEW로 유지하길 원하지 않는 한,
+    // REVIEW였다면 적절한 상태로 돌려준다.
+    if (nextStatus === ('REVIEW' as any)) {
+      nextStatus = (nextActualInAt && nextActualOutAt)
+        ? ('COMPLETED' as any)
+        : (nextActualInAt ? ('IN_PROGRESS' as any) : ('SCHEDULED' as any));
+    }
+  }
+  if (extendedByAdmin) {
+    // 연장 사유만 남기되, REVIEW로 전환하지는 않음
+    (reviewPatch as any).reviewReason = 'EXTENDED';
+  }
   const updated = await prisma.workShift.update({
     where: { id: shiftId },
     data: {
@@ -296,6 +325,7 @@ export const adminUpdateWorkShift = async (req: AuthRequiredRequest, res: Respon
       actualInAt: nextActualInAt,
       actualOutAt: nextActualOutAt,
       status: nextStatus,
+      ...reviewPatch,
       late: nextLate as any,
       leftEarly: nextLeftEarly as any,
       updatedBy: req.user.userId,
@@ -319,7 +349,7 @@ export const adminUpdateWorkShift = async (req: AuthRequiredRequest, res: Respon
 export const recordAttendance = async (req: AuthRequiredRequest, res: Response) => {
   const parsed = recordAttendanceSchema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: 'Invalid payload' }); return; }
-  const { shopId, shiftId, type } = parsed.data;
+  const { shopId, shiftId, type, memo } = parsed.data;
 
   if (req.user.shopId !== shopId) { res.status(403).json({ error: '다른 가게 QR입니다.' }); return; }
   const employeeId = req.user.userId;
@@ -330,17 +360,45 @@ export const recordAttendance = async (req: AuthRequiredRequest, res: Response) 
   if (!shift) { res.status(404).json({ error: '근무일정을 찾을 수 없습니다.' }); return; }
 
   if (type === 'IN') {
-    // 이미 IN 처리된 시프트 방지
-    if (shift.actualInAt) { res.status(400).json({ error: '이미 출근 처리된 시프트입니다.' }); return; }
+    const nowMs = now.getTime();
+    const startMs = shift.startAt.getTime();
+    const deltaMin = Math.round((nowMs - startMs) / 60000); // +: 늦음, -: 이름
 
-    const late = now.getTime() > (shift.startAt.getTime());
+    if (deltaMin > REVIEW_TOLERANCE_MIN) {
+      // ✅ 10분 초과 지각 → REVIEW 전환 + 메모 저장
+      const updated = await prisma.workShift.update({
+        where: { id: shiftId },
+        data: {
+          status: 'REVIEW',
+          needsReview: true,
+          reviewReason: 'LATE_IN' as any,
+          reviewNote: memo ?? undefined,
+          actualInAt: now,
+          late: true
+        },
+      });
+      res.json({
+        ok: true,
+        message: '출근(관리자 확인 필요)',
+        clockInAt: now,
+        review: { reason: 'LATE_IN', deltaMin },
+        shiftId: updated.id
+      });
+      return;
+    }
 
+    // 이른 출근 또는 10분 이내 지각: 정상 진행(IN_PROGRESS)
+    const late = nowMs > startMs; // 표시용(지각 배지)
     await prisma.workShift.update({
       where: { id: shiftId },
       data: { status: 'IN_PROGRESS', actualInAt: now, late },
     });
-
-    res.json({ ok: true, message: '출근 완료', clockInAt: now, shiftId });
+    res.json({
+      ok: true,
+      message: late ? '출근(지각)' : '출근 완료',
+      clockInAt: now,
+      shiftId
+    });
     return;
   }
 
@@ -350,25 +408,62 @@ export const recordAttendance = async (req: AuthRequiredRequest, res: Response) 
     if (shift.actualOutAt) { res.status(400).json({ error: '이미 퇴근 처리된 시프트입니다.' }); return; }
     if (!(now > shift.actualInAt)) { res.status(400).json({ error: '퇴근 시각은 출근 이후이어야 합니다.' }); return; }
 
-    // 근무 시간 계산
-    const actual = diffMinutes(shift.actualInAt, now);
-    const payable = intersectMinutes(shift.actualInAt, now, shift.startAt, shift.endAt);
+    const nowMs = now.getTime();
+    const endMs = shift.endAt.getTime();
+    const inMs = shift.actualInAt.getTime();
+    const leftEarly = nowMs < endMs;
 
+    // ✅ 정산: 10분 이내 지각은 삭감 없음 → payable 계산 시 inAt을 startAt으로 보정
+    const lateInMs = Math.max(0, inMs - shift.startAt.getTime());
+    const inForPayable =
+      lateInMs <= LATE_GRACE_MIN_FOR_PAYABLE * 60_000
+        ? shift.startAt  // 10분 내 지각은 계획 시작부터 인정
+        : shift.actualInAt;
+
+    const actual = diffMinutes(shift.actualInAt, now);
+    const payable = intersectMinutes(inForPayable, now, shift.startAt, shift.endAt);
+
+    // ✅ 종료 10분 이내 조퇴 → REVIEW 전환
+    if (leftEarly && (endMs - nowMs) >= REVIEW_TOLERANCE_MIN * 60_000) {
+      const updated = await prisma.workShift.update({
+        where: { id: shiftId },
+        data: {
+          status: 'REVIEW',
+          needsReview: true,
+          reviewReason: 'EARLY_OUT' as any,
+          actualOutAt: now,
+          leftEarly: true,
+          actualMinutes: actual,
+          workedMinutes: payable
+        },
+      });
+      res.json({
+        ok: true,
+        message: '퇴근(조퇴, 관리자 확인 필요)',
+        clockOutAt: now,
+        workedMinutes: payable,
+        actualMinutes: actual,
+        planned: { startAt: shift.startAt, endAt: shift.endAt },
+        review: { reason: 'EARLY_OUT' },
+        shiftId: updated.id,
+      });
+      return;
+    }
+
+    // 그 외: 정상 마감
     await prisma.workShift.update({
       where: { id: shiftId },
       data: {
         status: 'COMPLETED',
         actualOutAt: now,
-        leftEarly: now < shift.endAt,
-        // ✅ OUT 시 산출값 저장
+        leftEarly,
         actualMinutes: actual,
         workedMinutes: payable
       },
     });
-
     res.json({
       ok: true,
-      message: now < shift.endAt ? '퇴근(예정보다 이른 퇴근)' : '퇴근 완료',
+      message: leftEarly ? '퇴근(예정보다 이른 퇴근)' : '퇴근 완료',
       clockOutAt: now,
       workedMinutes: payable,
       actualMinutes: actual,

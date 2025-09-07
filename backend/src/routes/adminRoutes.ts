@@ -20,6 +20,7 @@ import {
   adminCreateShift,
   adminUpdateShift,
   adminDeleteShift,
+  adminListReviewShifts
 } from '../controllers/workShiftController';
 
 // ✅ 추가: 타입 안전 래퍼 & 정산 컨트롤러
@@ -47,11 +48,12 @@ router.use(requireAdmin);
 
 
 // ───────── WorkShift (Admin/Owner) ─────────
-+router.get('/shops/:shopId/workshifts', withUser(adminListShifts));
-+router.post('/shops/:shopId/employees/:employeeId/workshifts', withUser(adminCreateShift));
-+router.put('/shops/:shopId/workshifts/:shiftId', withUser(adminUpdateShift));
-+router.delete('/shops/:shopId/workshifts/:shiftId', withUser(adminDeleteShift));
+router.get('/shops/:shopId/workshifts', withUser(adminListShifts));
+router.post('/shops/:shopId/employees/:employeeId/workshifts', withUser(adminCreateShift));
+router.put('/shops/:shopId/workshifts/:shiftId', withUser(adminUpdateShift));
+router.delete('/shops/:shopId/workshifts/:shiftId', withUser(adminDeleteShift));
 router.get('/shops/:shopId/qr', getShopQrPng);
+router.get('/shops/:shopId/workshifts/review', withUser(adminListReviewShifts));
 /* ───────── 매장 CRUD ───────── */
 router.get('/shops',                 adminController.getShops);
 router.post('/shops',                adminController.createShop);
