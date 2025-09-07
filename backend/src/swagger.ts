@@ -1118,6 +1118,46 @@ responses: {
         }
       }
     },
+        '/api/my/workshifts/{shiftId}': {
+      put: {
+        tags: ['WorkShift (Employee)'],
+        summary: '내 근무일정 수정 (항상 REVIEW 전환)',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'shiftId', in: 'path', required: true, schema: { type: 'integer' } }
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: { $ref: '#/components/schemas/WorkShiftEmployeeUpdateRequest' },
+              examples: {
+                changeTime: {
+                  value: {
+                    startAt: '2025-09-10T00:00:00.000Z',
+                    endAt: '2025-09-10T08:00:00.000Z',
+                    reviewNote: '개인 사정으로 30분 당김'
+                  }
+                },
+                noteOnly: {
+                  value: {
+                    reviewNote: '출근을 깜빡해서 09:10에 찍었습니다. 확인 부탁드려요.'
+                  }
+                }
+              }
+            }
+          }
+        },
+        responses: {
+          '200': { description: 'Updated', content: { 'application/json': { schema: { $ref: '#/components/schemas/WorkShiftEmployeeUpdateResponse' } } } },
+          '400': { description: 'Invalid payload' },
+          '401': { description: 'Unauthorized' },
+          '403': { description: 'Forbidden' },
+          '404': { description: 'Not Found' },
+          '409': { description: 'Conflict (overlap / completed shift)' }
+        }
+      }
+    },
     '/api/admin/shops/{shopId}/workshifts/{shiftId}': {
       put: {
         tags: ['Shifts (Admin)'],
