@@ -41,13 +41,13 @@ const listQuerySchema = z.object({
   from: z.string().datetime().optional(),
   to:   z.string().datetime().optional(),
   employeeId: z.coerce.number().int().positive().optional(), // admin 전용
-  status: z.enum(['SCHEDULED','IN_PROGRESS','COMPLETED','CANCELED','OVERDUE']).optional(),
+  status: z.enum(['SCHEDULED','IN_PROGRESS','COMPLETED','CANCELED','OVERDUE','REVIEW']).optional(),
 });
 
 const updateShiftSchema = z.object({
   startAt: z.string().datetime().optional(),
   endAt:   z.string().datetime().optional(),
-  status:  z.enum(['SCHEDULED','IN_PROGRESS','COMPLETED','CANCELED','OVERDUE']).optional(),
+  status:  z.enum(['SCHEDULED','IN_PROGRESS','COMPLETED','CANCELED','OVERDUE','REVIEW']).optional(),
 });
 
 // ───────── 공통 파서 ─────────
