@@ -343,3 +343,50 @@ export const adminListReviewShifts = async (req: AuthRequiredRequest, res: Respo
   await prisma.workShift.delete({ where: { id: shiftId } });
   res.status(204).send();
 };
+/* ───────────────── 관리자/점주: 일정 상세 조회 ───────────────── */
+export const adminGetShiftDetail = async (req: AuthRequiredRequest, res: Response): Promise<void> => {
+  const shopId  = Number(req.params.shopId);
+  const shiftId = Number(req.params.shiftId);
+  if (req.user.shopId !== shopId) {
+    res.status(403).json({ error: '다른 가게는 조회할 수 없습니다.' });
+    return;
+  }
+
+  const shift = await prisma.workShift.findFirst({
+    where: { id: shiftId, shopId },
+    include: {
+      employee: {
+        select: {
+          id: true,
+          name: true,
+          position: true,
+          section: true,
+          pay: true,
+          payUnit: true,
+        }
+      }
+    }
+  });
+
+  if (!shift) {
+    res.status(404).json({ error: '일정을 찾을 수 없습니다.' });
+    return;
+  }
+
+  // 참고용 요약(분 계산)
+  const plannedMinutes =
+    Math.max(0, Math.floor((shift.endAt.getTime() - shift.startAt.getTime()) / 60000));
+
+  res.json({
+    ok: true,
+    shift,
+    summary: {
+      plannedMinutes,
+      actualMinutes: shift.actualMinutes ?? null,
+      workedMinutes: shift.workedMinutes ?? null,
+      late: shift.late ?? null,
+      leftEarly: shift.leftEarly ?? null,
+      status: shift.status
+    }
+  });
+};
