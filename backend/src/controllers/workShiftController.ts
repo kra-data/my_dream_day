@@ -160,6 +160,7 @@ export const adminListShifts = async (req: AuthRequiredRequest, res: Response): 
           section: true,
           pay: true,       // 금액 (시급/월급)
           payUnit: true,   // 'HOURLY' | 'MONTHLY'
+          personalColor: true,
         }
       }
     }
@@ -263,7 +264,7 @@ export const adminListReviewShifts = async (req: AuthRequiredRequest, res: Respo
   const rows = await prisma.workShift.findMany({
     where,
     include: {
-      employee: { select: { name: true, position: true, section: true } }
+      employee: { select: { name: true, position: true, section: true,personalColor: true, } }
     },
     orderBy: [{ id: 'desc' }],
     ...(cursor ? { cursor: { id: Number(cursor) }, skip: 1 } : {}),
@@ -291,6 +292,7 @@ export const adminListReviewShifts = async (req: AuthRequiredRequest, res: Respo
       name: r.employee.name,
       position: r.employee.position,
       section: r.employee.section,
+      personalColor: r.employee.personalColor,
     }
   }));
 
@@ -363,6 +365,7 @@ export const adminGetShiftDetail = async (req: AuthRequiredRequest, res: Respons
           section: true,
           pay: true,
           payUnit: true,
+          personalColor: true,
         }
       }
     }
