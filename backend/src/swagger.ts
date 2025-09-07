@@ -1118,7 +1118,6 @@ responses: {
         }
       }
     },
-
     '/api/admin/shops/{shopId}/workshifts/{shiftId}': {
       put: {
         tags: ['Shifts (Admin)'],
@@ -1141,9 +1140,9 @@ responses: {
           }
         },
         responses: {
-  '200': {
-    description: 'Updated',
-    content: {
+        '200': {
+       description: 'Updated',
+        content: {
       'application/json': {
         schema: { $ref: '#/components/schemas/WorkShiftUpdateResponse' },
         examples: {
@@ -1188,8 +1187,82 @@ responses: {
           '403': { description: 'Forbidden' },
           '404': { description: 'Not Found' }
         }
+      },
+      get:{
+ tags: ['Shifts (Admin)'],
+    summary: '근무일정 상세 조회',
+    security: [{ bearerAuth: [] }],
+    parameters: [
+      { name: 'shopId', in: 'path', required: true, schema: { type: 'integer' } },
+      { name: 'shiftId', in: 'path', required: true, schema: { type: 'integer' } }
+    ],
+    responses: {
+      '200': {
+        description: 'OK',
+        content: {
+          'application/json': {
+            schema: {
+              type: 'object',
+              properties: {
+                ok: { type: 'boolean' },
+                shift: {
+                  type: 'object',
+                  properties: {
+                    id: { type: 'integer' },
+                    shopId: { type: 'integer' },
+                    employeeId: { type: 'integer' },
+                    startAt: { type: 'string', format: 'date-time' },
+                    endAt:   { type: 'string', format: 'date-time' },
+                    status:  { $ref: '#/components/schemas/WorkShiftStatus' },
+                    actualInAt:  { type: 'string', format: 'date-time', nullable: true },
+                    actualOutAt: { type: 'string', format: 'date-time', nullable: true },
+                    late:        { type: 'boolean', nullable: true },
+                    leftEarly:   { type: 'boolean', nullable: true },
+                    actualMinutes: { type: 'integer', nullable: true },
+                    workedMinutes: { type: 'integer', nullable: true },
+                    needsReview:   { type: 'boolean', nullable: true },
+                    reviewReason:  { $ref: '#/components/schemas/ShiftReviewReason', nullable: true },
+                    reviewNote:    { type: 'string', nullable: true },
+                    reviewResolvedAt: { type: 'string', format: 'date-time', nullable: true },
+                    createdBy: { type: 'integer', nullable: true },
+                    updatedBy: { type: 'integer', nullable: true },
+                    createdAt: { type: 'string', format: 'date-time' },
+                    updatedAt: { type: 'string', format: 'date-time' },
+                    employee: {
+                      type: 'object',
+                      properties: {
+                        id: { type: 'integer' },
+                        name: { type: 'string' },
+                        position: { type: 'string' },
+                        section: { type: 'string' },
+                        pay: { type: 'integer' },
+                        payUnit: { type: 'string' }
+                      }
+                    }
+                  }
+                },
+                summary: {
+                  type: 'object',
+                  properties: {
+                    plannedMinutes: { type: 'integer' },
+                    actualMinutes:  { type: 'integer', nullable: true },
+                    workedMinutes:  { type: 'integer', nullable: true },
+                    late: { type: 'boolean', nullable: true },
+                    leftEarly: { type: 'boolean', nullable: true },
+                    status: { $ref: '#/components/schemas/WorkShiftStatus' }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      '401': { description: 'Unauthorized' },
+      '403': { description: 'Forbidden' },
+      '404': { description: 'Not Found' }
+    }
+  }
       }
-    },
   }
 };
 
