@@ -81,7 +81,7 @@ model Employee {
   shop                 Shop                @relation(fields: [shopId], references: [id], onDelete: Cascade)
   payrollSettlements   PayrollSettlement[] @relation("SettlementEmployee")
   processedSettlements PayrollSettlement[] @relation("SettlementProcessedBy")
-
+personalColor String?  @db.VarChar(7)
   // 🔹 신규 컬럼(처음엔 전부 NULL 허용)
   nationalIdEnc    String? @db.Text
   nationalIdHash   String? @db.VarChar(64)

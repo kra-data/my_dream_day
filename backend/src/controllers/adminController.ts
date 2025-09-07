@@ -9,6 +9,12 @@ import { Prisma, Position, Section, PayUnit } from '@prisma/client';
 
 /** Prisma가 write 시 기대하는 JSON 타입 */
 type Json = Prisma.InputJsonValue;      // ← 핵심!
+const hexColor = z.string().regex(/^#[0-9A-Fa-f]{6}$/, 'hex color like #A1B2C3');
+// 빈 문자열("")로 보내면 null 로 간주, 문자열이면 대문자로 정규화
+const colorOptNullable = z.preprocess(
+  (v) => (typeof v === 'string' && v.trim() === '' ? null : (typeof v === 'string' ? v.toUpperCase() : v)),
+  hexColor.nullable().optional()
+);
 
 
 //////////////////////////////
@@ -96,7 +102,8 @@ export const getEmployees = async (req: Request, res: Response) => {
       position: true,
       section: true,
       pay: true,
-      payUnit: true
+      payUnit: true,
+      personalColor: true
     }
   });
   res.json(employees);
@@ -118,7 +125,8 @@ const createEmployeeSchema = z.object({
   position: z.enum(['OWNER','MANAGER','STAFF','PART_TIME']).optional(),
   section: z.enum(['HALL','KITCHEN']).optional(),
   pay: z.number().positive().optional(),
-  payUnit: z.enum(['MONTHLY','HOURLY']).optional()
+  payUnit: z.enum(['MONTHLY','HOURLY']).optional(),
+  personalColor: colorOptNullable
 });
 
 export const createEmployee = async (req: Request, res: Response) => {
@@ -135,11 +143,12 @@ export const createEmployee = async (req: Request, res: Response) => {
     position = 'STAFF',
     section  = 'HALL',
     pay,
-    payUnit
+    payUnit,
+    personalColor = null
   } = parsed.data as unknown as {
     name: string; nationalId:string; accountNumber: string; bank: string;
     phone: string; schedule: Json; position?: Position; section?: Section;
-    pay?: number; payUnit?: PayUnit;
+    pay?: number; payUnit?: PayUnit; personalColor?:string
   };
 
   /* ✅ 공통 필드 검증 */
@@ -187,7 +196,8 @@ export const createEmployee = async (req: Request, res: Response) => {
       // 🔽 더 이상 평문 저장하지 않음 (nationalId 필드는 나중 단계에서 삭제)
       nationalIdEnc,
       nationalIdHash,
-      nationalIdMasked
+      nationalIdMasked,
+      personalColor: personalColor ?? null,
     }
   });
   // 응답에 enc/hash는 절대 포함X
@@ -212,7 +222,8 @@ const updateEmployeeSchema = z.object({
   position: z.enum(['OWNER','MANAGER','STAFF','PART_TIME']).optional(),
   section: z.enum(['HALL','KITCHEN']).optional(),
   pay: z.number().positive().optional(),
-  payUnit: z.enum(['MONTHLY','HOURLY']).optional()
+  payUnit: z.enum(['MONTHLY','HOURLY']).optional(),
+    personalColor: colorOptNullable
 });
 
 export const updateEmployee = async (req: Request, res: Response) => {
@@ -226,11 +237,12 @@ export const updateEmployee = async (req: Request, res: Response) => {
     position,
     section,
     pay,
-    payUnit
+    payUnit,
+    personalColor=null
   } = (updateEmployeeSchema.parse(req.body) as Partial<{
     name: string; accountNumber: string; bank: string; phone: string;
     schedule: Json; position: Position; section: Section;
-    pay: number; payUnit: PayUnit;
+    pay: number; payUnit: PayUnit; personalColor: string;
   }>);
 
   const emp = await prisma.employee.findUnique({ where: { id: empId } });
@@ -243,7 +255,6 @@ export const updateEmployee = async (req: Request, res: Response) => {
   const nextPosition: Position = (position ?? emp.position) as Position;
   const nextPayUnit: PayUnit   = (payUnit  ?? emp.payUnit)  as PayUnit;
   const inferredUnit: PayUnit  = nextPosition === 'PART_TIME' ? 'HOURLY' : 'MONTHLY';
-
   if (
     (schedule && !isValidSchedule(schedule)) ||
     (position && !POSITIONS.includes(position)) ||
@@ -267,7 +278,8 @@ export const updateEmployee = async (req: Request, res: Response) => {
       position,
       section,
       pay,
-      payUnit
+      payUnit,
+      personalColor: (personalColor === undefined) ? undefined : (personalColor ?? null)
     }
   });
   res.json(updated);

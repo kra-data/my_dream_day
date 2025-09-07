@@ -104,6 +104,36 @@ PayrollByEmployeeSummary: {
     totalWorkedMinutes: { type: 'integer', example: 23850 }
   }
 },
+      WorkShiftEmployeeUpdateRequest: {
+        type: 'object',
+        properties: {
+          startAt: { type: 'string', format: 'date-time' },
+          endAt:   { type: 'string', format: 'date-time' },
+          reviewNote: { type: 'string', maxLength: 500 }
+        },
+        description: 'startAt / endAt / reviewNote 중 최소 1개 필요'
+      },
+      WorkShiftEmployeeUpdateResponse: {
+        type: 'object',
+        properties: {
+          ok: { type: 'boolean', example: true },
+          shift: {
+            type: 'object',
+            properties: {
+              id: { type: 'integer' },
+              shopId: { type: 'integer' },
+              employeeId: { type: 'integer' },
+              startAt: { type: 'string', format: 'date-time' },
+              endAt:   { type: 'string', format: 'date-time' },
+              status:  { $ref: '#/components/schemas/WorkShiftStatus' },
+              needsReview: { type: 'boolean' },
+              reviewReason: { $ref: '#/components/schemas/ShiftReviewReason', nullable: true },
+              reviewNote:   { type: 'string', nullable: true },
+              updatedAt:    { type: 'string', format: 'date-time' }
+            }
+          }
+        }
+      },
 PayrollByEmployeeResponse: {
   type: 'object',
   properties: {
@@ -184,6 +214,10 @@ WorkShift: {
     startAt:     { type: 'string', format: 'date-time', example: '2025-09-01T02:00:00.000Z' },
     endAt:       { type: 'string', format: 'date-time', example: '2025-09-01T10:00:00.000Z' },
     status:      { $ref: '#/components/schemas/WorkShiftStatus' },
+          needsReview:   { type: 'boolean', nullable: true },
+          reviewReason:  { $ref: '#/components/schemas/ShiftReviewReason', nullable: true },
+          reviewNote:    { type: 'string', nullable: true },
+          reviewResolvedAt: { type: 'string', format: 'date-time', nullable: true },
 
     // ✅ 실적 필드
     actualInAt:  { type: 'string', format: 'date-time', nullable: true },
@@ -213,7 +247,8 @@ WorkShift: {
           position: { type: 'string', example: 'STAFF' },
           section:  { type: 'string', example: 'HALL' },
           pay:      { type: 'integer', nullable: true, example: 20000 },
-          payUnit:  { type: 'string', nullable: true, enum: ['HOURLY','MONTHLY'], example: 'HOURLY' }
+          payUnit:  { type: 'string', nullable: true, enum: ['HOURLY','MONTHLY'], example: 'HOURLY' },
+          personalColor: { type: 'string', nullable: true, pattern: '^#[0-9A-Fa-f]{6}$', example: '#1F6FEB' }
         }
       },
       WorkShiftWithEmployee: {
@@ -1024,7 +1059,6 @@ responses: {
                       needsReview: { type: 'boolean' },
                       reviewReason: { $ref: '#/components/schemas/ShiftReviewReason' },
                       reviewNote: { type: 'string', nullable: true },
-                      userAlertAckAt: { type: 'string', format: 'date-time', nullable: true },
                       reviewResolvedAt:{ type: 'string', format: 'date-time', nullable: true },
                       actualInAt: { type: 'string', format: 'date-time', nullable: true },
                       actualOutAt:{ type: 'string', format: 'date-time', nullable: true },
@@ -1037,7 +1071,8 @@ responses: {
                         properties: {
                           name: { type: 'string' },
                           position: { type: 'string' },
-                          section: { type: 'string' }
+                          section: { type: 'string' },
+                          personalColor: { type: 'string', nullable: true, pattern: '^#[0-9A-Fa-f]{6}$' }
                         }
                       }
                     }
@@ -1276,7 +1311,8 @@ responses: {
                         position: { type: 'string' },
                         section: { type: 'string' },
                         pay: { type: 'integer' },
-                        payUnit: { type: 'string' }
+                        payUnit: { type: 'string' },
+                        personalColor: { type: 'string', nullable: true, pattern: '^#[0-9A-Fa-f]{6}$' }
                       }
                     }
                   }
