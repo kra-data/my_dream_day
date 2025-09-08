@@ -2,18 +2,11 @@
 import { Router, NextFunction, Response } from 'express';
 import { authenticateJWT, AuthRequest } from '../middlewares/jwtMiddleware';
 import * as adminController from '../controllers/adminController';
-import { exportPayroll } from '../controllers/payrollController';
-import {
-  payrollDashboard,
-  payrollByEmployee,
-  payrollEmployeeDetail
-} from '../controllers/payrollAdminController';
 import {
   todaySummary,
   activeEmployees,
   recentActivities
 } from '../controllers/dashboardController';
-import { employeePayrollSummary } from '../controllers/payrollSummaryController';
 import { getShopQrPng } from '../controllers/qrController';
 import {
   adminListShifts,
@@ -23,10 +16,9 @@ import {
   adminListReviewShifts,
   adminGetShiftDetail
 } from '../controllers/workShiftController';
-
+import { payrollOverview,exportPayrollXlsx,getSettlementSummary } from '../controllers/payrollController';
 // ✅ 추가: 타입 안전 래퍼 & 정산 컨트롤러
 import { withUser, AuthRequiredRequest } from '../middlewares/requireUser';
-import { settlePreviousCycle } from '../controllers/payrollSettlementController';
 
 const router = Router();
 
@@ -76,28 +68,14 @@ router.post('/shops/:shopId/employees', adminController.createEmployee);
 router.put('/shops/:shopId/employees/:employeeId',        adminController.updateEmployee);
 router.delete('/shops/:shopId/employees/:employeeId',     adminController.deleteEmployee);
 
-/* ───────── 급여 엑셀 ───────── */
-router.get('/shops/:shopId/payroll/export', exportPayroll);
-router.get(
-  '/shops/:shopId/payroll/employees/:employeeId/summary',
-  employeePayrollSummary
-);
 
 /* ───────── 🆕 대시보드 ───────── */
 router.get('/shops/:shopId/dashboard/today',   todaySummary);
 router.get('/shops/:shopId/dashboard/active',  activeEmployees);
 router.get('/shops/:shopId/dashboard/recent',  recentActivities);
-router.get('/shops/:shopId/payroll/dashboard',     payrollDashboard);
-router.get('/shops/:shopId/payroll/employees',     payrollByEmployee);
-router.get('/shops/:shopId/payroll/employees/:employeeId', payrollEmployeeDetail);
 
-/* ───────── 🆕 지난 사이클 정산 확정 ───────── */
-// 전체 라우터에 authenticateJWT + requireAdmin가 이미 걸려있음
-router.post(
-  '/shops/:shopId/settlements/employees/:employeeId',
-  withUser((req: AuthRequiredRequest, res) => settlePreviousCycle(req, res))
-);
-
-
-
+// 🆕 급여 개요
+router.get('/shops/:shopId/payroll/overview', withUser(payrollOverview));
+router.get('/shops/:shopId/payroll/export-xlsx', withUser(exportPayrollXlsx));
+router.get('/shops/:shopId/payroll/summary', withUser(getSettlementSummary));
 export default router;

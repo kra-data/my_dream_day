@@ -115,6 +115,9 @@ model WorkShift {
   settlementId  Int?
   settlement    PayrollSettlement? @relation(fields: [settlementId], references: [id])
 
+  finalPayAmount Int?              // 확정 급여(원) — REVIEW 해제 & COMPLETED 시점에 계산/저장
+  isSettled      Boolean @default(false) // 해당 시프트가 정산(스냅샷)에 포함되었는지 플래그
+
   // ✅ 리뷰/알림/메모
   needsReview      Boolean            @default(false)
   reviewReason     ShiftReviewReason?
@@ -133,6 +136,7 @@ model WorkShift {
   @@index([shopId, employeeId, startAt])
   @@index([employeeId, status])
   @@index([settlementId])
+  @@index([shopId, employeeId, isSettled])
 }
 
 model PayrollSettlement {
