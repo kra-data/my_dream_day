@@ -54,15 +54,6 @@ router.get(
   withUser((req: AuthRequiredRequest, res) => getMyCurrentStatus(req, res))
 );
 
-/** 자신의 출퇴근 기록 조회(커서 기반) */
-router.get(
-  '/me',
-  authenticateJWT,
-  requireUser,
-  requireRoles('employee'),
-  withUser((req: AuthRequiredRequest, res) => getMyAttendance(req, res))
-);
-
 /* ───────────────── 관리자/점주 전용 ───────────────── */
 
 /** 가게의 출퇴근 기록 조회(커서 기반)

@@ -420,7 +420,7 @@ SettlePreviousResponse: {
     settlement: { $ref: '#/components/schemas/PayrollSettlement' }
   }
 },
-// ───────────────── Payroll Overview (신규 최소 스키마) ─────────────────
+// ───────────────── Payroll Overview (프리랜서 3.3% 반영) ─────────────────
 PayrollCycleLite: {
   type: 'object',
   properties: {
@@ -433,24 +433,84 @@ PayrollCycleLite: {
 PayrollOverviewFixed: {
   type: 'object',
   properties: {
-    amount: { type: 'integer', example: 2500000, description: '고정급 합계(원). 현재는 0 또는 추후 확정 로직 반영' }
+    amount: { type: 'integer', example: 2500000, description: '고정급 합계(원). 현재는 0 또는 추후 확정 로직 반영' },
+    withholding3_3: { type: 'integer', example: 82500, description: '프리랜서 원천징수 합계(소득세 3% + 지방세 0.3%)' },
+    netAmount: { type: 'integer', example: 2417500, description: '세후 금액(3.3% 차감 후)' }
   }
 },
 PayrollOverviewHourly: {
   type: 'object',
   properties: {
     amount:     { type: 'integer', example: 394000, description: '시급 확정 합계(원): COMPLETED & finalPayAmount 존재만 포함' },
-    shiftCount: { type: 'integer', example: 18 }
+    shiftCount: { type: 'integer', example: 18 },
+    withholding3_3: { type: 'integer', example: 13002, description: '프리랜서 원천징수 합계(≈3.3%)' },
+    netAmount: { type: 'integer', example: 380998, description: '세후 금액(3.3% 차감 후)' }
   }
 },
 PayrollOverviewTotals: {
   type: 'object',
   properties: {
-    expectedPayout:         { type: 'integer', example: 394000 },
-    previousExpectedPayout: { type: 'integer', example: 372000 },
-    deltaFromPrev:          { type: 'integer', example: 22000 }
+    // 세전
+    expectedPayout: {
+      type: 'integer',
+      example: 394000,
+      description: '세전 총 예상 지급액(원): 현재 사이클 fixed.amount + hourly.amount 합계'
+    },
+    previousExpectedPayout: {
+      type: 'integer',
+      example: 372000,
+      description: '세전 총 예상 지급액(원, 전 사이클)'
+    },
+    deltaFromPrev: {
+      type: 'integer',
+      example: 22000,
+      description: '세전 기준 전 사이클 대비 증감액(원) = expectedPayout - previousExpectedPayout'
+    },
+
+    // 세후
+    expectedPayoutNet: {
+      type: 'integer',
+      example: 380998,
+      description:
+        '세후 총 예상 지급액(원): 프리랜서 원천징수율(rate) 적용 후 반올림. = expectedPayout - withholding3_3.current'
+    },
+    previousExpectedPayoutNet: {
+      type: 'integer',
+      example: 359724,
+      description:
+        '세후 총 예상 지급액(원, 전 사이클): 프리랜서 원천징수율(rate) 적용 후 반올림'
+    },
+    deltaFromPrevNet: {
+      type: 'integer',
+      example: 21274,
+      description:
+        '세후 기준 전 사이클 대비 증감액(원) = expectedPayoutNet - previousExpectedPayoutNet'
+    },
+
+    // 원천징수 요약(참고)
+    withholding3_3: {
+      type: 'object',
+      properties: {
+        current:  {
+          type: 'integer',
+          example: 13002,
+          description: '이번 사이클 원천징수 합계(소득세 3% + 지방소득세 0.3%, 반올림)'
+        },
+        previous: {
+          type: 'integer',
+          example: 12276,
+          description: '전 사이클 원천징수 합계(반올림)'
+        },
+        rate:     {
+          type: 'number',
+          example: 0.033,
+          description: '적용 세율(기본 0.033). 서버 env(PAYROLL_WITHHOLDING_RATE)로 변경 가능'
+        }
+      }
+    }
   }
 },
+
 PayrollOverviewMeta: {
   type: 'object',
   properties: {
@@ -660,7 +720,9 @@ AttendanceCreateRequest: {
   get: {
     tags: ['Payroll'],
     summary: '급여 개요(사이클 기준 확정 합계)',
-    description: 'COMPLETED & finalPayAmount가 설정된 시급 시프트만 합산합니다. REVIEW/미확정은 제외. 고정급은 별도(fixed.amount)로 분리.',
+    description:
+      'COMPLETED & finalPayAmount가 설정된 시급 시프트만 합산합니다(REVIEW/미확정 제외). ' +
+      '세후/원천세는 프리랜서 기준(소득세 3% + 지방소득세=소득세의 10% → 총 3.3%)으로 산출합니다.',
     security: [{ bearerAuth: [] }],
     parameters: [
       { name: 'shopId', in: 'path', required: true, schema: { type: 'integer' } },
@@ -686,12 +748,31 @@ AttendanceCreateRequest: {
                     label: '9월 7일 ~ 10월 6일',
                     startDay: 7
                   },
-                  fixed: { amount: 0 },
-                  hourly: { amount: 394000, shiftCount: 18 },
+                  fixed: {
+                    amount: 0,
+                    withholding3_3: 0,
+                    netAmount: 0
+                  },
+                  hourly: {
+                    amount: 394000,
+                    shiftCount: 18,
+                    withholding3_3: 13002,
+                    netAmount: 380998
+                  },
                   totals: {
                     expectedPayout: 394000,
                     previousExpectedPayout: 372000,
-                    deltaFromPrev: 22000
+                    deltaFromPrev: 22000,
+
+                    expectedPayoutNet: 380998,
+                    previousExpectedPayoutNet: 359724,
+                    deltaFromPrevNet: 21274,
+
+                    withholding3_3: {
+                      current: 13002,
+                      previous: 12276,
+                      rate: 0.033
+                    }
                   },
                   meta: { eligibleEmployees: 12 }
                 }
@@ -856,7 +937,44 @@ responses: {
   '404': { description: 'Not Found' }
 }
 }
-    },
+    },// swaggerDocument.paths 에 추가
+'/api/admin/shops/{shopId}/payroll/export-xlsx': {
+  get: {
+    tags: ['Payroll'],
+    summary: '급여 엑셀 다운로드(XLSX)',
+    description:
+      '사이클(년/월/시작일) 기준으로 확정된 시급 근로의 정산 내역을 엑셀로 다운로드합니다. ' +
+      '세금은 프리랜서 원천징수 기준(소득세 3% + 지방소득세 0.3%)으로 계산하며, 기타세금은 0원으로 처리합니다.',
+    security: [{ bearerAuth: [] }],
+    parameters: [
+      { name: 'shopId', in: 'path', required: true, schema: { type: 'integer' } },
+      { name: 'year',   in: 'query', required: true, schema: { type: 'integer', minimum: 2000, maximum: 2100 } },
+      { name: 'month',  in: 'query', required: true, schema: { type: 'integer', minimum: 1, maximum: 12 } },
+      { name: 'cycleStartDay', in: 'query', required: false, schema: { type: 'integer', minimum: 1, maximum: 28 },
+        description: '사이클 시작일(기본: 매장 payday; 제공 시 override)' }
+    ],
+    responses: {
+      '200': {
+        description: 'XLSX binary stream',
+        content: {
+          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': {
+            schema: { type: 'string', format: 'binary' }
+          }
+        },
+        headers: {
+          'Content-Disposition': {
+            schema: { type: 'string' },
+            description: 'attachment; filename="payroll_<shop>_<YYYY-MM>.xlsx"'
+          }
+        }
+      },
+      '401': { description: 'Unauthorized' },
+      '403': { description: 'Forbidden' },
+      '404': { description: 'Shop not found' }
+    }
+  }
+},
+
     '/api/admin/shops/{shopId}/payroll/employees/{employeeId}/summary': {
       get: { tags: ['Payroll'], summary: '직원 월별 요약', parameters: [ { name:'shopId',in:'path',required:true,schema:{type:'integer'} }, { name:'employeeId',in:'path',required:true,schema:{type:'integer'} }, { name:'year',in:'query',schema:{type:'integer'} }, { name:'month',in:'query',schema:{type:'integer'} } ], responses: { '200': { description: 'OK' } } }
     },

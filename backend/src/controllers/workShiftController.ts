@@ -24,6 +24,9 @@ const parseHHMM = (s: string) => {
   if (hh < 0 || hh > 23 || mm < 0 || mm > 59) return null;
   return { hh, mm };
 };
+// 파일 상단 유틸 근처에 추가
+const diffMin = (a: Date, b: Date) =>
+  Math.max(0, Math.floor((b.getTime() - a.getTime()) / 60000));
 
 // ───────── Zod 스키마 (두 가지 입력 방식 지원) ─────────
 const byIso = z.object({
@@ -98,7 +101,7 @@ export const myCreateShift = async (req: AuthRequiredRequest, res: Response): Pr
   if (exists) { res.status(409).json({ error: '이미 겹치는 근무일정이 있습니다.' }); return; }
 
   const created = await prisma.workShift.create({
-    data: { shopId, employeeId, startAt, endAt, status: 'SCHEDULED', createdBy: employeeId }
+    data: { shopId, employeeId, startAt, endAt, status: 'SCHEDULED', createdBy: employeeId ,    workedMinutes: diffMin(startAt, endAt),}
   });
   res.status(201).json(created);
 };
@@ -152,6 +155,7 @@ export const adminListShifts = async (req: AuthRequiredRequest, res: Response): 
       endAt: true,
       status: true,
       finalPayAmount: true,
+      workedMinutes:true,
       // 필요 시 아래 주석 해제
       // graceInMin: true,
       employee: {
@@ -218,7 +222,7 @@ export const getMyTodayWorkshifts = async (req: AuthRequiredRequest, res: Respon
   if (exists) { res.status(409).json({ error: '이미 겹치는 근무일정이 있습니다.' }); return; }
 
   const created = await prisma.workShift.create({
-    data: { shopId, employeeId, startAt, endAt, status: 'SCHEDULED', createdBy: req.user.userId }
+    data: { shopId, employeeId, startAt, endAt, status: 'SCHEDULED', createdBy: req.user.userId,    workedMinutes: diffMin(startAt, endAt), }
   });
   res.status(201).json(created);
 };
@@ -330,6 +334,7 @@ export const adminListReviewShifts = async (req: AuthRequiredRequest, res: Respo
       endAt:   endAt   ? new Date(endAt)   : undefined,
       status:  status  ?? undefined,
       updatedBy: req.user.userId,
+       ...(startAt || endAt ? { workedMinutes: diffMin(nextStart, nextEnd) } : {})
     }
   });
   res.json(updated);
@@ -455,12 +460,13 @@ export const myUpdateShift = async (req: AuthRequiredRequest, res: Response): Pr
       reviewNote: reviewNote ?? shift.reviewNote,
       reviewResolvedAt: null,
       updatedBy: employeeId,
+       ...(startAt || endAt ? { workedMinutes: diffMin(nextStart, nextEnd) } : {}),
     },
     select: {
       id: true, shopId: true, employeeId: true,
       startAt: true, endAt: true, status: true,
       needsReview: true, reviewReason: true, reviewNote: true,
-      updatedAt: true
+      updatedAt: true, workedMinutes: true
     }
   });
 
