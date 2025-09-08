@@ -1341,7 +1341,43 @@ responses: {
       }
   }
 };
+// 🔻 기존 정산/급여 관련 스키마 제거
+[
+  'PayrollCycle',
+  'SettlementStatus',
+  'EmployeePayrollListItem',
+  'PayrollByEmployeeSummary',
+  'PayrollByEmployeeResponse',
+  'PayrollEmployeeDetailLog',
+  'PayrollEmployeeDetailResponse',
+  'PayrollSettlement',
+  'SettlePreviousResponse',
+  'MyPageCycle',
+  'MyPageCards',
+  'MyPageMonth',
+  'MyPageStats',
+  'MyPageSettlementResponse',
+].forEach((k) => {
+  try { delete swaggerDocument.components.schemas[k as any]; } catch {}
+});
 
+// 🔻 AttendanceRecord 안에 settlementId 필드도 제거(정산 재설계 전에 노출 안 함)
+try {
+  delete swaggerDocument.components.schemas.AttendanceRecord.properties.settlementId;
+} catch {}
+
+// 🔻 정산/급여 관련 경로 제거
+[
+  '/api/admin/shops/{shopId}/payroll/export',
+  '/api/admin/shops/{shopId}/payroll/dashboard',
+  '/api/admin/shops/{shopId}/payroll/employees',
+  '/api/admin/shops/{shopId}/payroll/employees/{employeeId}',
+  '/api/admin/shops/{shopId}/payroll/employees/{employeeId}/summary',
+  '/api/my/settlement',
+  '/api/admin/shops/{shopId}/settlements/employees/{employeeId}',
+].forEach((p) => {
+  try { delete swaggerDocument.paths[p as any]; } catch {}
+});
 export const swaggerServe: RequestHandler[] = swaggerUi.serve;
 
 export const swaggerSetup = swaggerUi.setup(swaggerDocument, {

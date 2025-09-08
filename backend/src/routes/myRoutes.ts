@@ -17,7 +17,6 @@ import {
   getMyTodayWorkshifts,
   myUpdateShift
 } from '../controllers/workShiftController';
-import { mySettlementSummary } from '../controllers/mySettlementController';
 
 const router = Router();
 
@@ -32,15 +31,6 @@ const requireRoles =
     }
     next();
   };
-
-/** 마이페이지 정산/프로필/통계 (직원 전용) */
-router.get(
-  '/my/settlement',
-  authenticateJWT,
-  requireUser,
-  requireRoles('employee'),
-  withUser((req: AuthRequiredRequest, res, _next) => mySettlementSummary(req, res))
-);
 
 router.post(
   '/my/workshifts',
