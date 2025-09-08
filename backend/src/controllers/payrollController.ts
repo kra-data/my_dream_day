@@ -1,119 +1,116 @@
-// controllers/payrollController.ts
+// controllers/payrollOverviewController.ts
 import { Response } from 'express';
-import { prisma } from '../db/prisma';
-import { AuthRequest } from '../middlewares/jwtMiddleware';
-import ExcelJS from 'exceljs';
 import { z } from 'zod';
+import { prisma } from '../db/prisma';
+import { AuthRequiredRequest } from '../middlewares/requireUser';
 
-/**
- * GET /api/admin/shops/:shopId/payroll/export
- *  ?start=YYYY-MM-DD&end=YYYY-MM-DD   (KST 기준)
- */
-const exportQuerySchema = z.object({
-  start: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  end:   z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
+// KST helpers
+const fromKstParts = (y: number, m1: number, d: number, hh = 0, mm = 0, ss = 0, ms = 0) =>
+  new Date(Date.UTC(y, m1, d, hh - 9, mm, ss, ms));
+const toKst = (d: Date) => new Date(d.getTime() + 9 * 60 * 60 * 1000);
+const diffMin = (a: Date, b: Date) => Math.max(0, Math.floor((b.getTime() - a.getTime()) / 60000));
+const intersectMin = (a1: Date, a2: Date, b1: Date, b2: Date) => {
+  const s = a1 > b1 ? a1 : b1;
+  const e = a2 < b2 ? a2 : b2;
+  return diffMin(s, e);
+};
+
+function kstCycle(year: number, month: number, startDay: number) {
+  const start = fromKstParts(year, month - 1, startDay, 0, 0, 0, 0);
+  const nm = month === 12 ? { y: year + 1, m: 1 } : { y: year, m: month + 1 };
+  const nextStart = fromKstParts(nm.y, nm.m - 1, startDay, 0, 0, 0, 0);
+  const end = new Date(nextStart.getTime() - 1);
+  return { start, end };
+}
+
+const q = z.object({
+  year: z.coerce.number().int().min(2000).max(2100),
+  month: z.coerce.number().int().min(1).max(12),
+  cycleStartDay: z.coerce.number().int().min(1).max(28).optional(),
 });
 
-/* ───────── 시간 유틸(KST↔UTC) ───────── */
-const fromKstParts = (y: number, m1: number, d: number, hh=0, mm=0, ss=0, ms=0) =>
-  new Date(Date.UTC(y, m1, d, hh - 9, mm, ss, ms));
+export const payrollOverview: (req: AuthRequiredRequest, res: Response) => Promise<void> =
+  async (req, res) => {
+    const shopId = Number(req.params.shopId);
+    if (req.user.shopId !== shopId) { res.status(403).json({ error: '다른 가게는 조회할 수 없습니다.' }); return; }
 
-/* ───────── 분 계산 ───────── */
-const diffMinutes = (a: Date, b: Date) => Math.max(0, Math.floor((+b - +a) / 60000));
-const intersectMinutes = (a0: Date, a1: Date, b0: Date, b1: Date) => {
-  const st = a0 > b0 ? a0 : b0;
-  const en = a1 < b1 ? a1 : b1;
-  return en > st ? diffMinutes(st, en) : 0;
-};
+    const parsed = q.safeParse(req.query);
+    if (!parsed.success) { res.status(400).json({ error: 'Invalid query' }); return; }
+    const { year, month } = parsed.data;
 
-export const exportPayroll = async (req: AuthRequest, res: Response) => {
-  const shopId = Number(req.params.shopId);
-  const parsed = exportQuerySchema.safeParse(req.query);
-  if (!parsed.success) { res.status(400).json({ error: 'Invalid start/end' }); return; }
+    const shop = await prisma.shop.findUnique({ where: { id: shopId }, select: { payday: true } });
+    if (!shop) { res.status(404).json({ error: 'Shop not found' }); return; }
+    const startDay = parsed.data.cycleStartDay ?? Math.min(Math.max(shop.payday ?? 1, 1), 28);
 
-  const { start, end } = parsed.data as { start: string; end: string };
-  const [sy, sm, sd] = start.split('-').map(Number);
-  const [ey, em, ed] = end.split('-').map(Number);
+    const curr = kstCycle(year, month, startDay);
+    const prevMonth = month === 1 ? 12 : month - 1;
+    const prevYear  = month === 1 ? year - 1 : year;
+    const prev = kstCycle(prevYear, prevMonth, startDay);
 
-  // KST 00:00:00.000 ~ 23:59:59.999 → UTC 변환
-  const from = fromKstParts(sy, sm - 1, sd, 0, 0, 0, 0);
-  const to   = fromKstParts(ey, em - 1, ed, 23, 59, 59, 999);
-  if (to < from) { res.status(400).json({ error: 'end must be after start' }); return; }
+    // 급여 대상 수(참고): 급여가 설정된 직원 수
+    const eligibleEmployees = await prisma.employee.count({ where: { shopId, pay: { gt: 0 } } });
 
-  /* ───── 1) 직원 조회 ───── */
-  const employees = await prisma.employee.findMany({
-    where: { shopId },
-    select: {
-      id: true, name: true, nationalIdMasked: true,
-      accountNumber: true, bank: true,
-      pay: true, payUnit: true
-    }
-  });
-  const empMap = new Map(employees.map(e => [e.id, e]));
-
-  /* ───── 2) 기간 내 완결된 시프트 조회 ─────
-     기존 AttendanceRecord는 clockInAt 기반으로 필터했으므로
-     WorkShift도 동일하게 actualInAt 기준으로 기간 필터를 맞춘다. */
-  const shifts = await prisma.workShift.findMany({
+    // ─────────────────────────────
+    // 시급 확정 합: COMPLETED + confirmedPay 존재 + (사이클 교집합)
+    // 교집합 비율만큼 confirmedPay를 비례 배분 (경계걸친 야간 등 대비)
+    // ─────────────────────────────
+async function confirmedHourlyIn(range: { start: Date; end: Date }) {
+  const rows = await prisma.workShift.findMany({
     where: {
       shopId,
-      actualInAt:  { gte: from, lte: to },
-      actualOutAt: { not: null }
+      status: 'COMPLETED',                    // REVIEW 제외
+      startAt: { lt: range.end },
+      endAt:   { gt: range.start },
+      employee: { payUnit: 'HOURLY' },
+      finalPayAmount: { not: null },          // 미확정 제외
     },
     select: {
-      employeeId: true,
-      startAt: true, endAt: true,
-      actualInAt: true, actualOutAt: true
+      startAt: true,
+      endAt: true,
+      workedMinutes: true,
+      finalPayAmount: true,
     }
   });
 
-  /* ───── 3) 직원별 인정 분 합산 ───── */
-  const minutesByEmp = new Map<number, number>();
-  for (const s of shifts) {
-    if (!s.actualInAt || !s.actualOutAt) continue;
-    const mins = intersectMinutes(s.actualInAt, s.actualOutAt, s.startAt, s.endAt);
-    minutesByEmp.set(s.employeeId, (minutesByEmp.get(s.employeeId) ?? 0) + mins);
+  let amount = 0;
+  let shiftCount = 0;
+
+  for (const r of rows) {
+    const baseMin = r.workedMinutes ?? Math.max(1, Math.floor((r.endAt.getTime() - r.startAt.getTime())/60000));
+    const inMin   = intersectMin(r.startAt, r.endAt, range.start, range.end);
+    const prorated = Math.round((r.finalPayAmount as number) * (inMin / baseMin));
+    amount += prorated;
+    shiftCount++;
   }
+  return { amount, shiftCount };
+}
+    // 현재/전월 시급 확정 합만 사용
+    const curHourly  = await confirmedHourlyIn(curr);
+    const prevHourly = await confirmedHourlyIn(prev);
 
-  /* ───── 4) 엑셀 작성 ───── */
-  const wb = new ExcelJS.Workbook();
-  const ws = wb.addWorksheet('Payroll');
+    // 현재는 '고정급 확정' 개념이 없으므로 0 (원장/정산 확정 도입 시 채울 것)
+    const fixed = { amount: 0 };
 
-  ws.columns = [
-    { header: '직원명',         key: 'name',              width: 15 },
-    { header: '주민번호(마스킹)', key: 'nationalIdMasked',  width: 20 },
-    { header: '계좌번호',       key: 'accountNumber',     width: 22 },
-    { header: '은행',           key: 'bank',              width: 10 },
-    { header: '월급(원)',       key: 'salary',            width: 15 },
-    { header: '근무시간(분)',   key: 'minutes',           width: 15 }
-  ];
+    const expectedPayout     = fixed.amount + curHourly.amount;
+    const prevExpectedPayout = fixed.amount + prevHourly.amount;
+    const deltaFromPrev      = expectedPayout - prevExpectedPayout;
 
-  for (const emp of employees) {
-    const minutes = minutesByEmp.get(emp.id) ?? 0;
-    const salary =
-      emp.payUnit === 'HOURLY'
-        ? Math.round((emp.pay / 60) * minutes) // 시급 ⇒ 분당 단가
-        : emp.pay;                             // 월급제 그대로(기간과 무관하게 1회 반영: 기존 동작 유지)
+    const kstS = toKst(curr.start), kstE = toKst(curr.end);
+    const label = `${kstS.getUTCMonth()+1}월 ${kstS.getUTCDate()}일 ~ ${kstE.getUTCMonth()+1}월 ${kstE.getUTCDate()}일`;
 
-    ws.addRow({
-      name: emp.name,
-      nationalIdMasked: emp.nationalIdMasked,
-      accountNumber: emp.accountNumber,
-      bank: emp.bank,
-      salary,
-      minutes
+    res.json({
+      year, month,
+      cycle: { start: curr.start, end: curr.end, startDay, label },
+      fixed,                              // { amount: 0 } (추후 확정 로직 연결)
+      hourly: {
+        amount: curHourly.amount,         // COMPLETED & confirmedPay 합
+        shiftCount: curHourly.shiftCount
+      },
+      totals: {
+        expectedPayout,
+        previousExpectedPayout: prevExpectedPayout,
+        deltaFromPrev
+      },
+      meta: { eligibleEmployees }
     });
-  }
-
-  /* ───── 5) 스트림 응답 ───── */
-  res.setHeader(
-    'Content-Disposition',
-    `attachment; filename=payroll_${shopId}_${start}_${end}.xlsx`
-  );
-  res.setHeader(
-    'Content-Type',
-    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-  );
-  await wb.xlsx.write(res);
-  res.end();
-};
+  };

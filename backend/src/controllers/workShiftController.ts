@@ -151,6 +151,7 @@ export const adminListShifts = async (req: AuthRequiredRequest, res: Response): 
       startAt: true,
       endAt: true,
       status: true,
+      finalPayAmount: true,
       // 필요 시 아래 주석 해제
       // graceInMin: true,
       employee: {

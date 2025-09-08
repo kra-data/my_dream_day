@@ -230,8 +230,12 @@ export const adminUpdateWorkShift = async (req: AuthRequiredRequest, res: Respon
   }
   const payload = parsed.data;
 
-  const shift = await prisma.workShift.findFirst({ where: { id: shiftId, shopId } });
-  if (!shift) { res.status(404).json({ error: '시프트를 찾을 수 없습니다.' }); return; }
+const shift = await prisma.workShift.findFirst({
+  where: { id: shiftId, shopId },
+  include: { employee: { select: { pay: true, payUnit: true } } }   // ← 단가/단위 필요
+});
+if (!shift) { res.status(404).json({ error: '시프트를 찾을 수 없습니다.' }); return; }
+
 
   const nextStartAt = payload.startAt ? new Date(payload.startAt) : shift.startAt;
   const nextEndAt   = payload.endAt   ? new Date(payload.endAt)   : shift.endAt;
@@ -287,10 +291,33 @@ export const adminUpdateWorkShift = async (req: AuthRequiredRequest, res: Respon
     nextLeftEarly = nextActualOutAt < nextEndAt;
   }
 
-  const computedActualMinutes =
-    (nextActualInAt && nextActualOutAt) ? diffMinutes(nextActualInAt, nextActualOutAt) : null;
-  const computedWorkedMinutes =
-    (nextActualInAt && nextActualOutAt) ? intersectMinutes(nextActualInAt, nextActualOutAt, nextStartAt, nextEndAt) : null;
+
+// ...중략(검증/겹침/상태결정 로직 동일) ...
+
+const computedActualMinutes =
+  (nextActualInAt && nextActualOutAt) ? diffMinutes(nextActualInAt, nextActualOutAt) : null;
+
+// ★ 지각 10분 유예 반영해서 payable 계산
+let computedWorkedMinutes: number | null = null;
+if (nextActualInAt && nextActualOutAt) {
+  const lateMs = Math.max(0, nextActualInAt.getTime() - nextStartAt.getTime());
+  const inForPayable =
+    lateMs <= LATE_GRACE_MIN_FOR_PAYABLE * 60_000 ? nextStartAt : nextActualInAt;
+  computedWorkedMinutes = intersectMinutes(inForPayable, nextActualOutAt, nextStartAt, nextEndAt);
+}
+
+// ★ 확정 급여 계산 (시급제 & COMPLETED & 근무분 유효)
+let nextFinalPayAmount: number | null | undefined = undefined;
+if (nextStatus === ('COMPLETED' as any) && computedWorkedMinutes != null) {
+  if (shift.employee.payUnit === 'HOURLY') {
+    nextFinalPayAmount = Math.round((computedWorkedMinutes / 60) * (shift.employee.pay ?? 0));
+  } else {
+    nextFinalPayAmount = null; // 월급제는 시프트별 확정 없음(요구사항)
+  }
+} else if (nextStatus !== ('COMPLETED' as any)) {
+  // 완료가 아니라면 확정값 제거(미확정 상태)
+  nextFinalPayAmount = null;
+}
 
   // ✅ 관리자 수정 규칙
   // - admin이 수정하는 경우에는 REVIEW로 "새로" 전환하지 않음.
@@ -331,6 +358,7 @@ export const adminUpdateWorkShift = async (req: AuthRequiredRequest, res: Respon
       updatedBy: req.user.userId,
       actualMinutes: computedActualMinutes,
       workedMinutes: computedWorkedMinutes,
+          finalPayAmount: nextFinalPayAmount,
     },
   });
 
@@ -342,6 +370,7 @@ export const adminUpdateWorkShift = async (req: AuthRequiredRequest, res: Respon
       workedMinutes: computedWorkedMinutes,
       late: updated.late ?? null,
       leftEarly: updated.leftEarly ?? null,
+          finalPayAmount: nextFinalPayAmount,
     }
   });
 };
@@ -356,8 +385,12 @@ export const recordAttendance = async (req: AuthRequiredRequest, res: Response) 
   const now = new Date();
 
   // 요청한 shift가 본인/해당 매장 소속인지 검증
-  const shift = await prisma.workShift.findFirst({ where: { id: shiftId, shopId, employeeId } });
-  if (!shift) { res.status(404).json({ error: '근무일정을 찾을 수 없습니다.' }); return; }
+const shift = await prisma.workShift.findFirst({
+  where: { id: shiftId, shopId, employeeId },
+  include: { employee: { select: { pay: true, payUnit: true } } }   // ← 단가/단위 필요
+});
+if (!shift) { res.status(404).json({ error: '근무일정을 찾을 수 없습니다.' }); return; }
+
 
   if (type === 'IN') {
     const nowMs = now.getTime();
@@ -449,27 +482,31 @@ export const recordAttendance = async (req: AuthRequiredRequest, res: Response) 
       });
       return;
     }
-
-    // 그 외: 정상 마감
-    await prisma.workShift.update({
-      where: { id: shiftId },
-      data: {
-        status: 'COMPLETED',
-        actualOutAt: now,
-        leftEarly,
-        actualMinutes: actual,
-        workedMinutes: payable
-      },
-    });
-    res.json({
-      ok: true,
-      message: leftEarly ? '퇴근(예정보다 이른 퇴근)' : '퇴근 완료',
-      clockOutAt: now,
-      workedMinutes: payable,
-      actualMinutes: actual,
-      planned: { startAt: shift.startAt, endAt: shift.endAt },
-      shiftId,
-    });
+const hourlyAmount =
+  shift.employee.payUnit === 'HOURLY'
+    ? Math.round((payable / 60) * (shift.employee.pay ?? 0))
+    : null;
+await prisma.workShift.update({
+  where: { id: shiftId },
+  data: {
+    status: 'COMPLETED',
+    actualOutAt: now,
+    leftEarly,
+    actualMinutes: actual,
+    workedMinutes: payable,
+    finalPayAmount: hourlyAmount,
+  },
+});
+res.json({
+  ok: true,
+  message: leftEarly ? '퇴근(예정보다 이른 퇴근)' : '퇴근 완료',
+  clockOutAt: now,
+  workedMinutes: payable,
+  actualMinutes: actual,
+  finalPayAmount: hourlyAmount,
+  planned: { startAt: shift.startAt, endAt: shift.endAt },
+  shiftId,
+});
     return;
   }
 
