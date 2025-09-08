@@ -54,36 +54,25 @@ export const payrollOverview: (req: AuthRequiredRequest, res: Response) => Promi
     // 시급 확정 합: COMPLETED + confirmedPay 존재 + (사이클 교집합)
     // 교집합 비율만큼 confirmedPay를 비례 배분 (경계걸친 야간 등 대비)
     // ─────────────────────────────
+// 사이클 내부 확정 시급 합계 (프레이션 없음)
 async function confirmedHourlyIn(range: { start: Date; end: Date }) {
   const rows = await prisma.workShift.findMany({
     where: {
       shopId,
-      status: 'COMPLETED',                    // REVIEW 제외
-      startAt: { lt: range.end },
-      endAt:   { gt: range.start },
-      employee: { payUnit: 'HOURLY' },
-      finalPayAmount: { not: null },          // 미확정 제외
+      status: 'COMPLETED',              // REVIEW 제외
+      finalPayAmount: { not: null },    // 미확정 제외
+      employee: { payUnit: 'HOURLY' },  // 시급만
+      // 한 사이클에만 속한다고 가정 → startAt 기준으로 버킷팅
+      startAt: { gte: range.start, lte: range.end },
+      // 만약 경계가 [start, nextStart) 반열림이라면 lte → lt(nextStart)로 바꿔도 OK
     },
-    select: {
-      startAt: true,
-      endAt: true,
-      workedMinutes: true,
-      finalPayAmount: true,
-    }
+    select: { finalPayAmount: true },
   });
 
-  let amount = 0;
-  let shiftCount = 0;
-
-  for (const r of rows) {
-    const baseMin = r.workedMinutes ?? Math.max(1, Math.floor((r.endAt.getTime() - r.startAt.getTime())/60000));
-    const inMin   = intersectMin(r.startAt, r.endAt, range.start, range.end);
-    const prorated = Math.round((r.finalPayAmount as number) * (inMin / baseMin));
-    amount += prorated;
-    shiftCount++;
-  }
-  return { amount, shiftCount };
+  const amount = rows.reduce((sum, r) => sum + (r.finalPayAmount ?? 0), 0);
+  return { amount, shiftCount: rows.length };
 }
+
     // 현재/전월 시급 확정 합만 사용
     const curHourly  = await confirmedHourlyIn(curr);
     const prevHourly = await confirmedHourlyIn(prev);

@@ -420,6 +420,55 @@ SettlePreviousResponse: {
     settlement: { $ref: '#/components/schemas/PayrollSettlement' }
   }
 },
+// ───────────────── Payroll Overview (신규 최소 스키마) ─────────────────
+PayrollCycleLite: {
+  type: 'object',
+  properties: {
+    start:    { type: 'string', format: 'date-time', example: '2025-09-07T00:00:00.000Z' },
+    end:      { type: 'string', format: 'date-time', example: '2025-10-06T23:59:59.999Z' },
+    label:    { type: 'string', example: '9월 7일 ~ 10월 6일' },
+    startDay: { type: 'integer', minimum: 1, maximum: 28, example: 7 }
+  }
+},
+PayrollOverviewFixed: {
+  type: 'object',
+  properties: {
+    amount: { type: 'integer', example: 2500000, description: '고정급 합계(원). 현재는 0 또는 추후 확정 로직 반영' }
+  }
+},
+PayrollOverviewHourly: {
+  type: 'object',
+  properties: {
+    amount:     { type: 'integer', example: 394000, description: '시급 확정 합계(원): COMPLETED & finalPayAmount 존재만 포함' },
+    shiftCount: { type: 'integer', example: 18 }
+  }
+},
+PayrollOverviewTotals: {
+  type: 'object',
+  properties: {
+    expectedPayout:         { type: 'integer', example: 394000 },
+    previousExpectedPayout: { type: 'integer', example: 372000 },
+    deltaFromPrev:          { type: 'integer', example: 22000 }
+  }
+},
+PayrollOverviewMeta: {
+  type: 'object',
+  properties: {
+    eligibleEmployees: { type: 'integer', example: 12, description: '급여 대상(급여 단가가 있는) 직원 수' }
+  }
+},
+PayrollOverviewResponse: {
+  type: 'object',
+  properties: {
+    year:  { type: 'integer', example: 2025 },
+    month: { type: 'integer', example: 9 },
+    cycle: { $ref: '#/components/schemas/PayrollCycleLite' },
+    fixed: { $ref: '#/components/schemas/PayrollOverviewFixed' },
+    hourly:{ $ref: '#/components/schemas/PayrollOverviewHourly' },
+    totals:{ $ref: '#/components/schemas/PayrollOverviewTotals' },
+    meta:  { $ref: '#/components/schemas/PayrollOverviewMeta' }
+  }
+},
 
 MyPageCycle: {
   type: 'object',
@@ -607,6 +656,56 @@ AttendanceCreateRequest: {
         responses: { '200': { description: 'OK' } }
       }
     },
+'/api/admin/shops/{shopId}/payroll/overview': {
+  get: {
+    tags: ['Payroll'],
+    summary: '급여 개요(사이클 기준 확정 합계)',
+    description: 'COMPLETED & finalPayAmount가 설정된 시급 시프트만 합산합니다. REVIEW/미확정은 제외. 고정급은 별도(fixed.amount)로 분리.',
+    security: [{ bearerAuth: [] }],
+    parameters: [
+      { name: 'shopId', in: 'path', required: true, schema: { type: 'integer' } },
+      { name: 'year', in: 'query', required: true, schema: { type: 'integer', minimum: 2000, maximum: 2100 } },
+      { name: 'month', in: 'query', required: true, schema: { type: 'integer', minimum: 1, maximum: 12 } },
+      { name: 'cycleStartDay', in: 'query', required: false, schema: { type: 'integer', minimum: 1, maximum: 28 },
+        description: '사이클 시작일(기본: 매장 payday; 제공 시 override)' }
+    ],
+    responses: {
+      '200': {
+        description: 'OK',
+        content: {
+          'application/json': {
+            schema: { $ref: '#/components/schemas/PayrollOverviewResponse' },
+            examples: {
+              sample: {
+                value: {
+                  year: 2025,
+                  month: 9,
+                  cycle: {
+                    start: '2025-09-07T00:00:00.000Z',
+                    end:   '2025-10-06T23:59:59.999Z',
+                    label: '9월 7일 ~ 10월 6일',
+                    startDay: 7
+                  },
+                  fixed: { amount: 0 },
+                  hourly: { amount: 394000, shiftCount: 18 },
+                  totals: {
+                    expectedPayout: 394000,
+                    previousExpectedPayout: 372000,
+                    deltaFromPrev: 22000
+                  },
+                  meta: { eligibleEmployees: 12 }
+                }
+              }
+            }
+          }
+        }
+      },
+      '401': { description: 'Unauthorized' },
+      '403': { description: 'Forbidden' },
+      '404': { description: 'Shop not found' }
+    }
+  }
+},
 
 
     '/api/admin/shops': {
