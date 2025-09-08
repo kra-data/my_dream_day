@@ -16,7 +16,7 @@ import {
   adminListReviewShifts,
   adminGetShiftDetail
 } from '../controllers/workShiftController';
-import { payrollOverview,exportPayrollXlsx } from '../controllers/payrollController';
+import { payrollOverview,exportPayrollXlsx,getSettlementSummary } from '../controllers/payrollController';
 // ✅ 추가: 타입 안전 래퍼 & 정산 컨트롤러
 import { withUser, AuthRequiredRequest } from '../middlewares/requireUser';
 
@@ -77,4 +77,5 @@ router.get('/shops/:shopId/dashboard/recent',  recentActivities);
 // 🆕 급여 개요
 router.get('/shops/:shopId/payroll/overview', withUser(payrollOverview));
 router.get('/shops/:shopId/payroll/export-xlsx', withUser(exportPayrollXlsx));
+router.get('/shops/:shopId/payroll/summary', withUser(getSettlementSummary));
 export default router;

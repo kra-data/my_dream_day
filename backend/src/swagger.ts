@@ -629,7 +629,47 @@ AttendanceCreateRequest: {
         }
       },
 
-
+     PayrollCycleWithNext: {
+       type: 'object',
+       properties: {
+         start: { type: 'string', format: 'date-time', example: '2025-09-07T00:00:00.000Z' },
+         end:   { type: 'string', format: 'date-time', example: '2025-10-06T23:59:59.999Z' },
+         nextStart: { type: 'string', format: 'date-time', example: '2025-10-07T00:00:00.000Z' },
+         label: { type: 'string', example: '9월 7일 ~ 10월 6일' },
+         startDay: { type: 'integer', minimum: 1, maximum: 28, example: 7 }
+       }
+     },
+     MonthRange: {
+       type: 'object',
+       properties: {
+         start: { type: 'string', format: 'date-time', example: '2025-09-01T00:00:00.000Z' },
+         end:   { type: 'string', format: 'date-time', example: '2025-09-30T23:59:59.999Z' },
+         label: { type: 'string', example: '9월 1일 ~ 9월 30일' }
+       }
+     },
+     SettlementDashboardKPI: {
+       type: 'object',
+       properties: {
+         amountToSettle: { type: 'integer', description: '정산 대상 금액(원)', example: 0 },
+         pendingEmployees: { type: 'integer', description: '미정산 직원 수', example: 0 },
+         paidEmployees: { type: 'integer', description: '정산 완료 직원 수', example: 0 },
+         workedMinutesThisMonth: { type: 'integer', description: '이번달 총 근무 분', example: 540 },
+         workedDurationThisMonthLabel: { type: 'string', description: '이번달 총 근무시간 라벨', example: '9시간' },
+         previousCyclePayout: { type: 'integer', description: '지난달 지출(직전 사이클 확정 합계, 원)', example: 0 }
+       }
+     },
+     SettlementDashboardResponse: {
+       type: 'object',
+       properties: {
+         year: { type: 'integer', example: 2025 },
+         month:{ type: 'integer', example: 9 },
+         cycle: { $ref: '#/components/schemas/PayrollCycleWithNext' },
+         scheduledPayday: { type: 'string', format: 'date-time', description: '정산 예정일(다음 사이클 시작일)', example: '2025-10-07T00:00:00.000Z' },
+         scheduledPaydayLabel: { type: 'string', description: 'YYYY. M. D. 표기', example: '2025. 10. 7.' },
+         monthRange: { $ref: '#/components/schemas/MonthRange' },
+         kpi: { $ref: '#/components/schemas/SettlementDashboardKPI' }
+       }
+     },
 
 
     }
@@ -787,7 +827,67 @@ AttendanceCreateRequest: {
     }
   }
 },
-
+    '/api/admin/shops/{shopId}/payroll/summary': {
+      get: {
+        tags: ['Payroll'],
+        summary: '정산관리 대시보드 요약',
+        description:
+          '선택한 연/월과 급여 사이클 기준으로 정산 요약 정보를 반환합니다.\n' +
+          '- 정산 대상 금액, 미정산/정산 완료 인원 수\n' +
+          '- 정산 예정일(다음 사이클 시작일)\n' +
+          '- 이번달 총 근무시간(라벨 포함)\n' +
+          '- 지난달 지출(직전 사이클 확정 합계)',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'shopId', in: 'path', required: true, schema: { type: 'integer' } },
+          { name: 'year', in: 'query', required: true, schema: { type: 'integer', minimum: 2000, maximum: 2100 } },
+          { name: 'month', in: 'query', required: true, schema: { type: 'integer', minimum: 1, maximum: 12 } },
+          { name: 'cycleStartDay', in: 'query', required: false, schema: { type: 'integer', minimum: 1, maximum: 28 },
+            description: '사이클 시작일(미지정 시 매장 payday 사용)' }
+        ],
+        responses: {
+          '200': {
+            description: 'OK',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/SettlementDashboardResponse' },
+                examples: {
+                  sample: {
+                    value: {
+                      year: 2025,
+                      month: 9,
+                      cycle: {
+                        start: '2025-09-07T00:00:00.000Z',
+                        end: '2025-10-06T23:59:59.999Z',
+                        nextStart: '2025-10-07T00:00:00.000Z',
+                        label: '9월 7일 ~ 10월 6일',
+                        startDay: 7
+                      },
+                      monthRange: {
+                        start: '2025-09-01T00:00:00.000Z',
+                        end: '2025-09-30T23:59:59.999Z',
+                        label: '9월 1일 ~ 9월 30일'
+                      },
+                      kpi: {
+                        amountToSettle: 0,
+                        pendingEmployees: 0,
+                        paidEmployees: 0,
+                        workedMinutesThisMonth: 540,
+                        workedDurationThisMonthLabel: '9시간',
+                        previousCyclePayout: 0
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          '401': { description: 'Unauthorized' },
+          '403': { description: 'Forbidden' },
+          '404': { description: 'Not Found' }
+        }
+      }
+    },
 
     '/api/admin/shops': {
       get: { tags: ['Admin'], summary: '매장 목록', responses: { '200': { description: 'OK' } } },

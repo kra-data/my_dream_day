@@ -10,20 +10,43 @@ const fromKstParts = (y: number, m1: number, d: number, hh = 0, mm = 0, ss = 0, 
 const toKst = (d: Date) => new Date(d.getTime() + 9 * 60 * 60 * 1000);
 
 // 사이클 계산
-function kstCycle(year: number, month: number, startDay: number) {
+function kstCycle(
+  year: number,
+  month: number,
+  startDay: number
+): { start: Date; end: Date; nextStart: Date } {
   const start = fromKstParts(year, month - 1, startDay, 0, 0, 0, 0);
   const nm = month === 12 ? { y: year + 1, m: 1 } : { y: year, m: month + 1 };
   const nextStart = fromKstParts(nm.y, nm.m - 1, startDay, 0, 0, 0, 0);
   const end = new Date(nextStart.getTime() - 1);
-  return { start, end };
+  return { start, end, nextStart };
 }
-
 const q = z.object({
   year: z.coerce.number().int().min(2000).max(2100),
   month: z.coerce.number().int().min(1).max(12),
   cycleStartDay: z.coerce.number().int().min(1).max(28).optional(),
 });
+const fmtDateDot = (d: Date) => {
+  const k = toKst(d);
+  return `${k.getUTCFullYear()}. ${k.getUTCMonth() + 1}. ${k.getUTCDate()}.`;
+};
+const fmtRangeLabel = (s: Date, e: Date) => {
+  const ks = toKst(s), ke = toKst(e);
+  return `${ks.getUTCMonth() + 1}월 ${ks.getUTCDate()}일 ~ ${ke.getUTCMonth() + 1}월 ${ke.getUTCDate()}일`;
+};
+const fmtHourMinKo = (mins: number) => {
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return m === 0 ? `${h}시간` : `${h}시간 ${m}분`;
+};
 
+function kstCalendarMonth(year: number, month: number) {
+  const start = fromKstParts(year, month - 1, 1, 0, 0, 0, 0);
+  const nm = month === 12 ? { y: year + 1, m: 1 } : { y: year, m: month + 1 };
+  const nextStart = fromKstParts(nm.y, nm.m - 1, 1, 0, 0, 0, 0);
+  const end = new Date(nextStart.getTime() - 1);
+  return { start, end };
+}
     const fmtKoreanDuration = (mins: number) => {
       const h = Math.floor(mins / 60);
       const m = mins % 60;
@@ -286,6 +309,122 @@ if (rowNo > 0) {
     await wb.xlsx.write(res);
     res.end();
   };
+
+
+export const getSettlementSummary = async (req: AuthRequiredRequest, res: Response): Promise<void> => {
+  const shopId = Number(req.params.shopId);
+  if (req.user.shopId !== shopId) { res.status(403).json({ error: '다른 가게는 조회할 수 없습니다.' }); return; }
+
+  const parsed = q.safeParse(req.query);
+  if (!parsed.success) { res.status(400).json({ error: 'Invalid query' }); return; }
+
+  // 기본 anchor: 현재 KST
+  const now = toKst(new Date());
+  const year  = parsed.data.year  ?? now.getUTCFullYear();
+  const month = parsed.data.month ?? (now.getUTCMonth() + 1);
+
+  const shop = await prisma.shop.findUnique({ where: { id: shopId }, select: { payday: true } });
+  if (!shop) { res.status(404).json({ error: 'Shop not found' }); return; }
+  const startDay = parsed.data.cycleStartDay ?? Math.min(Math.max(shop.payday ?? 1, 1), 28);
+
+  // 사이클 & 달 범위
+  const cycle = kstCycle(year, month, startDay);
+  const calThis = kstCalendarMonth(year, month);
+  const prevMonth = month === 1 ? 12 : month - 1;
+  const prevYear  = month === 1 ? year - 1 : year;
+  const calPrev = kstCalendarMonth(prevYear, prevMonth);
+
+  // ───────── 사이클 범위의 근무(시급, 확정분만) 조회 ─────────
+  const cycleShifts = await prisma.workShift.findMany({
+    where: {
+      shopId,
+      status: 'COMPLETED',
+      finalPayAmount: { not: null },
+      employee: { payUnit: 'HOURLY' },
+      startAt: { gte: cycle.start, lte: cycle.end },
+    },
+    select: { employeeId: true, finalPayAmount: true, settlementId: true }
+  });
+
+  // 직원별 미정산/완료 판정
+  const empMap = new Map<number, { grossTotal: number; hasUnsettled: boolean }>();
+  for (const r of cycleShifts) {
+    const cur = empMap.get(r.employeeId) ?? { grossTotal: 0, hasUnsettled: false };
+    cur.grossTotal += r.finalPayAmount ?? 0;
+    if (!r.settlementId) cur.hasUnsettled = true;
+    empMap.set(r.employeeId, cur);
+  }
+
+  const employeeCount = empMap.size;
+  let paidCount = 0, unpaidCount = 0;
+  let pendingGross = 0;
+
+  for (const [, v] of empMap) {
+    if (v.hasUnsettled) {
+      unpaidCount++;
+      // "정산 대상 금액"은 미정산분 총액으로 해석: 사이클 내 미정산 시프트만 합산
+      // (사이클 전부가 미정산인지/일부만 미정산인지 상관없이, 시프트 단위로 미정산만 집계)
+    }
+  }
+  // 미정산 금액 재집계(시프트 단위)
+  pendingGross = cycleShifts
+    .filter(s => !s.settlementId)
+    .reduce((sum, s) => sum + (s.finalPayAmount ?? 0), 0);
+
+  paidCount = employeeCount - unpaidCount;
+
+  // ───────── 이번달 총 근무시간(캘린더 월), 지난달 지출(캘린더 월 정산된 금액) ─────────
+  const monthShifts = await prisma.workShift.findMany({
+    where: {
+      shopId,
+      status: 'COMPLETED',
+      employee: { payUnit: 'HOURLY' },
+      startAt: { gte: calThis.start, lte: calThis.end },
+    },
+    select: { workedMinutes: true }
+  });
+  const totalMinutesThisMonth = monthShifts.reduce((s, r) => s + (r.workedMinutes ?? 0), 0);
+
+  const prevPaidShifts = await prisma.workShift.findMany({
+    where: {
+      shopId,
+      status: 'COMPLETED',
+      finalPayAmount: { not: null },
+      settlementId: { not: null },          // 지난달 "지출"은 실제 정산된(지급처리) 금액만
+      employee: { payUnit: 'HOURLY' },
+      startAt: { gte: calPrev.start, lte: calPrev.end },
+    },
+    select: { finalPayAmount: true }
+  });
+  const spentLastMonth = prevPaidShifts.reduce((s, r) => s + (r.finalPayAmount ?? 0), 0);
+
+  // ───────── 응답 ─────────
+  const cycleLabel = fmtRangeLabel(cycle.start, cycle.end);
+  const calendarLabel = fmtRangeLabel(calThis.start, calThis.end);
+
+  res.json({
+    year, month,
+    cycle: {
+      start: cycle.start,
+      end: cycle.end,
+      startDay,
+      label: cycleLabel,
+    },
+    summary: {
+      settlementTargetAmount: Math.trunc(pendingGross),   // 정산 대상 금액(미정산 시フト 합계, 원단위 절사표시)
+      unpaidEmployees: unpaidCount,                       // 미정산 직원 수
+      paidEmployees: paidCount,                           // 정산 완료 직원 수
+      employeesInCycle: employeeCount,                    // 사이클 내 근무가 있었던 직원 수(참고)
+    },
+    calendarMonth: {
+      rangeLabel: calendarLabel,                          // 예: '9월 1일 ~ 9월 30일'
+      totalWorkedMinutes: totalMinutesThisMonth,
+      totalWorkedLabel: fmtHourMinKo(totalMinutesThisMonth), // 예: '9시간'
+      spentLastMonth: Math.trunc(spentLastMonth),         // 지난달 지출(정산 완료 합계)
+    }
+  });
+};
+
 export const payrollOverview: (req: AuthRequiredRequest, res: Response) => Promise<void> =
   async (req, res) => {
     const shopId = Number(req.params.shopId);
