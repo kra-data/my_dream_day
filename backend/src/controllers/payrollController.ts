@@ -501,10 +501,6 @@ export const settleEmployeeCycle: (req: AuthRequiredRequest, res: Response) => P
     const startDay = parsedQ.data.cycleStartDay ?? Math.min(Math.max(shop.payday ?? 1, 1), 28);
     const cycle = kstCycle(year, month, startDay);
 
-    const parsedB = bodySchema.safeParse(req.body ?? {});
-    if (!parsedB.success) { res.status(400).json({ error: 'Invalid body' }); return; }
-    const { note, forceWithholding } = parsedB.data;
-
     // 직원 조회(같은 매장 소속인지)
     const emp = await prisma.employee.findFirst({
       where: { id: employeeId, shopId },
@@ -556,7 +552,7 @@ export const settleEmployeeCycle: (req: AuthRequiredRequest, res: Response) => P
 
     // 세금(정책: HOURLY만 3.3% 적용; 강제 플래그 있으면 적용)
     let incomeTax = 0, localIncomeTax = 0, otherTax = 0, netPay = totalPay;
-    const shouldWithhold = forceWithholding || emp.payUnit === 'HOURLY';
+    const shouldWithhold = emp.payUnit === 'HOURLY';
     if (shouldWithhold) {
       const t = calcTaxesTruncate(totalPay);
       incomeTax = t.incomeTax;
@@ -581,7 +577,6 @@ export const settleEmployeeCycle: (req: AuthRequiredRequest, res: Response) => P
           otherTax,
           netPay,
           processedBy: req.user.userId ?? null,
-          note,
         }
       });
 

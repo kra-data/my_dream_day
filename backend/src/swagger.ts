@@ -1414,18 +1414,6 @@ AttendanceCreateRequest: {
     { name: 'cycleStartDay', in: 'query', required: false, schema: { type: 'integer', minimum: 1, maximum: 28 },
       description: '사이클 시작일 override(미지정 시 매장 payday 사용)' }
   ],
-  requestBody: {
-    required: false,
-    content: {
-      'application/json': {
-        schema: { $ref: '#/components/schemas/SettleEmployeeCycleRequest' },
-        examples: {
-          hourly: { value: { note: '9월 정산', forceWithholding: true } },
-          monthly: { value: { note: '월급 정산' } }
-        }
-      }
-    }
-  },
   responses: {
     '201': {
       description: 'Created',
