@@ -12,6 +12,12 @@ const startOfKstDay = (base: Date) => {
   const k = toKst(base);
   return fromKstParts(k.getUTCFullYear(), k.getUTCMonth(), k.getUTCDate(), 0, 0, 0, 0);
 };
+const intersectMinutes = (a0: Date, a1: Date, b0: Date, b1: Date) => {
+  const st = a0 > b0 ? a0 : b0;
+  const en = a1 < b1 ? a1 : b1;
+  if (en <= st) return 0;
+  return diffMinutes(st, en);
+};
 const endOfKstDay = (base: Date) => {
   const k = toKst(base);
   return fromKstParts(k.getUTCFullYear(), k.getUTCMonth(), k.getUTCDate(), 23, 59, 59, 999);
@@ -52,7 +58,12 @@ const updateShiftSchema = z.object({
   endAt:   z.string().datetime().optional(),
   status:  z.enum(['SCHEDULED','IN_PROGRESS','COMPLETED','CANCELED','OVERDUE','REVIEW']).optional(),
 });
-
+const resolveReviewSchema = z.object({
+  // 필요한 보정값을 선택적으로 허용 (없으면 현행 유지)
+  startAt: z.string().datetime(),
+  endAt:   z.string().datetime(),
+  memo: z.string().max(500).optional()
+});
 // ───────── 공통 파서 ─────────
 function resolveRangeKst(body: z.infer<typeof createShiftSchema>) {
   if ('startAt' in body) {
@@ -78,7 +89,7 @@ const overlapWhere = (employeeId: number, shopId: number, startAt: Date, endAt: 
   endAt:   { gt: startAt }, // 기존끝 > 새시작
   ...(excludeId ? { NOT: { id: excludeId } } : {}),
 });
-
+const LATE_GRACE_MIN_FOR_PAYABLE = Number(process.env.LATE_GRACE_MIN_FOR_PAYABLE ?? '10'); // ≤10 지각 인정(정산 삭감 없음)
 /* ───────────────── 직원 전용: 내 근무일정 생성 ───────────────── */
 export const myCreateShift = async (req: AuthRequiredRequest, res: Response): Promise<void> => {
   const parsed = createShiftSchema.safeParse(req.body);
@@ -195,8 +206,95 @@ export const getMyTodayWorkshifts = async (req: AuthRequiredRequest, res: Respon
 
   res.json(rows);
 };
+const diffMinutes = (a: Date, b: Date) => Math.max(0, Math.floor((b.getTime() - a.getTime()) / 60000));
+export const resolveReviewShiftScheduleOnly = async (req: AuthRequiredRequest, res: Response) => {
+  const shopId  = Number(req.params.shopId);
+  const shiftId = Number(req.params.shiftId);
+  if (req.user.shopId !== shopId) { res.status(403).json({ error: '다른 가게는 관리할 수 없습니다.' }); return; }
+
+  const parsed = resolveReviewSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: 'Invalid payload', detail: parsed.error.flatten() });
+    return;
+  }
+  const { startAt, endAt,memo } = parsed.data;
+
+  // REVIEW 상태의 시프트만 대상으로 함
+  const shift = await prisma.workShift.findFirst({
+    where: { id: shiftId, shopId, status: 'REVIEW' as any },
+    include: { employee: { select: { pay: true, payUnit: true } } }
+  });
+  if (!shift) { res.status(404).json({ error: 'REVIEW 상태의 시프트를 찾을 수 없습니다.' }); return; }
+
+  const nextStartAt = new Date(startAt);
+  const nextEndAt   = new Date(endAt);
+  if (!(nextStartAt < nextEndAt)) { res.status(400).json({ error: 'endAt은 startAt 이후여야 합니다.' }); return; }
+
+  // 동일 직원의 다른 시프트와 겹침 방지
+  const overlap = await prisma.workShift.findFirst({
+    where: {
+      shopId,
+      employeeId: shift.employeeId,
+      id: { not: shiftId },
+      startAt: { lt: nextEndAt },
+      endAt:   { gt: nextStartAt },
+    },
+    select: { id: true, startAt: true, endAt: true },
+  });
+  if (overlap) { res.status(409).json({ error: '다른 근무일정과 시간이 겹칩니다.', overlap }); return; }
+
+  // actual은 건드리지 않음
+  const nextActualInAt  = shift.actualInAt;
+  const nextActualOutAt = shift.actualOutAt;
+
+  // 상태 결정(실근무 기록 유무만으로)
+  let nextStatus: any =
+    (nextActualInAt && nextActualOutAt) ? 'COMPLETED'
+    : (nextActualInAt ? 'IN_PROGRESS' : 'SCHEDULED');
+
+  // 분 계산
+  const computedActualMinutes =
+    (nextActualInAt && nextActualOutAt) ? diffMinutes(nextActualInAt, nextActualOutAt) : null;
+
+  const computedWorkedMinutes=(nextStartAt && nextEndAt) ? diffMinutes(nextStartAt, nextEndAt) : null;
 
 
+  // 확정 급여(시급제 & COMPLETED & 근무분 존재 시)
+  let nextFinalPayAmount: number | null = null;
+  if (nextStatus === 'COMPLETED' && computedWorkedMinutes != null && shift.employee.payUnit === 'HOURLY') {
+    nextFinalPayAmount = Math.round((computedWorkedMinutes / 60) * (shift.employee.pay ?? 0));
+  }
+
+  const updated = await prisma.workShift.update({
+    where: { id: shiftId },
+    data: {
+      // 스케줄만 보정
+      startAt: nextStartAt,
+      endAt: nextEndAt,
+      // 리뷰 해소 이력
+      reviewResolvedAt: new Date(),
+      reviewedBy: req.user.userId,
+      // 상태/산출치 갱신
+      status: nextStatus,
+      actualMinutes: computedActualMinutes,
+      workedMinutes: computedWorkedMinutes,
+      finalPayAmount: nextFinalPayAmount,
+      updatedBy: req.user.userId,
+      // reviewReason/memo 등은 변경하지 않음(원하면 여기서 유지/수정 가능)
+    },
+  });
+
+  res.json({
+    ok: true,
+    shift: updated,
+    summary: {
+      status: nextStatus,
+      workedMinutes: computedWorkedMinutes,
+      actualMinutes: computedActualMinutes,
+      finalPayAmount: nextFinalPayAmount,
+    }
+  });
+};
 /* ───────────────── 관리자/점주: 특정 직원 일정 생성 ───────────────── */
  export const adminCreateShift = async (req: AuthRequiredRequest, res: Response): Promise<void> => {
   const shopId     = Number(req.params.shopId);

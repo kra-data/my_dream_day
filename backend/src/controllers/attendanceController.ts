@@ -291,9 +291,6 @@ if (!shift) { res.status(404).json({ error: '시프트를 찾을 수 없습니�
     nextLeftEarly = nextActualOutAt < nextEndAt;
   }
 
-
-// ...중략(검증/겹침/상태결정 로직 동일) ...
-
 const computedActualMinutes =
   (nextActualInAt && nextActualOutAt) ? diffMinutes(nextActualInAt, nextActualOutAt) : null;
 

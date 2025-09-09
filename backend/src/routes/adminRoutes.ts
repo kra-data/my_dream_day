@@ -14,7 +14,8 @@ import {
   adminUpdateShift,
   adminDeleteShift,
   adminListReviewShifts,
-  adminGetShiftDetail
+  adminGetShiftDetail,
+  resolveReviewShiftScheduleOnly
 } from '../controllers/workShiftController';
 import { getEmployeeStatusList,getEmployeeStatusDetail,payrollOverview,exportPayrollXlsx,getSettlementSummary,settleEmployeeCycle } from '../controllers/payrollController';
 // ✅ 추가: 타입 안전 래퍼 & 정산 컨트롤러
@@ -54,6 +55,7 @@ router.post('/shops/:shopId/employees/:employeeId/workshifts', withUser(adminCre
 router.get('/shops/:shopId/workshifts/:shiftId', withUser(adminGetShiftDetail));
 router.put('/shops/:shopId/workshifts/:shiftId', withUser(adminUpdateShift));
 router.delete('/shops/:shopId/workshifts/:shiftId', withUser(adminDeleteShift));
+router.post('/shops/:shopId/workshifts/:shiftId/review/resolve', withUser(resolveReviewShiftScheduleOnly));
 router.get('/shops/:shopId/qr', getShopQrPng);
 
 /* ───────── 매장 CRUD ───────── */

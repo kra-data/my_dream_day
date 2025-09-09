@@ -135,7 +135,18 @@ WorkShift: {
     updatedAt:   { type: 'string', format: 'date-time', nullable: true },
     notes:       { type: 'string', nullable: true }
   }
+},// ✅ 새 요청 스키마 추가
+ResolveReviewScheduleRequest: {
+  type: 'object',
+  required: ['startAt', 'endAt'],
+  properties: {
+    startAt: { type: 'string', format: 'date-time', example: '2025-09-09T10:00:00.000Z' },
+    endAt:   { type: 'string', format: 'date-time', example: '2025-09-09T13:00:00.000Z' },
+    memo:    { type: 'string', nullable: true, maxLength: 500, example: '종료시간 30분 보정' }
+  }
 },
+
+
       WorkShiftEmployeeLite: {
         type: 'object',
         properties: {
@@ -966,6 +977,88 @@ AttendanceCreateRequest: {
         }
       }
     },
+    '/api/admin/shops/{shopId}/workshifts/{shiftId}/review/resolve': {
+  post: {
+    tags: ['Shifts (Admin)'],
+    summary: 'REVIEW 해소(스케줄만 보정)',
+    description:
+      'REVIEW 상태의 근무일정에 대해 **실제 in/out(actual\*)은 그대로 두고** 계획 시간(startAt/endAt)만 수정하여 REVIEW를 해소합니다.\n' +
+      '- `workedMinutes`는 **지각 유예 없이** `actualInAt~actualOutAt` 과 수정된 `startAt~endAt`의 **순수 교집합**으로 재계산합니다.\n' +
+      '- `status`는 실제 기록 유무에 따라 SCHEDULED/IN_PROGRESS/COMPLETED 로 설정됩니다.\n' +
+      '- `finalPayAmount`는 COMPLETED & HOURLY & workedMinutes 존재 시 `workedMinutes` 기준으로 재산출됩니다.\n' +
+      '- 처리 시 `reviewResolvedAt`, `reviewedBy`가 기록됩니다.',
+    security: [{ bearerAuth: [] }],
+    parameters: [
+      { name: 'shopId',  in: 'path', required: true, schema: { type: 'integer' } },
+      { name: 'shiftId', in: 'path', required: true, schema: { type: 'integer' } }
+    ],
+    requestBody: {
+      required: true,
+      content: {
+        'application/json': {
+          schema: { $ref: '#/components/schemas/ResolveReviewScheduleRequest' },
+          examples: {
+            sample: {
+              value: {
+                startAt: '2025-09-09T10:00:00.000Z',
+                endAt:   '2025-09-09T13:00:00.000Z',
+                memo:    '종료 30분 보정'
+              }
+            }
+          }
+        }
+      }
+    },
+    responses: {
+      '200': {
+        description: 'Resolved',
+        content: {
+          'application/json': {
+            schema: { $ref: '#/components/schemas/WorkShiftUpdateResponse' },
+            examples: {
+              resolved: {
+                value: {
+                  ok: true,
+                  shift: {
+                    id: 321,
+                    shopId: 1,
+                    employeeId: 42,
+                    startAt: '2025-09-09T10:00:00.000Z',
+                    endAt:   '2025-09-09T13:00:00.000Z',
+                    status:  'COMPLETED',
+                    actualInAt:  '2025-09-09T10:05:00.000Z',
+                    actualOutAt: '2025-09-09T13:02:00.000Z',
+                    late: true,
+                    leftEarly: false,
+                    actualMinutes: 177,
+                    workedMinutes: 175,
+                    finalPayAmount: 35000,
+                    memo: '종료 30분 보정',
+                    reviewResolvedAt: '2025-09-09T13:05:00.000Z',
+                    reviewedBy: 1,
+                    updatedAt: '2025-09-09T13:05:00.000Z'
+                  },
+                  summary: {
+                    status: 'COMPLETED',
+                    actualMinutes: 177,
+                    workedMinutes: 175,
+                    finalPayAmount: 35000
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      '400': { description: 'Invalid payload' },
+      '401': { description: 'Unauthorized' },
+      '403': { description: 'Forbidden' },
+      '404': { description: 'REVIEW shift not found' },
+      '409': { description: 'Overlap with another shift' }
+    }
+  }
+},
+
     '/api/admin/shops/{shopId}/dashboard/active': {
       get: {
         tags: ['Dashboard'],
