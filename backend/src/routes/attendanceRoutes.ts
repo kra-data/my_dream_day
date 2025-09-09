@@ -10,7 +10,6 @@ import {
   getAttendanceRecords,
   getMyAttendance,
   getMyCurrentStatus,
-  adminUpdateWorkShift,
     getMyOverdueWorkShifts,
   getShopOverdueWorkShifts,
 } from '../controllers/attendanceController';
@@ -67,18 +66,7 @@ router.get(
   withUser((req: AuthRequiredRequest, res) => getAttendanceRecords(req, res))
 );
 
-/** (확장) 관리자 근무일정 보정
- *  PUT /api/attendance/admin/shops/:shopId/workshifts/:shiftId
- *  - 예정/실측(startAt,endAt,actualInAt,actualOutAt,late,leftEarly,status) 보정
- *  - 겹침/일관성 검증은 컨트롤러에서 처리
- */
-router.put(
-  '/admin/shops/:shopId/workshifts/:shiftId',
-  authenticateJWT,
-  requireUser,
-  requireRoles('admin', 'owner'),
-  withUser((req: AuthRequiredRequest, res) => adminUpdateWorkShift(req, res))
-);
+
 // 직원: OVERDUE 시프트 목록
 router.get(
   '/me/overdue',

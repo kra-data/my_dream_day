@@ -114,6 +114,7 @@ WorkShift: {
           reviewReason:  { $ref: '#/components/schemas/ShiftReviewReason', nullable: true },
           memo:    { type: 'string', nullable: true },
           reviewResolvedAt: { type: 'string', format: 'date-time', nullable: true },
+          finalPayAmount: { type: 'integer', nullable: true, example: 96000, description: '시급제: 확정 금액(원). 월급제: null' },
 
     // ✅ 실적 필드
     actualInAt:  { type: 'string', format: 'date-time', nullable: true },
@@ -339,6 +340,35 @@ PayrollEmployeeStatusDetailResponse: {
     }
   }
 },
+   AttendanceAdminRecord: {
+     type: 'object',
+     properties: {
+       id: { type: 'integer' },
+       shopId: { type: 'integer' },
+       employeeId: { type: 'integer' },
+       type: { $ref: '#/components/schemas/AttendanceType' },  // 'IN' | 'OUT'
+       clockInAt:  { type: 'string', format: 'date-time', nullable: true },
+       clockOutAt: { type: 'string', format: 'date-time', nullable: true },
+       workedMinutes:  { type: 'integer', nullable: true, description: '저장된 지급인정 분 (없으면 교집합 보조계산)' },
+       actualMinutes:  { type: 'integer', nullable: true, description: '저장된 실제 근무 분 (없으면 보조계산)' },
+       finalPayAmount: { type: 'integer', nullable: true, description: '시급제 확정 금액(원). 월급/미확정은 null' },
+       extraMinutes: { type: 'integer', example: 0 },
+       paired: { type: 'boolean', example: true, description: 'OUT 기록 존재 여부' },
+       shiftId: { type: 'integer' },
+       status: { $ref: '#/components/schemas/WorkShiftStatus' },
+       memo: { type: 'string', nullable: true }
+     }
+   },
+   CursorAttendanceAdminPage: {
+     type: 'object',
+     properties: {
+       items: {
+         type: 'array',
+         items: { $ref: '#/components/schemas/AttendanceAdminRecord' }
+       },
+       nextCursor: { type: ['integer','null'], example: 987 }
+     }
+   },
 // 필요 시 비고/옵션 입력용(바디 없이도 동작하게 optional)
 SettleEmployeeRequest: {
   type: 'object',
@@ -352,7 +382,8 @@ WorkShiftUpdateSummary: {
     actualMinutes: { type: 'integer', nullable: true, example: 505 },
     workedMinutes: { type: 'integer', nullable: true, example: 480 },
     late:          { type: 'boolean', nullable: true, example: false },
-    leftEarly:     { type: 'boolean', nullable: true, example: false }
+    leftEarly:     { type: 'boolean', nullable: true, example: false },
+    finalPayAmount:{ type: 'integer', nullable: true, example: 96000 }
   }
 },
 WorkShiftUpdateResponse: {
@@ -428,7 +459,42 @@ CursorWorkShiftWithEmployeePage: {
           workedMinutes: { type: 'integer', nullable: true, example: 285 }
         }
       },
-
+// swaggerDocument.components.schemas 안에 추가
+SettleEmployeeCycleRequest: {
+  type: 'object',
+  properties: {
+    note: { type: 'string', maxLength: 500, nullable: true, example: '사장 확인 완료' },
+    forceWithholding: {
+      type: 'boolean',
+      default: false,
+      description: 'true면 월급제(MONTHLY)도 3.3% 원천징수 강제 적용'
+    }
+  }
+},
+SettleEmployeeCycleResponse: {
+  type: 'object',
+  properties: {
+    ok: { type: 'boolean', example: true },
+    cycle: {
+      type: 'object',
+      properties: {
+        start:    { type: 'string', format: 'date-time', example: '2025-09-07T00:00:00.000Z' },
+        end:      { type: 'string', format: 'date-time', example: '2025-10-06T23:59:59.999Z' },
+        startDay: { type: 'integer', example: 7 }
+      }
+    },
+    employee: {
+      type: 'object',
+      properties: {
+        id:      { type: 'integer', example: 42 },
+        name:    { type: 'string',  example: '김직원' },
+        payUnit: { type: 'string',  enum: ['HOURLY','MONTHLY'], example: 'HOURLY' }
+      }
+    },
+    appliedShiftCount: { type: 'integer', example: 18, description: '이번 정산에 연결된 시프트 개수' },
+    settlement: { $ref: '#/components/schemas/PayrollSettlement' }
+  }
+},
 
 // ───────────────── Payroll Overview (프리랜서 3.3% 반영) ─────────────────
 PayrollCycleLite: {
@@ -555,7 +621,8 @@ AttendanceCreateRequest: {
           ok: { type: 'boolean' },
           message: { type: 'string', example: '출근 완료' },
           clockInAt: { type: 'string', format: 'date-time' },
-          shiftId: { type: 'integer', example: 456 }
+          shiftId: { type: 'integer', example: 456 },
+          memo: { type: 'string', nullable: true, example: '버스 지연' }
         }
       },
       AttendanceConfirmOutResponse: {
@@ -567,6 +634,8 @@ AttendanceCreateRequest: {
           workedMinutes: { type: 'integer' },
           actualMinutes: { type: 'integer' },
           shiftId: { type: 'integer', example: 456 },
+          finalPayAmount: { type: 'integer', nullable: true, example: 96000 },
+          memo: { type: 'string', nullable: true, example: '컨디션 저하' },
           planned: {
             type: 'object',
             nullable: true,
@@ -651,71 +720,6 @@ AttendanceCreateRequest: {
         }
       }
     },
-    // ── paths {...} 내부 수정(기존 엔드포인트 업데이트) ─────────────────────
-'/api/admin/shops/{shopId}/settlements/employees/{employeeId}': {
-  post: {
-    tags: ['Payroll'],
-    summary: '지난 사이클 정산(스냅샷 저장)',
-    description:
-      'shop의 급여 사이클 기준으로 특정 직원의 직전 사이클을 정산하고 PayrollSettlement 레코드를 생성합니다.',
-    security: [{ bearerAuth: [] }],
-    parameters: [
-      { name: 'shopId', in: 'path', required: true, schema: { type: 'integer' } },
-      { name: 'employeeId', in: 'path', required: true, schema: { type: 'integer' } },
-      // 필요 시 사이클 override
-      { name: 'year', in: 'query', required: false, schema: { type: 'integer', minimum: 2000, maximum: 2100 } },
-      { name: 'month', in: 'query', required: false, schema: { type: 'integer', minimum: 1, maximum: 12 } },
-      { name: 'cycleStartDay', in: 'query', required: false, schema: { type: 'integer', minimum: 1, maximum: 28 },
-        description: '사이클 시작일 override(미지정 시 매장 payday 사용)' }
-    ],
-    requestBody: {
-      required: false,
-      content: {
-        'application/json': {
-          schema: { $ref: '#/components/schemas/SettleEmployeeRequest' }
-        }
-      }
-    },
-    responses: {
-      '201': {
-        description: 'Created',
-        content: {
-          'application/json': {
-            schema: { $ref: '#/components/schemas/SettlePreviousResponse' },
-            examples: {
-              sample: {
-                value: {
-                  ok: true,
-                  settlement: {
-                    id: 10,
-                    shopId: 1,
-                    employeeId: 42,
-                    cycleStart: '2025-09-07T00:00:00.000Z',
-                    cycleEnd: '2025-10-06T23:59:59.999Z',
-                    workedMinutes: 13200,
-                    basePay: 2640000,
-                    totalPay: 2640000,
-                    incomeTax: 79200,
-                    localIncomeTax: 7920,
-                    otherTax: 0,
-                    netPay: 2560880,
-                    settledAt: '2025-10-01T09:12:34.000Z',
-                    processedBy: 1,
-                    note: '9월 정산'
-                  }
-                }
-              }
-            }
-          }
-        }
-      },
-      '401': { description: 'Unauthorized' },
-      '403': { description: 'Forbidden' },
-      '404': { description: 'Not Found' },
-      '409': { description: 'Already settled for this cycle' }
-    }
-  }
-},
 
     '/api/auth/refresh': {
       post: {
@@ -953,7 +957,59 @@ AttendanceCreateRequest: {
     }
   }
 },
-
+  '/api/admin/shops/{shopId}/attendance/records': {
+    get: {
+      tags: ['Attendance (Admin)'],
+      summary: '가게 출퇴근 목록(페이징)',
+      description:
+        '관리자/점주용 출퇴근 목록입니다. 저장된 workedMinutes/actualMinutes/finalPayAmount를 그대로 사용하며, 메모(memo)를 포함해 반환합니다.',
+      security: [{ bearerAuth: [] }],
+      parameters: [
+        { name: 'shopId', in: 'path', required: true, schema: { type: 'integer' } },
+        { name: 'employeeId', in: 'query', required: false, schema: { type: 'integer' } },
+        { name: 'start', in: 'query', required: false, schema: { type: 'string', format: 'date-time' },
+          description: 'actualInAt >= start' },
+        { name: 'end', in: 'query', required: false, schema: { type: 'string', format: 'date-time' },
+          description: 'actualOutAt <= end' },
+        { name: 'cursor', in: 'query', required: false, schema: { type: 'integer' } },
+        { name: 'limit', in: 'query', required: false, schema: { type: 'integer', minimum: 1, maximum: 50, default: 10 } }
+      ],
+      responses: {
+        '200': {
+          description: 'OK',
+          content: {
+            'application/json': {
+              schema: { $ref: '#/components/schemas/CursorAttendanceAdminPage' },
+              examples: {
+                sample: {
+                  value: {
+                    items: [
+                      {
+                        id: 1234, shopId: 1, employeeId: 42, type: 'OUT',
+                        clockInAt: '2025-09-05T08:30:00.000Z',
+                        clockOutAt:'2025-09-05T17:30:00.000Z',
+                        workedMinutes: 480,
+                        actualMinutes: 485,
+                        finalPayAmount: 96000,
+                        extraMinutes: 0,
+                        paired: true,
+                        shiftId: 1234,
+                        status: 'COMPLETED',
+                        memo: '조금 일찍 마감'
+                      }
+                    ],
+                    nextCursor: null
+                  }
+                }
+              }
+            }
+          }
+        },
+        '401': { description: 'Unauthorized' },
+        '403': { description: 'Forbidden' }
+      }
+    }
+  },
     '/api/admin/shops/{shopId}/qr': {
       get: { tags: ['QR'], summary: '매장 QR PNG 생성', parameters: [ { name:'shopId',in:'path',required:true,schema:{type:'integer'} }, { name:'download',in:'query',schema:{type:'integer', minimum:0, maximum:1} }, { name:'format', in:'query', schema:{ type:'string', enum:['raw','base64','json'] }, description:'QR 페이로드 포맷 (기본 raw)' } ], responses: { '200': { description: 'PNG' }, '404': { description: 'Not Found' } } }
     },
@@ -1208,7 +1264,96 @@ AttendanceCreateRequest: {
       '403': { description: 'Forbidden' },
       '404': { description: 'Not Found' }
     }
+  },
+  post: {
+  tags: ['Payroll'],
+  summary: '직원 사이클 정산 생성',
+  description:
+    '선택한 연/월 및 급여 사이클(startDay) 기준으로 해당 직원의 직전 사이클을 정산합니다.\n' +
+    '- HOURLY: COMPLETED & settlementId=null 인 시프트 중 **finalPayAmount** 합계로 계산\n' +
+    '- MONTHLY: 기본 월급 그대로 사용\n' +
+    '- 생성 후 해당 시프트들의 `settlementId`가 생성된 스냅샷 ID로 업데이트됩니다.',
+  security: [{ bearerAuth: [] }],
+  parameters: [
+    { name: 'shopId',     in: 'path',  required: true, schema: { type: 'integer' } },
+    { name: 'employeeId', in: 'path',  required: true, schema: { type: 'integer' } },
+    { name: 'year',        in: 'query', required: true,  schema: { type: 'integer', minimum: 2000, maximum: 2100 } },
+    { name: 'month',       in: 'query', required: true,  schema: { type: 'integer', minimum: 1, maximum: 12 } },
+    { name: 'cycleStartDay', in: 'query', required: false, schema: { type: 'integer', minimum: 1, maximum: 28 },
+      description: '사이클 시작일 override(미지정 시 매장 payday 사용)' }
+  ],
+  requestBody: {
+    required: false,
+    content: {
+      'application/json': {
+        schema: { $ref: '#/components/schemas/SettleEmployeeCycleRequest' },
+        examples: {
+          hourly: { value: { note: '9월 정산', forceWithholding: true } },
+          monthly: { value: { note: '월급 정산' } }
+        }
+      }
+    }
+  },
+  responses: {
+    '201': {
+      description: 'Created',
+      content: {
+        'application/json': {
+          schema: { $ref: '#/components/schemas/SettleEmployeeCycleResponse' },
+          examples: {
+            sample: {
+              value: {
+                ok: true,
+                cycle: {
+                  start: '2025-09-07T00:00:00.000Z',
+                  end:   '2025-10-06T23:59:59.999Z',
+                  startDay: 7
+                },
+                employee: { id: 42, name: '김직원', payUnit: 'HOURLY' },
+                appliedShiftCount: 18,
+                settlement: {
+                  id: 10,
+                  shopId: 1,
+                  employeeId: 42,
+                  cycleStart: '2025-09-07T00:00:00.000Z',
+                  cycleEnd:   '2025-10-06T23:59:59.999Z',
+                  workedMinutes: 13200,
+                  basePay: 2640000,
+                  totalPay: 2640000,
+                  incomeTax: 79200,
+                  localIncomeTax: 7920,
+                  otherTax: 0,
+                  netPay: 2560880,
+                  settledAt: '2025-10-01T09:12:34.000Z',
+                  processedBy: 1,
+                  note: '9월 정산'
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    '400': { description: 'Bad Request (파라미터 오류 / 정산할 근무 없음)' },
+    '401': { description: 'Unauthorized' },
+    '403': { description: 'Forbidden (다른 가게)' },
+    '404': { description: 'Not Found (Shop/Employee 없음)' },
+    '409': {
+      description: 'Already settled for this cycle',
+      content: {
+        'application/json': {
+          schema: {
+            type: 'object',
+            properties: {
+              error: { type: 'string', example: '이미 정산 완료된 사이클입니다.' },
+              settlement: { $ref: '#/components/schemas/PayrollSettlement' }
+            }
+          }
+        }
+      }
+    }
   }
+},
 },
 
     '/api/my/workshifts': {
@@ -1481,7 +1626,7 @@ AttendanceCreateRequest: {
     },
         '/api/my/workshifts/{shiftId}': {
       put: {
-        tags: ['WorkShift (Employee)'],
+        tags: ['Shifts'],
         summary: '내 근무일정 수정 (항상 REVIEW 전환)',
         security: [{ bearerAuth: [] }],
         parameters: [

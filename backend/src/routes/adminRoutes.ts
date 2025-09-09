@@ -20,7 +20,9 @@ import {
 import { getEmployeeStatusList,getEmployeeStatusDetail,payrollOverview,exportPayrollXlsx,getSettlementSummary,settleEmployeeCycle } from '../controllers/payrollController';
 // ✅ 추가: 타입 안전 래퍼 & 정산 컨트롤러
 import { withUser, AuthRequiredRequest } from '../middlewares/requireUser';
-
+import {
+  getAttendanceRecords,
+} from '../controllers/attendanceController';
 const router = Router();
 
 /* 관리자가 아닌 경우 거부 */
@@ -57,6 +59,8 @@ router.put('/shops/:shopId/workshifts/:shiftId', withUser(adminUpdateShift));
 router.delete('/shops/:shopId/workshifts/:shiftId', withUser(adminDeleteShift));
 router.post('/shops/:shopId/workshifts/:shiftId/review/resolve', withUser(resolveReviewShiftScheduleOnly));
 router.get('/shops/:shopId/qr', getShopQrPng);
+router.get('/shops/:shopId/attendance/records', withUser(getAttendanceRecords));
+
 
 /* ───────── 매장 CRUD ───────── */
 router.get('/shops',                 adminController.getShops);
@@ -69,7 +73,6 @@ router.get('/shops/:shopId/employees',  adminController.getEmployees);
 router.post('/shops/:shopId/employees', adminController.createEmployee);
 router.put('/shops/:shopId/employees/:employeeId',        adminController.updateEmployee);
 router.delete('/shops/:shopId/employees/:employeeId',     adminController.deleteEmployee);
-
 
 /* ───────── 🆕 대시보드 ───────── */
 router.get('/shops/:shopId/dashboard/today',   todaySummary);

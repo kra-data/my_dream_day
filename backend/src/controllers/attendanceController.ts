@@ -109,18 +109,6 @@ const recordAttendanceSchema = z.object({
   memo: z.string().max(500).optional(),
 });
 
-const adminUpdateWorkShiftSchema = z.object({
-  startAt: z.string().datetime().optional(),
-  endAt: z.string().datetime().optional(),
-  status: z.enum(['SCHEDULED', 'IN_PROGRESS', 'COMPLETED', 'CANCELED', 'OVERDUE']).optional(), // ← 추가
-  actualInAt: z.string().datetime().nullable().optional(),
-  actualOutAt: z.string().datetime().nullable().optional(),
-  late: z.boolean().optional(),
-  leftEarly: z.boolean().optional(),
-}).refine(
-  (v) => !!v.startAt || !!v.endAt || !!v.status || 'actualInAt' in v || 'actualOutAt' in v || 'late' in v || 'leftEarly' in v,
-  { message: '수정할 필드를 최소 1개 이상 제공하세요.' }
-);
 
 // ───── [추가] OVERDUE 목록용 공통 쿼리 ─────
 const overdueListQuery = z.object({
@@ -219,157 +207,7 @@ export const getShopOverdueWorkShifts = async (req: AuthRequiredRequest, res: Re
     nextCursor: rows.length === (limit ?? 20) ? rows[rows.length - 1].id : null,
   });
 };
-export const adminUpdateWorkShift = async (req: AuthRequiredRequest, res: Response) => {
-  const shopId = Number(req.params.shopId);
-  const shiftId = Number(req.params.shiftId);
-  if (req.user.shopId !== shopId) { res.status(403).json({ error: '다른 가게는 관리할 수 없습니다.' }); return; }
 
-  const parsed = adminUpdateWorkShiftSchema.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: 'Invalid payload', detail: parsed.error.flatten() }); return;
-  }
-  const payload = parsed.data;
-
-const shift = await prisma.workShift.findFirst({
-  where: { id: shiftId, shopId },
-  include: { employee: { select: { pay: true, payUnit: true } } }   // ← 단가/단위 필요
-});
-if (!shift) { res.status(404).json({ error: '시프트를 찾을 수 없습니다.' }); return; }
-
-
-  const nextStartAt = payload.startAt ? new Date(payload.startAt) : shift.startAt;
-  const nextEndAt   = payload.endAt   ? new Date(payload.endAt)   : shift.endAt;
-
-  const nextActualInAt =
-    payload.actualInAt === undefined ? shift.actualInAt
-    : (payload.actualInAt === null ? null : new Date(payload.actualInAt));
-
-  const nextActualOutAt =
-    payload.actualOutAt === undefined ? shift.actualOutAt
-    : (payload.actualOutAt === null ? null : new Date(payload.actualOutAt));
-
-  if (nextStartAt && nextEndAt && !(nextStartAt < nextEndAt)) {
-    res.status(400).json({ error: 'endAt은 startAt 이후여야 합니다.' }); return;
-  }
-  if (nextActualInAt && nextActualOutAt && !(nextActualInAt < nextActualOutAt)) {
-    res.status(400).json({ error: 'actualOutAt은 actualInAt 이후여야 합니다.' }); return;
-  }
-
-  const scheduleChanged = !!payload.startAt || !!payload.endAt;
-  if (scheduleChanged && nextStartAt && nextEndAt) {
-    const overlap = await prisma.workShift.findFirst({
-      where: {
-        shopId,
-        employeeId: shift.employeeId,
-        id: { not: shiftId },
-        startAt: { lt: nextEndAt },
-        endAt:   { gt: nextStartAt },
-      },
-      select: { id: true, startAt: true, endAt: true },
-    });
-    if (overlap) { res.status(409).json({ error: 'Overlap with another shift', overlap }); return; }
-  }
-
-  // 상태 산출: 입력값 우선, 다만 in/out 모두 있으면 강제 COMPLETED
-  let nextStatus = payload.status ?? shift.status;
-  if (nextActualInAt && nextActualOutAt) {
-    nextStatus = 'COMPLETED' as any; // ← OVERDUE 였어도 실제 보정되면 완료 처리
-  } else if (!payload.status) {
-    if (nextActualInAt && !nextActualOutAt) nextStatus = 'IN_PROGRESS' as any;
-    else nextStatus = 'SCHEDULED' as any;
-  }
-
-  // 지각/조퇴, 분 계산
-  let nextLate: boolean | null | undefined = payload.late ?? shift.late ?? null;
-  if (payload.late === undefined && nextActualInAt && nextStartAt) {
-    const graceMs = 1 * 60_000; // 필요시 환경변수/DB 유예분 반영
-    nextLate = nextActualInAt.getTime() > (nextStartAt.getTime() + graceMs);
-  }
-
-  let nextLeftEarly: boolean | null | undefined = payload.leftEarly ?? shift.leftEarly ?? null;
-  if (payload.leftEarly === undefined && nextActualOutAt && nextEndAt) {
-    nextLeftEarly = nextActualOutAt < nextEndAt;
-  }
-
-const computedActualMinutes =
-  (nextActualInAt && nextActualOutAt) ? diffMinutes(nextActualInAt, nextActualOutAt) : null;
-
-// ★ 지각 10분 유예 반영해서 payable 계산
-let computedWorkedMinutes: number | null = null;
-if (nextActualInAt && nextActualOutAt) {
-  const lateMs = Math.max(0, nextActualInAt.getTime() - nextStartAt.getTime());
-  const inForPayable =
-    lateMs <= LATE_GRACE_MIN_FOR_PAYABLE * 60_000 ? nextStartAt : nextActualInAt;
-  computedWorkedMinutes = intersectMinutes(inForPayable, nextActualOutAt, nextStartAt, nextEndAt);
-}
-
-// ★ 확정 급여 계산 (시급제 & COMPLETED & 근무분 유효)
-let nextFinalPayAmount: number | null | undefined = undefined;
-if (nextStatus === ('COMPLETED' as any) && computedWorkedMinutes != null) {
-  if (shift.employee.payUnit === 'HOURLY') {
-    nextFinalPayAmount = Math.round((computedWorkedMinutes / 60) * (shift.employee.pay ?? 0));
-  } else {
-    nextFinalPayAmount = null; // 월급제는 시프트별 확정 없음(요구사항)
-  }
-} else if (nextStatus !== ('COMPLETED' as any)) {
-  // 완료가 아니라면 확정값 제거(미확정 상태)
-  nextFinalPayAmount = null;
-}
-
-  // ✅ 관리자 수정 규칙
-  // - admin이 수정하는 경우에는 REVIEW로 "새로" 전환하지 않음.
-  // - 이미 REVIEW 상태였다면 이번 수정으로 "해결 처리"한다(승인 개념).
-  // - 연장( endAt 증가 )도 admin이 하면 '해결 처리 + 사유 기록'으로 남긴다.
-  const extendedByAdmin = scheduleChanged && nextEndAt.getTime() > shift.endAt.getTime();
-
-  // 리뷰 관련 패치(관리자 수정 = resolve)
-  const reviewPatch: Prisma.WorkShiftUpdateInput = {};
-  if (shift.status === ('REVIEW' as any)) {
-    // 기존 리뷰를 이번 수정으로 해소
-    (reviewPatch as any).reviewResolvedAt = new Date();
-    (reviewPatch as any).reviewedBy = req.user.userId;
-    // admin이 명시적으로 status를 REVIEW로 유지하길 원하지 않는 한,
-    // REVIEW였다면 적절한 상태로 돌려준다.
-    if (nextStatus === ('REVIEW' as any)) {
-      nextStatus = (nextActualInAt && nextActualOutAt)
-        ? ('COMPLETED' as any)
-        : (nextActualInAt ? ('IN_PROGRESS' as any) : ('SCHEDULED' as any));
-    }
-  }
-  if (extendedByAdmin) {
-    // 연장 사유만 남기되, REVIEW로 전환하지는 않음
-    (reviewPatch as any).reviewReason = 'EXTENDED';
-  }
-  const updated = await prisma.workShift.update({
-    where: { id: shiftId },
-    data: {
-      startAt: nextStartAt,
-      endAt: nextEndAt,
-      actualInAt: nextActualInAt,
-      actualOutAt: nextActualOutAt,
-      status: nextStatus,
-      ...reviewPatch,
-      late: nextLate as any,
-      leftEarly: nextLeftEarly as any,
-      updatedBy: req.user.userId,
-      actualMinutes: computedActualMinutes,
-      workedMinutes: computedWorkedMinutes,
-          finalPayAmount: nextFinalPayAmount,
-    },
-  });
-
-  res.json({
-    ok: true,
-    shift: updated,
-    summary: {
-      actualMinutes: computedActualMinutes,
-      workedMinutes: computedWorkedMinutes,
-      late: updated.late ?? null,
-      leftEarly: updated.leftEarly ?? null,
-          finalPayAmount: nextFinalPayAmount,
-    }
-  });
-};
 /** 직원: QR/버튼으로 출퇴근 (shift 1:1) */
 export const recordAttendance = async (req: AuthRequiredRequest, res: Response) => {
   const parsed = recordAttendanceSchema.safeParse(req.body);
@@ -585,7 +423,6 @@ export const getMyAttendance = async (req: AuthRequiredRequest, res: Response) =
 
 
 /** (관리자/점주) 가게 출퇴근 목록 */
-/** (관리자/점주) 가게 출퇴근 목록 */
 export const getAttendanceRecords = async (req: AuthRequiredRequest, res: Response) => {
   const shopId = req.user.shopId;
   const { start, end, employeeId, cursor, limit } = adminListQuerySchema.parse(req.query);
@@ -593,8 +430,8 @@ export const getAttendanceRecords = async (req: AuthRequiredRequest, res: Respon
   const where: Prisma.WorkShiftWhereInput = {
     shopId,
     ...(employeeId ? { employeeId } : {}),
-    ...(start ? { actualInAt: { gte: new Date(start) } } : {}),
-    ...(end   ? { actualOutAt: { lte: new Date(end) } } : {}),
+    ...(start ? { actualInAt:  { gte: new Date(start) } } : {}),
+    ...(end   ? { actualOutAt: { lte: new Date(end)   } } : {}),
   };
 
   const rows = await prisma.workShift.findMany({
@@ -605,21 +442,41 @@ export const getAttendanceRecords = async (req: AuthRequiredRequest, res: Respon
   });
 
   const items = rows.map(s => {
-    const inAt = s.actualInAt ?? null;
+    const inAt  = s.actualInAt ?? null;
     const outAt = s.actualOutAt ?? null;
-    const payable = (inAt && outAt) ? intersectMinutes(inAt, outAt, s.startAt, s.endAt) : null;
+
+    // 저장값 우선, 없을 때만 보조 계산(레거시 대비)
+    const fallbackWorked =
+      (inAt && outAt) ? intersectMinutes(inAt, outAt, s.startAt, s.endAt) : null;
+    const fallbackActual =
+      (inAt && outAt) ? diffMinutes(inAt, outAt) : null;
+
+    const workedMinutes  = s.workedMinutes  ?? fallbackWorked;
+    const actualMinutes  = s.actualMinutes  ?? fallbackActual;
+    const finalPayAmount = s.finalPayAmount ?? null;
+
     return {
       id: s.id,
       shopId: s.shopId,
       employeeId: s.employeeId,
+
       type: outAt ? 'OUT' : 'IN',
       clockInAt: inAt,
       clockOutAt: outAt,
-      workedMinutes: payable,
+
+      // 저장 스냅샷 기준으로 응답
+      workedMinutes,
+      actualMinutes,
+      finalPayAmount,
+
+      // 기존 호환 필드
       extraMinutes: 0,
       paired: !!outAt,
       shiftId: s.id,
       status: s.status,
+
+      // ✅ 새 스키마: 메모 노출
+      memo: s.memo ?? null,
     };
   });
 
@@ -628,4 +485,3 @@ export const getAttendanceRecords = async (req: AuthRequiredRequest, res: Respon
     nextCursor: rows.length === (limit ?? 10) ? rows[rows.length - 1].id : null
   });
 };
-
