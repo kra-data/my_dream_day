@@ -403,7 +403,7 @@ if (!shift) { res.status(404).json({ error: '근무일정을 찾을 수 없습�
         data: {
           status: 'REVIEW',
           reviewReason: 'LATE_IN' as any,
-          reviewNote: memo ?? undefined,
+          memo: memo ?? undefined,
           actualInAt: now,
           late: true
         },

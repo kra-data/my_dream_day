@@ -284,7 +284,7 @@ if (unresolved) where.reviewResolvedAt = null;
     endAt: r.endAt,
     status: r.status,              // 'REVIEW'
     reviewReason: r.reviewReason,  // 'LATE_IN' | 'EARLY_OUT' | 'LATE_OUT' | 'EXTENDED' | 'EARLY_IN'
-    reviewNote: r.reviewNote ?? null,
+    memo: r.memo ?? null,
     reviewResolvedAt: r.reviewResolvedAt ?? null,
     actualInAt: r.actualInAt ?? null,
     actualOutAt: r.actualOutAt ?? null,
@@ -403,9 +403,9 @@ export const adminGetShiftDetail = async (req: AuthRequiredRequest, res: Respons
 const myUpdateShiftSchema = z.object({
   startAt: z.string().datetime().optional(),
   endAt:   z.string().datetime().optional(),
-  reviewNote: z.string().max(500).optional(),
-}).refine(v => !!v.startAt || !!v.endAt || !!v.reviewNote, {
-  message: 'startAt / endAt / reviewNote 중 최소 1개는 필요합니다.'
+  memo: z.string().max(500).optional(),
+}).refine(v => !!v.startAt || !!v.endAt || !!v.memo, {
+  message: 'startAt / endAt / memo 중 최소 1개는 필요합니다.'
 });
 
 export const myUpdateShift = async (req: AuthRequiredRequest, res: Response): Promise<void> => {
@@ -417,7 +417,7 @@ export const myUpdateShift = async (req: AuthRequiredRequest, res: Response): Pr
     res.status(400).json({ error: 'Invalid payload', detail: parsed.error.flatten() });
     return;
   }
-  const { startAt, endAt, reviewNote } = parsed.data;
+  const { startAt, endAt, memo } = parsed.data;
 
   const employeeId = req.user.userId;
   const shopId     = req.user.shopId;
@@ -455,7 +455,7 @@ export const myUpdateShift = async (req: AuthRequiredRequest, res: Response): Pr
       endAt:   endAt   ? nextEnd   : undefined,
       // ✅ 직원 수정 시 항상 리뷰 필요
       status: 'REVIEW',
-      reviewNote: reviewNote ?? shift.reviewNote,
+      memo: memo ?? shift.memo,
       reviewResolvedAt: null,
       updatedBy: employeeId,
        ...(startAt || endAt ? { workedMinutes: diffMin(nextStart, nextEnd) } : {}),
@@ -463,7 +463,7 @@ export const myUpdateShift = async (req: AuthRequiredRequest, res: Response): Pr
     select: {
       id: true, shopId: true, employeeId: true,
       startAt: true, endAt: true, status: true,
-      reviewReason: true, reviewNote: true,
+      reviewReason: true, memo: true,
       updatedAt: true, workedMinutes: true
     }
   });
