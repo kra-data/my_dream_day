@@ -593,7 +593,7 @@ export const settleEmployeeCycle: (req: AuthRequiredRequest, res: Response) => P
           startAt: { gte: cycle.start, lte: cycle.end },
           settlementId: null,
         },
-        data: { settlementId: settlement.id }
+        data: { settlementId: settlement.id,isSettled:true }
       });
 
       return { settlement, appliedShiftCount };
@@ -607,6 +607,215 @@ export const settleEmployeeCycle: (req: AuthRequiredRequest, res: Response) => P
       settlement: result.settlement
     });
   };
+
+
+
+export const settleAllEmployeesCycle: (req: AuthRequiredRequest, res: Response) => Promise<void> =
+  async (req, res) => {
+    const shopId = Number(req.params.shopId);
+
+    if (req.user.shopId !== shopId) {
+      res.status(403).json({ error: '다른 가게는 처리할 수 없습니다.' });
+      return;
+    }
+
+    // query: year, month, cycleStartDay(선택)
+    const qSchema = z.object({
+      year: z.coerce.number().int().min(2000).max(2100),
+      month: z.coerce.number().int().min(1).max(12),
+      cycleStartDay: z.coerce.number().int().min(1).max(28).optional()
+    });
+    const parsedQ = qSchema.safeParse(req.query);
+    if (!parsedQ.success) { res.status(400).json({ error: 'Invalid query' }); return; }
+    const { year, month, cycleStartDay } = parsedQ.data;
+
+    // body: note(선택), forceWithholding(선택)
+    const bSchema = z.object({
+      note: z.string().max(500).optional().nullable(),
+      forceWithholding: z.boolean().optional().default(false)
+    });
+    const parsedB = bSchema.safeParse(req.body ?? {});
+    if (!parsedB.success) { res.status(400).json({ error: 'Invalid body' }); return; }
+    const { note, forceWithholding } = parsedB.data;
+
+    const shop = await prisma.shop.findUnique({ where: { id: shopId }, select: { payday: true } });
+    if (!shop) { res.status(404).json({ error: 'Shop not found' }); return; }
+
+    const startDay = cycleStartDay ?? Math.min(Math.max(shop.payday ?? 1, 1), 28);
+    const cycle = kstCycle(year, month, startDay);
+
+    // 해당 매장 모든 직원
+    const employees = await prisma.employee.findMany({
+      where: { shopId },
+      select: { id: true, name: true, pay: true, payUnit: true }
+    });
+
+    const created: Array<{
+      employeeId: number;
+      name: string;
+      payUnit: 'HOURLY' | 'MONTHLY' | null;
+      workedMinutes: number;
+      basePay: number;
+      totalPay: number;
+      incomeTax: number;
+      localIncomeTax: number;
+      otherTax: number;
+      netPay: number;
+      settlementId: number;
+    }> = [];
+
+    const skipped: Array<{
+      employeeId: number;
+      name: string;
+      reason: 'ALREADY_SETTLED' | 'NO_CONFIRMED_SHIFTS' | 'NO_PAY' | 'NO_PAYUNIT' | 'ERROR';
+      details?: string;
+      settlementId?: number;
+    }> = [];
+
+    for (const emp of employees) {
+      try {
+        // 이미 정산된 경우 skip
+        const existed = await prisma.payrollSettlement.findFirst({
+          where: {
+            employeeId: emp.id,
+            cycleStart: cycle.start,
+            cycleEnd: cycle.end
+          },
+          select: { id: true }
+        });
+        if (existed) {
+          skipped.push({
+            employeeId: emp.id,
+            name: emp.name,
+            reason: 'ALREADY_SETTLED',
+            settlementId: existed.id
+          });
+          continue;
+        }
+
+        // 급여 유형 체크
+        if (!emp.payUnit) {
+          skipped.push({ employeeId: emp.id, name: emp.name, reason: 'NO_PAYUNIT' });
+          continue;
+        }
+
+        // 해당 사이클 내, 아직 정산되지 않은 COMPLETED 시프트
+        const shifts = await prisma.workShift.findMany({
+          where: {
+            shopId,
+            employeeId: emp.id,
+            status: 'COMPLETED',
+            startAt: { gte: cycle.start, lte: cycle.end },
+            settlementId: null
+          },
+          select: { id: true, workedMinutes: true, finalPayAmount: true }
+        });
+
+        const workedMinutes = shifts.reduce((s, x) => s + (x.workedMinutes ?? 0), 0);
+
+        // 급여 계산
+        let basePay = 0;
+        let totalPay = 0;
+
+        if (emp.payUnit === 'HOURLY') {
+          totalPay = shifts.reduce((s, x) => s + (x.finalPayAmount ?? 0), 0);
+          basePay = totalPay;
+          if (totalPay === 0) {
+            // HOURLY 확정 근무가 없다면 스킵
+            skipped.push({ employeeId: emp.id, name: emp.name, reason: 'NO_CONFIRMED_SHIFTS' });
+            continue;
+          }
+        } else {
+          // MONTHLY: 월급 필요
+          if (!emp.pay || emp.pay <= 0) {
+            skipped.push({ employeeId: emp.id, name: emp.name, reason: 'NO_PAY' });
+            continue;
+          }
+          basePay = emp.pay;
+          totalPay = basePay;
+        }
+
+        // 세금 계산 (정책: HOURLY 기본 적용, forceWithholding=true 이면 MONTHLY에도 적용)
+        let incomeTax = 0, localIncomeTax = 0, otherTax = 0, netPay = totalPay;
+        const shouldWithhold = forceWithholding || emp.payUnit === 'HOURLY';
+        if (shouldWithhold) {
+          const t = calcTaxesTruncate(totalPay);
+          incomeTax = t.incomeTax;
+          localIncomeTax = t.localIncomeTax;
+          otherTax = floorWon(totalPay * OTHER_TAX_RATE);
+          netPay = t.net;
+        }
+
+        // 트랜잭션: 스냅샷 생성 + 해당 시프트 settlementId 세팅
+        const result = await prisma.$transaction(async (tx) => {
+          const settlement = await tx.payrollSettlement.create({
+            data: {
+              shopId,
+              employeeId: emp.id,
+              cycleStart: cycle.start,
+              cycleEnd: cycle.end,
+              workedMinutes,
+              basePay,
+              totalPay,
+              incomeTax,
+              localIncomeTax,
+              otherTax,
+              netPay,
+              processedBy: req.user.userId ?? null,
+              note,
+              settledAt: new Date()
+            },
+            select: { id: true }
+          });
+
+          // HOURLY/MONTHLY 모두 COMPLETED 시프트를 해당 정산에 연결
+          await tx.workShift.updateMany({
+            where: {
+              shopId,
+              employeeId: emp.id,
+              status: 'COMPLETED',
+              startAt: { gte: cycle.start, lte: cycle.end },
+              settlementId: null
+            },
+            data: { settlementId: settlement.id,isSettled:true }
+          });
+
+          return settlement.id;
+        });
+
+        created.push({
+          employeeId: emp.id,
+          name: emp.name,
+          payUnit: emp.payUnit,
+          workedMinutes,
+          basePay,
+          totalPay,
+          incomeTax,
+          localIncomeTax,
+          otherTax,
+          netPay,
+          settlementId: result
+        });
+      } catch (e: any) {
+        skipped.push({
+          employeeId: emp.id,
+          name: emp.name,
+          reason: 'ERROR',
+          details: e?.message ?? String(e)
+        });
+      }
+    }
+
+    res.status(201).json({
+      ok: true,
+      cycle: { start: cycle.start, end: cycle.end, startDay },
+      createdCount: created.length,
+      skippedCount: skipped.length,
+      created,
+      skipped
+    });
+  };
+
 export const payrollOverview: (req: AuthRequiredRequest, res: Response) => Promise<void> =
   async (req, res) => {
     const shopId = Number(req.params.shopId);
