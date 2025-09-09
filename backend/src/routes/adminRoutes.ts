@@ -16,7 +16,7 @@ import {
   adminListReviewShifts,
   adminGetShiftDetail
 } from '../controllers/workShiftController';
-import { payrollOverview,exportPayrollXlsx,getSettlementSummary,settleEmployeeCycle } from '../controllers/payrollController';
+import { getEmployeeStatusList,getEmployeeStatusDetail,payrollOverview,exportPayrollXlsx,getSettlementSummary,settleEmployeeCycle } from '../controllers/payrollController';
 // ✅ 추가: 타입 안전 래퍼 & 정산 컨트롤러
 import { withUser, AuthRequiredRequest } from '../middlewares/requireUser';
 
@@ -78,5 +78,7 @@ router.get('/shops/:shopId/dashboard/recent',  recentActivities);
 router.get('/shops/:shopId/payroll/overview', withUser(payrollOverview));
 router.get('/shops/:shopId/payroll/export-xlsx', withUser(exportPayrollXlsx));
 router.get('/shops/:shopId/payroll/summary', withUser(getSettlementSummary));
-router.get('/shops/:shopId/payroll/employees/:employeeId', withUser(settleEmployeeCycle));
+router.post('/shops/:shopId/payroll/employees/:employeeId', withUser(settleEmployeeCycle));
+router.get('/shops/:shopId/payroll/employees/:employeeId', withUser(getEmployeeStatusDetail));
+router.get('/shops/:shopId/payroll/employees', withUser(getEmployeeStatusList));
 export default router;
