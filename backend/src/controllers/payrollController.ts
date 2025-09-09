@@ -26,6 +26,23 @@ const q = z.object({
   month: z.coerce.number().int().min(1).max(12),
   cycleStartDay: z.coerce.number().int().min(1).max(28).optional(),
 });
+
+// 소수점 절사(원 단위) 규칙: 각 세목을 개별 절사 → 합계
+const floorWon = (n: number) => Math.floor(n);
+
+const calcTaxesTruncate = (gross: number) => {
+  const incomeTax = floorWon(gross * INCOME_TAX_RATE);
+  const localIncomeTax = floorWon(incomeTax * LOCAL_TAX_ON_INCOME_RATE);
+  const otherTax = floorWon(gross * OTHER_TAX_RATE);
+  const deductions = incomeTax + localIncomeTax + otherTax;
+  const net = gross - deductions;
+  return { incomeTax, localIncomeTax, otherTax, net };
+};
+const bodySchema = z.object({
+  note: z.string().max(500).optional(),
+  // 기본 정책: HOURLY만 3.3% 적용. 필요시 강제 적용 플래그 제공.
+  forceWithholding: z.coerce.boolean().optional(),
+});
 const fmtDateDot = (d: Date) => {
   const k = toKst(d);
   return `${k.getUTCFullYear()}. ${k.getUTCMonth() + 1}. ${k.getUTCDate()}.`;
@@ -424,7 +441,132 @@ export const getSettlementSummary = async (req: AuthRequiredRequest, res: Respon
     }
   });
 };
+export const settleEmployeeCycle: (req: AuthRequiredRequest, res: Response) => Promise<void> =
+  async (req, res) => {
+    const shopId = Number(req.params.shopId);
+    const employeeId = Number(req.params.employeeId);
 
+    // 권한 체크
+    if (req.user.shopId !== shopId) {
+      res.status(403).json({ error: '다른 가게는 처리할 수 없습니다.' });
+      return;
+    }
+
+    const parsedQ = q.safeParse(req.query);
+    if (!parsedQ.success) { res.status(400).json({ error: 'Invalid query' }); return; }
+    const { year, month } = parsedQ.data;
+
+    const shop = await prisma.shop.findUnique({ where: { id: shopId }, select: { payday: true } });
+    if (!shop) { res.status(404).json({ error: 'Shop not found' }); return; }
+    const startDay = parsedQ.data.cycleStartDay ?? Math.min(Math.max(shop.payday ?? 1, 1), 28);
+    const cycle = kstCycle(year, month, startDay);
+
+    const parsedB = bodySchema.safeParse(req.body ?? {});
+    if (!parsedB.success) { res.status(400).json({ error: 'Invalid body' }); return; }
+    const { note, forceWithholding } = parsedB.data;
+
+    // 직원 조회(같은 매장 소속인지)
+    const emp = await prisma.employee.findFirst({
+      where: { id: employeeId, shopId },
+      select: { id: true, name: true, pay: true, payUnit: true }
+    });
+    if (!emp) { res.status(404).json({ error: 'Employee not found' }); return; }
+
+    // 이미 정산된 기록 유무 (고유키: employeeId + cycleStart + cycleEnd)
+    const existing = await prisma.payrollSettlement.findFirst({
+      where: { employeeId, cycleStart: cycle.start, cycleEnd: cycle.end }
+    });
+    if (existing) {
+      res.status(409).json({ error: '이미 정산 완료된 사이클입니다.', settlement: existing });
+      return;
+    }
+
+    // 사이클 내 미정산 & 확정된 근무일정
+    const shifts = await prisma.workShift.findMany({
+      where: {
+        shopId,
+        employeeId,
+        status: 'COMPLETED',
+        startAt: { gte: cycle.start, lte: cycle.end },
+        settlementId: null,
+      },
+      select: { id: true, workedMinutes: true, finalPayAmount: true }
+    });
+
+    const workedMinutes = shifts.reduce((s, x) => s + (x.workedMinutes ?? 0), 0);
+
+    // 급여 계산
+    let basePay = 0;
+    let totalPay = 0;
+
+    if (emp.payUnit === 'HOURLY') {
+      // finalPayAmount 합(미확정 제외; 이미 COMPLETED 전제)
+      totalPay = shifts.reduce((s, x) => s + (x.finalPayAmount ?? 0), 0);
+      basePay = totalPay;
+      // HOURLY인데 근무 0이면 방지(원하면 허용 가능)
+      if (totalPay === 0) {
+        res.status(400).json({ error: '해당 사이클에 정산할 확정 근무가 없습니다.' });
+        return;
+      }
+    } else {
+      // MONTHLY: 월급 그대로(필요하면 비례계산 로직 추가)
+      basePay = emp.pay ?? 0;
+      totalPay = basePay;
+    }
+
+    // 세금(정책: HOURLY만 3.3% 적용; 강제 플래그 있으면 적용)
+    let incomeTax = 0, localIncomeTax = 0, otherTax = 0, netPay = totalPay;
+    const shouldWithhold = forceWithholding || emp.payUnit === 'HOURLY';
+    if (shouldWithhold) {
+      const t = calcTaxesTruncate(totalPay);
+      incomeTax = t.incomeTax;
+      localIncomeTax = t.localIncomeTax;
+      otherTax = floorWon(totalPay * OTHER_TAX_RATE);
+      netPay = t.net;
+    }
+
+    // 트랜잭션: 정산 스냅샷 생성 + 시프트 settlementId 업데이트
+    const result = await prisma.$transaction(async (tx) => {
+      const settlement = await tx.payrollSettlement.create({
+        data: {
+          shopId,
+          employeeId,
+          cycleStart: cycle.start,
+          cycleEnd: cycle.end,
+          workedMinutes,
+          basePay,
+          totalPay,
+          incomeTax,
+          localIncomeTax,
+          otherTax,
+          netPay,
+          processedBy: req.user.userId ?? null,
+          note,
+        }
+      });
+
+      const { count: appliedShiftCount } = await tx.workShift.updateMany({
+        where: {
+          shopId,
+          employeeId,
+          status: 'COMPLETED',
+          startAt: { gte: cycle.start, lte: cycle.end },
+          settlementId: null,
+        },
+        data: { settlementId: settlement.id }
+      });
+
+      return { settlement, appliedShiftCount };
+    });
+
+    res.status(201).json({
+      ok: true,
+      cycle: { start: cycle.start, end: cycle.end, startDay },
+      employee: { id: emp.id, name: emp.name, payUnit: emp.payUnit },
+      appliedShiftCount: result.appliedShiftCount,
+      settlement: result.settlement
+    });
+  };
 export const payrollOverview: (req: AuthRequiredRequest, res: Response) => Promise<void> =
   async (req, res) => {
     const shopId = Number(req.params.shopId);

@@ -264,7 +264,7 @@ export const adminListReviewShifts = async (req: AuthRequiredRequest, res: Respo
   const unresolved =
     unresolvedOnly === undefined ? true :
     (unresolvedOnly === '1' || unresolvedOnly === 'true');
-  if (unresolved) where.needsReview = true;
+if (unresolved) where.reviewResolvedAt = null;
 
   const rows = await prisma.workShift.findMany({
     where,
@@ -283,7 +283,6 @@ export const adminListReviewShifts = async (req: AuthRequiredRequest, res: Respo
     startAt: r.startAt,
     endAt: r.endAt,
     status: r.status,              // 'REVIEW'
-    needsReview: r.needsReview,    // 보통 true
     reviewReason: r.reviewReason,  // 'LATE_IN' | 'EARLY_OUT' | 'LATE_OUT' | 'EXTENDED' | 'EARLY_IN'
     reviewNote: r.reviewNote ?? null,
     reviewResolvedAt: r.reviewResolvedAt ?? null,
@@ -456,7 +455,6 @@ export const myUpdateShift = async (req: AuthRequiredRequest, res: Response): Pr
       endAt:   endAt   ? nextEnd   : undefined,
       // ✅ 직원 수정 시 항상 리뷰 필요
       status: 'REVIEW',
-      needsReview: true,
       reviewNote: reviewNote ?? shift.reviewNote,
       reviewResolvedAt: null,
       updatedBy: employeeId,
@@ -465,7 +463,7 @@ export const myUpdateShift = async (req: AuthRequiredRequest, res: Response): Pr
     select: {
       id: true, shopId: true, employeeId: true,
       startAt: true, endAt: true, status: true,
-      needsReview: true, reviewReason: true, reviewNote: true,
+      reviewReason: true, reviewNote: true,
       updatedAt: true, workedMinutes: true
     }
   });

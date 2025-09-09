@@ -119,7 +119,6 @@ model WorkShift {
   isSettled      Boolean @default(false) // 해당 시프트가 정산(스냅샷)에 포함되었는지 플래그
 
   // ✅ 리뷰/알림/메모
-  needsReview      Boolean            @default(false)
   reviewReason     ShiftReviewReason?
   reviewNote       String?
   reviewResolvedAt DateTime?
@@ -152,12 +151,19 @@ model PayrollSettlement {
   processedBy   Int?
   note          String?
 
-  shop            Shop      @relation(fields: [shopId], references: [id], onDelete: Cascade)
-  employee        Employee  @relation("SettlementEmployee", fields: [employeeId], references: [id], onDelete: Cascade)
+  incomeTax        Int   @default(0) // 소득세
+  localIncomeTax   Int   @default(0) // 지방소득세
+  otherTax         Int   @default(0)
+  netPay           Int   @default(0)           // 실지급액 (totalPay - 위 공제 합)
+
+  shop            Shop      @relation(fields: [shopId], references: [id], onDelete: Restrict)
+  employee        Employee  @relation("SettlementEmployee", fields: [employeeId], references: [id], onDelete: Restrict)
   processedByUser Employee? @relation("SettlementProcessedBy", fields: [processedBy], references: [id], onDelete: SetNull)
 
   workShifts WorkShift[]
 
   @@unique([employeeId, cycleStart, cycleEnd])
   @@index([shopId])
+  @@index([shopId, cycleStart, cycleEnd])
+  @@index([employeeId, cycleStart, cycleEnd])
 }

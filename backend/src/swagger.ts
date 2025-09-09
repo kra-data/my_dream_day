@@ -60,50 +60,8 @@ export const swaggerDocument: any = {
 
         }
       },
-      // 🔽 components.schemas 에 추가
-PayrollCycle: {
-  type: 'object',
-  properties: {
-    start: { type: 'string', format: 'date-time', example: '2025-07-07T00:00:00.000Z' },
-    end:   { type: 'string', format: 'date-time', example: '2025-08-06T23:59:59.999Z' },
-    label: { type: 'string', example: '7월 7일 ~ 8월 6일' },
-    startDay: { type: 'integer', minimum: 1, maximum: 28, example: 7 }
-  }
-},
-SettlementStatus: {
-  type: 'object',
-  properties: {
-    status: { type: 'string', enum: ['PENDING','PAID'], example: 'PAID' },
-    settlementId: { type: 'integer', nullable: true, example: 123 },
-    totalPay: { type: 'integer', nullable: true, example: 2500000 },
-    settledAt: { type: 'string', format: 'date-time', nullable: true, example: '2025-08-10T09:00:00.000Z' },
-    // 상세 응답에서만 쓰는 보조 필드(있어도 되고 없어도 됨)
-    fullyApplied: { type: 'boolean', nullable: true, example: true, description: '사이클 내 모든 근무 기록이 settlementId로 묶였는지' }
-  }
-},
-EmployeePayrollListItem: {
-  type: 'object',
-  properties: {
-    employeeId: { type: 'integer', example: 42 },
-    name: { type: 'string', example: '김철수' },
-    position: { type: 'string', example: 'STAFF' },
-    hourlyPay: { type: 'integer', nullable: true, example: null },
-    monthlyPay: { type: 'integer', nullable: true, example: 2500000 },
-    workedMinutes: { type: 'integer', example: 14982 },
-    extraMinutes: { type: 'integer', example: 0 },
-    salary: { type: 'integer', example: 2500000 },
-    settlement: { $ref: '#/components/schemas/SettlementStatus' }
-  }
-},
-PayrollByEmployeeSummary: {
-  type: 'object',
-  properties: {
-    employeeCount: { type: 'integer', example: 17 },
-    paidCount: { type: 'integer', example: 9 },
-    pendingCount: { type: 'integer', example: 8 },
-    totalWorkedMinutes: { type: 'integer', example: 23850 }
-  }
-},
+
+
       WorkShiftEmployeeUpdateRequest: {
         type: 'object',
         properties: {
@@ -126,7 +84,6 @@ PayrollByEmployeeSummary: {
               startAt: { type: 'string', format: 'date-time' },
               endAt:   { type: 'string', format: 'date-time' },
               status:  { $ref: '#/components/schemas/WorkShiftStatus' },
-              needsReview: { type: 'boolean' },
               reviewReason: { $ref: '#/components/schemas/ShiftReviewReason', nullable: true },
               reviewNote:   { type: 'string', nullable: true },
               updatedAt:    { type: 'string', format: 'date-time' }
@@ -134,66 +91,6 @@ PayrollByEmployeeSummary: {
           }
         }
       },
-PayrollByEmployeeResponse: {
-  type: 'object',
-  properties: {
-    year: { type: 'integer', example: 2025 },
-    month: { type: 'integer', example: 8 },
-    cycle: { $ref: '#/components/schemas/PayrollCycle' },
-    summary: { $ref: '#/components/schemas/PayrollByEmployeeSummary' },
-    employees: {
-      type: 'array',
-      items: { $ref: '#/components/schemas/EmployeePayrollListItem' }
-    },
-    paid: {
-      type: 'array',
-      items: { $ref: '#/components/schemas/EmployeePayrollListItem' }
-    },
-    pending: {
-      type: 'array',
-      items: { $ref: '#/components/schemas/EmployeePayrollListItem' }
-    }
-  }
-},
-PayrollEmployeeDetailLog: {
-  type: 'object',
-  properties: {
-    id: { type: 'integer', example: 9876 },
-    date: { type: 'string', format: 'date', nullable: true, example: '2025-08-03' },
-    clockInAt: { type: 'string', format: 'date-time', nullable: true },
-    clockOutAt: { type: 'string', format: 'date-time', nullable: true },
-    workedMinutes: { type: 'integer', nullable: true, example: 360 },
-    extraMinutes: { type: 'integer', nullable: true, example: 0 },
-    settlementId: { type: 'integer', nullable: true, example: 123 }
-  }
-},
-PayrollEmployeeDetailResponse: {
-  type: 'object',
-  properties: {
-    year: { type: 'integer', example: 2025 },
-    month: { type: 'integer', example: 8 },
-    cycle: { $ref: '#/components/schemas/PayrollCycle' },
-    settlement: { $ref: '#/components/schemas/SettlementStatus' },
-    employee: {
-      type: 'object',
-      properties: {
-        id: { type: 'integer', example: 42 },
-        name: { type: 'string', example: '김철수' },
-        position: { type: 'string', example: 'STAFF' },
-        hourlyPay: { type: 'integer', nullable: true, example: null },
-        monthlyPay: { type: 'integer', nullable: true, example: 2500000 }
-      }
-    },
-    daysWorked: { type: 'integer', example: 12 },
-    workedMinutes: { type: 'integer', example: 14982 },
-    extraMinutes: { type: 'integer', example: 0 },
-    salary: { type: 'integer', example: 2500000 },
-    logs: {
-      type: 'array',
-      items: { $ref: '#/components/schemas/PayrollEmployeeDetailLog' }
-    }
-  }
-},
       // ───────────────────────────────
       // Shifts (근무일정) 스키마 추가
       // ───────────────────────────────
@@ -214,7 +111,6 @@ WorkShift: {
     startAt:     { type: 'string', format: 'date-time', example: '2025-09-01T02:00:00.000Z' },
     endAt:       { type: 'string', format: 'date-time', example: '2025-09-01T10:00:00.000Z' },
     status:      { $ref: '#/components/schemas/WorkShiftStatus' },
-          needsReview:   { type: 'boolean', nullable: true },
           reviewReason:  { $ref: '#/components/schemas/ShiftReviewReason', nullable: true },
           reviewNote:    { type: 'string', nullable: true },
           reviewResolvedAt: { type: 'string', format: 'date-time', nullable: true },
@@ -301,7 +197,44 @@ WorkShift: {
           leftEarly:   { type: 'boolean', description: '관리자 보정용: 조퇴 여부' }
         }
       },
-      // swaggerDocument.components.schemas 에 추가
+PayrollSettlement: {
+  type: 'object',
+  properties: {
+    id:            { type: 'integer', example: 10 },
+    shopId:        { type: 'integer', example: 1 },
+    employeeId:    { type: 'integer', example: 42 },
+    cycleStart:    { type: 'string', format: 'date-time', example: '2025-09-07T00:00:00.000Z' },
+    cycleEnd:      { type: 'string', format: 'date-time', example: '2025-10-06T23:59:59.999Z' },
+    workedMinutes: { type: 'integer', example: 13200 },
+    basePay:       { type: 'integer', example: 2640000 },
+    totalPay:      { type: 'integer', example: 2640000 },
+
+    // 공제(프리랜서 3.3% 등) + 실지급
+    incomeTax:      { type: 'integer', example: 79200, description: '소득세(원)' },
+    localIncomeTax: { type: 'integer', example: 7920,  description: '지방소득세(원)' },
+    otherTax:       { type: 'integer', example: 0 },
+    netPay:         { type: 'integer', example: 2560880, description: '실지급액 = totalPay - (incomeTax+localIncomeTax+otherTax)' },
+
+    // 메타
+    settledAt:    { type: 'string', format: 'date-time', example: '2025-10-01T09:12:34.000Z' },
+    processedBy:  { type: ['integer', 'null'], example: 1 },
+    note:         { type: ['string', 'null'], example: '9월 정산' }
+  }
+},
+SettlePreviousResponse: {
+  type: 'object',
+  properties: {
+    ok: { type: 'boolean', example: true },
+    settlement: { $ref: '#/components/schemas/PayrollSettlement' }
+  }
+},
+// 필요 시 비고/옵션 입력용(바디 없이도 동작하게 optional)
+SettleEmployeeRequest: {
+  type: 'object',
+  properties: {
+    note: { type: 'string', maxLength: 500, nullable: true, example: '사장 확인 완료' }
+  }
+},
 WorkShiftUpdateSummary: {
   type: 'object',
   properties: {
@@ -384,42 +317,8 @@ CursorWorkShiftWithEmployeePage: {
           workedMinutes: { type: 'integer', nullable: true, example: 285 }
         }
       },
-// swaggerDocument.components.schemas 에 추가
-MyPageProfile: {
-  type: 'object',
-  properties: {
-    name: { type: 'string', example: '김철수' },
-    section: { type: 'string', example: 'HALL' },
-    position: { type: 'string', example: 'STAFF' },
-    pay: { type: 'integer', example: 2500000 },
-    payUnit: { type: 'string', enum: ['MONTHLY','HOURLY'], example: 'MONTHLY' },
-    phoneMasked: { type: 'string', example: '010****5432' },
-    bank: { type: 'string', nullable: true, example: '국민' },
-    bankRegistered: { type: 'boolean', example: false }
-  }
-},
-PayrollSettlement: {
-  type: 'object',
-  properties: {
-    id:           { type: 'integer', example: 10 },
-    shopId:       { type: 'integer', example: 1 },
-    employeeId:   { type: 'integer', example: 42 },
-    cycleStart:   { type: 'string', format: 'date-time' },
-    cycleEnd:     { type: 'string', format: 'date-time' },
-    workedMinutes:{ type: 'integer', example: 14982 },
-    basePay:      { type: 'integer', example: 2500000 },
-    totalPay:     { type: 'integer', example: 2500000 },
-    settledAt:    { type: 'string', format: 'date-time', nullable: true },
-    processedBy:  { type: 'integer', nullable: true, example: 1 }
-  }
-},
-SettlePreviousResponse: {
-  type: 'object',
-  properties: {
-    ok: { type: 'boolean', example: true },
-    settlement: { $ref: '#/components/schemas/PayrollSettlement' }
-  }
-},
+
+
 // ───────────────── Payroll Overview (프리랜서 3.3% 반영) ─────────────────
 PayrollCycleLite: {
   type: 'object',
@@ -527,70 +426,6 @@ PayrollOverviewResponse: {
     hourly:{ $ref: '#/components/schemas/PayrollOverviewHourly' },
     totals:{ $ref: '#/components/schemas/PayrollOverviewTotals' },
     meta:  { $ref: '#/components/schemas/PayrollOverviewMeta' }
-  }
-},
-
-MyPageCycle: {
-  type: 'object',
-  properties: {
-    start: { type: 'string', format: 'date-time' },
-    end:   { type: 'string', format: 'date-time' },
-    label: { type: 'string', example: '8월 7일 ~ 9월 6일' },
-    startDay: { type: 'integer', minimum: 1, maximum: 28, example: 7 }
-  }
-},
-MyPageCards: {
-  type: 'object',
-  properties: {
-    current: {
-      type: 'object',
-      properties: {
-        amount: { type: 'integer', example: 2500000 },
-        status: { type: 'string', enum: ['PENDING','PAID'], example: 'PENDING' },
-        cycleStart: { type: 'string', format: 'date-time' },
-        cycleEnd: { type: 'string', format: 'date-time' }
-      }
-    },
-    previous: {
-      type: 'object',
-      properties: {
-        amount: { type: 'integer', example: 2500000 },
-        status: { type: 'string', enum: ['PENDING','PAID'], example: 'PAID' },
-        cycleStart: { type: 'string', format: 'date-time' },
-        cycleEnd: { type: 'string', format: 'date-time' },
-        settledAt: { type: 'string', format: 'date-time', nullable: true }
-      }
-    }
-  }
-},
-MyPageMonth: {
-  type: 'object',
-  properties: {
-    year: { type: 'integer', example: 2025 },
-    month:{ type: 'integer', example: 8 },
-    workedMinutes: { type: 'integer', example: 14982 },
-    workedHours: { type: 'number', example: 249.7 },
-    basePay: { type: 'integer', example: 3901923 },
-    totalPay: { type: 'integer', example: 3948798 }
-  }
-},
-MyPageStats: {
-  type: 'object',
-  properties: {
-    presentDays: { type: 'integer', example: 10 },
-    lateCount: { type: 'integer', example: 8 },
-    absentCount: { type: 'integer', example: 11 }
-  }
-},
-MyPageSettlementResponse: {
-  type: 'object',
-  properties: {
-    ok: { type: 'boolean', example: true },
-    profile: { $ref: '#/components/schemas/MyPageProfile' },
-    cycle:   { $ref: '#/components/schemas/MyPageCycle' },
-    cards:   { $ref: '#/components/schemas/MyPageCards' },
-    month:   { $ref: '#/components/schemas/MyPageMonth' },
-    stats:   { $ref: '#/components/schemas/MyPageStats' }
   }
 },
 AttendanceCreateRequest: {
@@ -705,6 +540,72 @@ AttendanceCreateRequest: {
         }
       }
     },
+    // ── paths {...} 내부 수정(기존 엔드포인트 업데이트) ─────────────────────
+'/api/admin/shops/{shopId}/settlements/employees/{employeeId}': {
+  post: {
+    tags: ['Payroll'],
+    summary: '지난 사이클 정산(스냅샷 저장)',
+    description:
+      'shop의 급여 사이클 기준으로 특정 직원의 직전 사이클을 정산하고 PayrollSettlement 레코드를 생성합니다.',
+    security: [{ bearerAuth: [] }],
+    parameters: [
+      { name: 'shopId', in: 'path', required: true, schema: { type: 'integer' } },
+      { name: 'employeeId', in: 'path', required: true, schema: { type: 'integer' } },
+      // 필요 시 사이클 override
+      { name: 'year', in: 'query', required: false, schema: { type: 'integer', minimum: 2000, maximum: 2100 } },
+      { name: 'month', in: 'query', required: false, schema: { type: 'integer', minimum: 1, maximum: 12 } },
+      { name: 'cycleStartDay', in: 'query', required: false, schema: { type: 'integer', minimum: 1, maximum: 28 },
+        description: '사이클 시작일 override(미지정 시 매장 payday 사용)' }
+    ],
+    requestBody: {
+      required: false,
+      content: {
+        'application/json': {
+          schema: { $ref: '#/components/schemas/SettleEmployeeRequest' }
+        }
+      }
+    },
+    responses: {
+      '201': {
+        description: 'Created',
+        content: {
+          'application/json': {
+            schema: { $ref: '#/components/schemas/SettlePreviousResponse' },
+            examples: {
+              sample: {
+                value: {
+                  ok: true,
+                  settlement: {
+                    id: 10,
+                    shopId: 1,
+                    employeeId: 42,
+                    cycleStart: '2025-09-07T00:00:00.000Z',
+                    cycleEnd: '2025-10-06T23:59:59.999Z',
+                    workedMinutes: 13200,
+                    basePay: 2640000,
+                    totalPay: 2640000,
+                    incomeTax: 79200,
+                    localIncomeTax: 7920,
+                    otherTax: 0,
+                    netPay: 2560880,
+                    settledAt: '2025-10-01T09:12:34.000Z',
+                    processedBy: 1,
+                    note: '9월 정산'
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      '401': { description: 'Unauthorized' },
+      '403': { description: 'Forbidden' },
+      '404': { description: 'Not Found' },
+      '409': { description: 'Already settled for this cycle' }
+    }
+  }
+},
+
     '/api/auth/refresh': {
       post: {
         tags: ['Auth'],
@@ -905,139 +806,6 @@ AttendanceCreateRequest: {
       put:  { tags: ['Admin'], summary: '직원 수정', parameters: [{ name: 'shopId', in: 'path', required: true, schema: { type: 'integer' } }, { name: 'employeeId', in: 'path', required: true, schema: { type: 'integer' } }], responses: { '200': { description: 'OK' }, '404': { description: 'Not Found' } } },
       delete:{ tags: ['Admin'], summary: '직원 삭제', parameters: [{ name: 'shopId', in: 'path', required: true, schema: { type: 'integer' } }, { name: 'employeeId', in: 'path', required: true, schema: { type: 'integer' } }], responses: { '204': { description: 'No Content' } } }
     },
-    '/api/admin/shops/{shopId}/payroll/export': {
-      get: { tags: ['Payroll'], summary: '급여 엑셀 다운로드', parameters: [ { name:'shopId',in:'path',required:true,schema:{type:'integer'} }, { name:'start',in:'query',required:true,schema:{type:'string',format:'date'} }, { name:'end',in:'query',required:true,schema:{type:'string',format:'date'} } ], responses: { '200': { description: 'Excel stream' } } }
-    },
-    '/api/admin/shops/{shopId}/payroll/dashboard': {
-      get: { tags: ['Payroll'], summary: '급여 대시보드', parameters: [ { name:'shopId',in:'path',required:true,schema:{type:'integer'} }, { name:'year',in:'query',schema:{type:'integer'} }, { name:'month',in:'query',schema:{type:'integer'} } ], responses: { '200': { description: 'OK' } } }
-    },
-    '/api/admin/shops/{shopId}/payroll/employees': {
-      get: { tags: ['Payroll'], summary: '직원별 급여 목록', parameters: [ { name:'shopId',in:'path',required:true,schema:{type:'integer'} }, { name:'year',in:'query',schema:{type:'integer'} }, { name:'month',in:'query',schema:{type:'integer'} } ], // 기존 paths['/api/admin/shops/{shopId}/payroll/employees'].get.responses 를 아래로 교체
-responses: {
-  '200': {
-    description: 'OK',
-    content: {
-      'application/json': {
-        schema: { $ref: '#/components/schemas/PayrollByEmployeeResponse' },
-        examples: {
-          sample: {
-            value: {
-              year: 2025,
-              month: 8,
-              cycle: {
-                start: '2025-07-07T00:00:00.000Z',
-                end:   '2025-08-06T23:59:59.999Z',
-                label: '7월 7일 ~ 8월 6일',
-                startDay: 7
-              },
-              summary: {
-                employeeCount: 2,
-                paidCount: 1,
-                pendingCount: 1,
-                totalWorkedMinutes: 28182
-              },
-              employees: [
-                {
-                  employeeId: 1, name: '김철수', position: 'STAFF',
-                  hourlyPay: null, monthlyPay: 2500000,
-                  workedMinutes: 14982, extraMinutes: 0, salary: 2500000,
-                  settlement: { status: 'PAID', settlementId: 10, settledAt: '2025-08-10T09:00:00.000Z', totalPay: 2500000 }
-                },
-                {
-                  employeeId: 2, name: '이영희', position: 'PART_TIME',
-                  hourlyPay: 12000, monthlyPay: null,
-                  workedMinutes: 13200, extraMinutes: 0, salary: 2640000,
-                  settlement: { status: 'PENDING', settlementId: null, settledAt: null, totalPay: null }
-                }
-              ],
-              paid: [
-                {
-                  employeeId: 1, name: '김철수', position: 'STAFF',
-                  hourlyPay: null, monthlyPay: 2500000,
-                  workedMinutes: 14982, extraMinutes: 0, salary: 2500000,
-                  settlement: { status: 'PAID', settlementId: 10, settledAt: '2025-08-10T09:00:00.000Z', totalPay: 2500000 }
-                }
-              ],
-              pending: [
-                {
-                  employeeId: 2, name: '이영희', position: 'PART_TIME',
-                  hourlyPay: 12000, monthlyPay: null,
-                  workedMinutes: 13200, extraMinutes: 0, salary: 2640000,
-                  settlement: { status: 'PENDING', settlementId: null, settledAt: null, totalPay: null }
-                }
-              ]
-            }
-          }
-        }
-      }
-    }
-  }
-}
- }
-    },
-    '/api/admin/shops/{shopId}/payroll/employees/{employeeId}': {
-      get: { tags: ['Payroll'], summary: '직원 월별 급여 상세', parameters: [ { name:'shopId',in:'path',required:true,schema:{type:'integer'} }, { name:'employeeId',in:'path',required:true,schema:{type:'integer'} }, { name:'year',in:'query',schema:{type:'integer'} }, { name:'month',in:'query',schema:{type:'integer'} } ], // 기존 paths['/api/admin/shops/{shopId}/payroll/employees/{employeeId}'].get.responses 를 아래로 교체
-responses: {
-  '200': {
-    description: 'OK',
-    content: {
-      'application/json': {
-        schema: { $ref: '#/components/schemas/PayrollEmployeeDetailResponse' },
-        examples: {
-          sample: {
-            value: {
-              year: 2025,
-              month: 8,
-              cycle: {
-                start: '2025-07-07T00:00:00.000Z',
-                end:   '2025-08-06T23:59:59.999Z',
-                label: '7월 7일 ~ 8월 6일',
-                startDay: 7
-              },
-              settlement: {
-                status: 'PAID',
-                settlementId: 10,
-                totalPay: 2500000,
-                settledAt: '2025-08-10T09:00:00.000Z',
-                fullyApplied: true
-              },
-              employee: {
-                hourlyPay: null, monthlyPay: 2500000
-              },
-              daysWorked: 12,
-              workedMinutes: 14982,
-              extraMinutes: 0,
-              salary: 2500000,
-              logs: [
-                {
-                  id: 901,
-                  date: '2025-08-01',
-                  clockInAt: '2025-08-01T00:05:00.000Z',
-                  clockOutAt: '2025-08-01T09:00:00.000Z',
-                  workedMinutes: 535,
-                  extraMinutes: 0,
-                  settlementId: 10
-                },
-                {
-                  id: 902,
-                  date: '2025-08-02',
-                  clockInAt: '2025-08-02T00:03:00.000Z',
-                  clockOutAt: '2025-08-02T09:01:00.000Z',
-                  workedMinutes: 538,
-                  extraMinutes: 0,
-                  settlementId: 10
-                }
-              ]
-            }
-          }
-        }
-      }
-    }
-  },
-  '404': { description: 'Not Found' }
-}
-}
-    },// swaggerDocument.paths 에 추가
 '/api/admin/shops/{shopId}/payroll/export-xlsx': {
   get: {
     tags: ['Payroll'],
@@ -1075,9 +843,6 @@ responses: {
   }
 },
 
-    '/api/admin/shops/{shopId}/payroll/employees/{employeeId}/summary': {
-      get: { tags: ['Payroll'], summary: '직원 월별 요약', parameters: [ { name:'shopId',in:'path',required:true,schema:{type:'integer'} }, { name:'employeeId',in:'path',required:true,schema:{type:'integer'} }, { name:'year',in:'query',schema:{type:'integer'} }, { name:'month',in:'query',schema:{type:'integer'} } ], responses: { '200': { description: 'OK' } } }
-    },
     '/api/admin/shops/{shopId}/qr': {
       get: { tags: ['QR'], summary: '매장 QR PNG 생성', parameters: [ { name:'shopId',in:'path',required:true,schema:{type:'integer'} }, { name:'download',in:'query',schema:{type:'integer', minimum:0, maximum:1} }, { name:'format', in:'query', schema:{ type:'string', enum:['raw','base64','json'] }, description:'QR 페이로드 포맷 (기본 raw)' } ], responses: { '200': { description: 'PNG' }, '404': { description: 'Not Found' } } }
     },
@@ -1151,56 +916,6 @@ responses: {
         }
       }
     },
-// swaggerDocument.paths 에 추가
-'/api/my/settlement': {
-  get: {
-    tags: ['Payroll'],
-    summary: '마이페이지 정산/프로필/통계',
-    security: [{ bearerAuth: [] }],
-    parameters: [
-      {
-        name: 'anchor',
-        in: 'query',
-        required: false,
-        schema: { type: 'string', format: 'date-time' },
-        description: '기준 시각(KST 기준 사이클/월 계산 anchor). 기본값: 현재 시각'
-      },
-      {
-        name: 'cycleStartDay',
-        in: 'query',
-        required: false,
-        schema: { type: 'integer', minimum: 1, maximum: 28 },
-        description: '사이클 시작일(숫자). 기본: 매장 payday 또는 환경변수'
-      }
-    ],
-    responses: {
-      '200': {
-        description: 'OK',
-        content: {
-          'application/json': { schema: { $ref: '#/components/schemas/MyPageSettlementResponse' } }
-        }
-      },
-      '401': { description: 'Unauthorized' }
-    }
-  }
-},
-'/api/admin/shops/{shopId}/settlements/employees/{employeeId}': {
-  post: {
-    tags: ['Payroll'],
-    summary: '지난 사이클 정산(스냅샷 저장)',
-    security: [{ bearerAuth: [] }],
-    parameters: [
-      { name: 'shopId', in: 'path', required: true, schema: { type: 'integer' } },
-      { name: 'employeeId', in: 'path', required: true, schema: { type: 'integer' } }
-    ],
-    responses: {
-      '201': { description: 'Created', content: { 'application/json': { schema: { $ref: '#/components/schemas/SettlePreviousResponse' } } } },
-      '401': { description: 'Unauthorized' },
-      '403': { description: 'Forbidden' },
-      '404': { description: 'Not Found' }
-   }
- }
-},
     '/api/my/workshifts': {
       get: {
         tags: ['Shifts'],
@@ -1373,7 +1088,6 @@ responses: {
                       startAt: { type: 'string', format: 'date-time' },
                       endAt: { type: 'string', format: 'date-time' },
                       status: { $ref: '#/components/schemas/WorkShiftStatus' },
-                      needsReview: { type: 'boolean' },
                       reviewReason: { $ref: '#/components/schemas/ShiftReviewReason' },
                       reviewNote: { type: 'string', nullable: true },
                       reviewResolvedAt:{ type: 'string', format: 'date-time', nullable: true },
@@ -1612,7 +1326,6 @@ responses: {
                     leftEarly:   { type: 'boolean', nullable: true },
                     actualMinutes: { type: 'integer', nullable: true },
                     workedMinutes: { type: 'integer', nullable: true },
-                    needsReview:   { type: 'boolean', nullable: true },
                     reviewReason:  { $ref: '#/components/schemas/ShiftReviewReason', nullable: true },
                     reviewNote:    { type: 'string', nullable: true },
                     reviewResolvedAt: { type: 'string', format: 'date-time', nullable: true },
@@ -1658,43 +1371,7 @@ responses: {
       }
   }
 };
-// 🔻 기존 정산/급여 관련 스키마 제거
-[
-  'PayrollCycle',
-  'SettlementStatus',
-  'EmployeePayrollListItem',
-  'PayrollByEmployeeSummary',
-  'PayrollByEmployeeResponse',
-  'PayrollEmployeeDetailLog',
-  'PayrollEmployeeDetailResponse',
-  'PayrollSettlement',
-  'SettlePreviousResponse',
-  'MyPageCycle',
-  'MyPageCards',
-  'MyPageMonth',
-  'MyPageStats',
-  'MyPageSettlementResponse',
-].forEach((k) => {
-  try { delete swaggerDocument.components.schemas[k as any]; } catch {}
-});
 
-// 🔻 AttendanceRecord 안에 settlementId 필드도 제거(정산 재설계 전에 노출 안 함)
-try {
-  delete swaggerDocument.components.schemas.AttendanceRecord.properties.settlementId;
-} catch {}
-
-// 🔻 정산/급여 관련 경로 제거
-[
-  '/api/admin/shops/{shopId}/payroll/export',
-  '/api/admin/shops/{shopId}/payroll/dashboard',
-  '/api/admin/shops/{shopId}/payroll/employees',
-  '/api/admin/shops/{shopId}/payroll/employees/{employeeId}',
-  '/api/admin/shops/{shopId}/payroll/employees/{employeeId}/summary',
-  '/api/my/settlement',
-  '/api/admin/shops/{shopId}/settlements/employees/{employeeId}',
-].forEach((p) => {
-  try { delete swaggerDocument.paths[p as any]; } catch {}
-});
 export const swaggerServe: RequestHandler[] = swaggerUi.serve;
 
 export const swaggerSetup = swaggerUi.setup(swaggerDocument, {
