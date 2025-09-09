@@ -403,7 +403,7 @@ if (!shift) { res.status(404).json({ error: '근무일정을 찾을 수 없습�
         data: {
           status: 'REVIEW',
           reviewReason: 'LATE_IN' as any,
-          memo: memo,
+          memo: memo ?? undefined,
           actualInAt: now,
           late: true
         },
@@ -413,6 +413,7 @@ if (!shift) { res.status(404).json({ error: '근무일정을 찾을 수 없습�
         message: '출근(관리자 확인 필요)',
         clockInAt: now,
         review: { reason: 'LATE_IN', deltaMin },
+        memo : memo,
         shiftId: updated.id
       });
       return;
@@ -422,12 +423,13 @@ if (!shift) { res.status(404).json({ error: '근무일정을 찾을 수 없습�
     const late = nowMs > startMs; // 표시용(지각 배지)
     await prisma.workShift.update({
       where: { id: shiftId },
-      data: { status: 'IN_PROGRESS', actualInAt: now, late },
+      data: { status: 'IN_PROGRESS', actualInAt: now, late,memo: memo ?? undefined, },
     });
     res.json({
       ok: true,
       message: late ? '출근(지각)' : '출근 완료',
       clockInAt: now,
+      memo,
       shiftId
     });
     return;
@@ -463,6 +465,7 @@ if (!shift) { res.status(404).json({ error: '근무일정을 찾을 수 없습�
           reviewReason: 'EARLY_OUT' as any,
           actualOutAt: now,
           leftEarly: true,
+          memo: memo ?? undefined,
           actualMinutes: actual,
           workedMinutes: payable
         },
@@ -489,6 +492,7 @@ await prisma.workShift.update({
     status: 'COMPLETED',
     actualOutAt: now,
     leftEarly,
+    memo: memo ?? undefined,
     actualMinutes: actual,
     workedMinutes: payable,
     finalPayAmount: hourlyAmount,
