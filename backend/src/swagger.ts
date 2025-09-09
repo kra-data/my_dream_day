@@ -228,6 +228,106 @@ SettlePreviousResponse: {
     settlement: { $ref: '#/components/schemas/PayrollSettlement' }
   }
 },
+PayrollCycleV2: {
+  type: 'object',
+  properties: {
+    start:    { type: 'string', format: 'date-time', example: '2025-09-07T00:00:00.000Z' },
+    end:      { type: 'string', format: 'date-time', example: '2025-10-06T23:59:59.999Z' },
+    label:    { type: 'string', example: '9월 7일 ~ 10월 6일' },
+    startDay: { type: 'integer', minimum: 1, maximum: 28, example: 7 }
+  }
+},
+EmployeeSettlementStatus: {
+  type: 'object',
+  properties: {
+    status: { type: 'string', enum: ['PENDING','PAID'], example: 'PENDING' },
+    settlementId: { type: ['integer','null'], example: null },
+    settledAt: { type: ['string','null'], format: 'date-time', example: null }
+  }
+},
+PayrollEmployeeStatusListItem: {
+  type: 'object',
+  properties: {
+    employeeId:   { type: 'integer', example: 1 },
+    name:         { type: 'string',  example: '김철수' },
+    position:     { type: 'string',  example: '매니저' },
+    payUnit:      { type: 'string',  enum: ['HOURLY','MONTHLY'], example: 'HOURLY' },
+    pay:          { type: ['integer','null'], example: 12000, description: '시급(원) 또는 월급(원)' },
+
+    // 금액: 기본급만 (연장급액 제거)
+    amount:       { type: 'integer', example: 2100000, description: '표시 급여액(세전). HOURLY는 확정합(sum finalPayAmount), MONTHLY는 월급' },
+
+    // 근무량: 추가근무(초과분) 제거
+    workedMinutes:{ type: 'integer', example: 10560, description: '지급 인정 분(payable) 합계' },
+    daysWorked:   { type: 'integer', example: 22 },
+
+    settlement: { $ref: '#/components/schemas/EmployeeSettlementStatus' }
+  }
+},
+PayrollEmployeeStatusSummary: {
+  type: 'object',
+  properties: {
+    employeeCount: { type: 'integer', example: 5 },
+    paidCount:     { type: 'integer', example: 2 },
+    pendingCount:  { type: 'integer', example: 3 },
+    totalAmount:   { type: 'integer', example: 8360000, description: 'amount 합계(세전)' }
+  }
+},
+PayrollEmployeeStatusListResponse: {
+  type: 'object',
+  properties: {
+    year:  { type: 'integer', example: 2025 },
+    month: { type: 'integer', example: 9 },
+    cycle: { $ref: '#/components/schemas/PayrollCycleV2' },
+    summary: { $ref: '#/components/schemas/PayrollEmployeeStatusSummary' },
+    items: {
+      type: 'array',
+      items: { $ref: '#/components/schemas/PayrollEmployeeStatusListItem' }
+    }
+  }
+},
+PayrollEmployeeShiftLog: {
+  type: 'object',
+  properties: {
+    id:            { type: 'integer', example: 901 },
+    date:          { type: 'string', format: 'date', example: '2025-09-03' },
+    plannedStart:  { type: 'string', format: 'date-time', example: '2025-09-03T00:00:00.000Z' },
+    plannedEnd:    { type: 'string', format: 'date-time', example: '2025-09-03T08:00:00.000Z' },
+    actualInAt:    { type: ['string','null'], format: 'date-time', example: '2025-09-03T00:03:00.000Z' },
+    actualOutAt:   { type: ['string','null'], format: 'date-time', example: '2025-09-03T08:05:00.000Z' },
+    status:        { type: 'string', enum: ['SCHEDULED','IN_PROGRESS','COMPLETED','CANCELED','OVERDUE','REVIEW'], example: 'COMPLETED' },
+    workedMinutes: { type: ['integer','null'], example: 480, description: '지급 인정 분' },
+    actualMinutes: { type: ['integer','null'], example: 485, description: '실제 근무 분' },
+    finalPayAmount:{ type: ['integer','null'], example: 96000, description: '시급제: 확정 금액, 월급제: null' },
+    settlementId:  { type: ['integer','null'], example: null }
+  }
+},
+PayrollEmployeeStatusDetailResponse: {
+  type: 'object',
+  properties: {
+    year:  { type: 'integer', example: 2025 },
+    month: { type: 'integer', example: 9 },
+    cycle: { $ref: '#/components/schemas/PayrollCycleV2' },
+    settlement: { $ref: '#/components/schemas/EmployeeSettlementStatus' },
+    employee: {
+      type: 'object',
+      properties: {
+        id:       { type: 'integer', example: 1 },
+        name:     { type: 'string',  example: '김철수' },
+        position: { type: 'string',  example: '매니저' },
+        payUnit:  { type: 'string',  enum: ['HOURLY','MONTHLY'], example: 'HOURLY' },
+        pay:      { type: ['integer','null'], example: 12000 }
+      }
+    },
+    workedMinutes: { type: 'integer', example: 10560 },
+    daysWorked:    { type: 'integer', example: 22 },
+    amount:        { type: 'integer', example: 2100000, description: '표시 급여액(세전). 연장급액 없음' },
+    logs: {
+      type: 'array',
+      items: { $ref: '#/components/schemas/PayrollEmployeeShiftLog' }
+    }
+  }
+},
 // 필요 시 비고/옵션 입력용(바디 없이도 동작하게 optional)
 SettleEmployeeRequest: {
   type: 'object',
@@ -916,6 +1016,108 @@ AttendanceCreateRequest: {
         }
       }
     },
+    // 직원별 급여 현황 - 목록(추가근무/연장급액 제거)
+'/api/admin/shops/{shopId}/payroll/employees': {
+  get: {
+    tags: ['Payroll'],
+    summary: '직원별 급여 현황(목록) - 기본급만',
+    description:
+      '선택한 급여 사이클 기준으로 직원별 금액/근무시간/정산상태를 집계합니다.\n' +
+      '- HOURLY: COMPLETED & finalPayAmount 합계(없으면 workedMinutes×시급)\n' +
+      '- MONTHLY: 월급 그대로 사용\n' +
+      '- 추가근무 및 연장급액 항목은 포함하지 않습니다.',
+    security: [{ bearerAuth: [] }],
+    parameters: [
+      { name: 'shopId', in: 'path', required: true, schema: { type: 'integer' } },
+      { name: 'year',   in: 'query', required: true,  schema: { type: 'integer', minimum: 2000, maximum: 2100 } },
+      { name: 'month',  in: 'query', required: true,  schema: { type: 'integer', minimum: 1, maximum: 12 } },
+      { name: 'cycleStartDay', in: 'query', required: false, schema: { type: 'integer', minimum: 1, maximum: 28 },
+        description: '사이클 시작일(기본: 매장 설정값 또는 환경변수)' },
+      { name: 'q', in: 'query', schema: { type: 'string' }, description: '직원명 검색(부분 일치)' },
+      { name: 'position', in: 'query', schema: { type: 'string' }, description: '직위/역할 필터' },
+      { name: 'settlement', in: 'query', schema: { type: 'string', enum: ['PENDING','PAID'] }, description: '정산 상태' },
+      { name: 'sort', in: 'query', schema: { type: 'string', enum: ['amount','name','workedMinutes'], default: 'name' } },
+      { name: 'order', in: 'query', schema: { type: 'string', enum: ['asc','desc'], default: 'asc' } }
+    ],
+    responses: {
+      '200': {
+        description: 'OK',
+        content: {
+          'application/json': {
+            schema: { $ref: '#/components/schemas/PayrollEmployeeStatusListResponse' },
+            examples: {
+              sample: {
+                value: {
+                  year: 2025,
+                  month: 9,
+                  cycle: {
+                    start: '2025-09-07T00:00:00.000Z',
+                    end:   '2025-10-06T23:59:59.999Z',
+                    label: '9월 7일 ~ 10월 6일',
+                    startDay: 7
+                  },
+                  summary: { employeeCount: 5, paidCount: 2, pendingCount: 3, totalAmount: 8360000 },
+                  items: [
+                    {
+                      employeeId: 1, name: '김철수', position: '매니저',
+                      payUnit: 'HOURLY', pay: 12000,
+                      amount: 2100000,
+                      workedMinutes: 10560, daysWorked: 22,
+                      settlement: { status: 'PENDING', settlementId: null, settledAt: null }
+                    },
+                    {
+                      employeeId: 4, name: '정수진', position: '직원',
+                      payUnit: 'MONTHLY', pay: 2500000,
+                      amount: 2500000,
+                      workedMinutes: 10080, daysWorked: 21,
+                      settlement: { status: 'PAID', settlementId: 77, settledAt: '2025-09-08T09:00:00.000Z' }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      '401': { description: 'Unauthorized' },
+      '403': { description: 'Forbidden' },
+      '404': { description: 'Not Found' }
+    }
+  }
+},
+
+// 직원별 급여 현황 - 상세(추가근무/연장급액 제거)
+'/api/admin/shops/{shopId}/payroll/employees/{employeeId}': {
+  get: {
+    tags: ['Payroll'],
+    summary: '직원별 급여 현황(상세) - 기본급만',
+    description:
+      '선택한 사이클에서 특정 직원의 합계 및 시프트 로그를 반환합니다.\n' +
+      '- 추가근무 및 연장급액 항목은 포함하지 않습니다.',
+    security: [{ bearerAuth: [] }],
+    parameters: [
+      { name: 'shopId', in: 'path', required: true, schema: { type: 'integer' } },
+      { name: 'employeeId', in: 'path', required: true, schema: { type: 'integer' } },
+      { name: 'year',   in: 'query', required: true,  schema: { type: 'integer', minimum: 2000, maximum: 2100 } },
+      { name: 'month',  in: 'query', required: true,  schema: { type: 'integer', minimum: 1, maximum: 12 } },
+      { name: 'cycleStartDay', in: 'query', required: false, schema: { type: 'integer', minimum: 1, maximum: 28 } }
+    ],
+    responses: {
+      '200': {
+        description: 'OK',
+        content: {
+          'application/json': {
+            schema: { $ref: '#/components/schemas/PayrollEmployeeStatusDetailResponse' }
+          }
+        }
+      },
+      '401': { description: 'Unauthorized' },
+      '403': { description: 'Forbidden' },
+      '404': { description: 'Not Found' }
+    }
+  }
+},
+
     '/api/my/workshifts': {
       get: {
         tags: ['Shifts'],

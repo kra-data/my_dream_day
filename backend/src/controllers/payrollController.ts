@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { prisma } from '../db/prisma';
 import { AuthRequiredRequest } from '../middlewares/requireUser';
 import ExcelJS from 'exceljs';
+import type { Position } from '@prisma/client';
 // KST helpers
 const fromKstParts = (y: number, m1: number, d: number, hh = 0, mm = 0, ss = 0, ms = 0) =>
   new Date(Date.UTC(y, m1, d, hh - 9, mm, ss, ms));
@@ -26,7 +27,46 @@ const q = z.object({
   month: z.coerce.number().int().min(1).max(12),
   cycleStartDay: z.coerce.number().int().min(1).max(28).optional(),
 });
+/** 사이클(startDay 기준): [start, end] (end는 inclusive 23:59:59.999) */
+function buildCycle(year: number, month: number, startDay: number) {
+  // month: 1~12
+  const kstStart = fromKstParts(year, month - 1, startDay, 0, 0, 0, 0);
+  // next month + same startDay
+  const nextMonth = month === 12 ? 1 : month + 1;
+  const nextYear  = month === 12 ? year + 1 : year;
+  const kstNext   = fromKstParts(nextYear, nextMonth - 1, startDay, 0, 0, 0, 0);
+  const start = kstStart;                       // UTC
+  const end   = new Date(kstNext.getTime() - 1);// inclusive
+  const label = `${toKst(start).getUTCMonth()+1}월 ${toKst(start).getUTCDate()}일 ~ ${toKst(end).getUTCMonth()+1}월 ${toKst(end).getUTCDate()}일`;
+  return { start, end, nextStart: kstNext, label, startDay };
+}
 
+const listQuery = z.object({
+  year:  z.coerce.number().int().min(2000).max(2100),
+  month: z.coerce.number().int().min(1).max(12),
+  cycleStartDay: z.coerce.number().int().min(1).max(28).optional(),
+  q: z.string().optional(),
+  position: z.enum(['MANAGER','STAFF','PART_TIME','OWNER']).optional(),
+  settlement: z.enum(['PENDING','PAID']).optional(),
+  sort: z.enum(['amount','name','workedMinutes']).optional().default('name'),
+  order: z.enum(['asc','desc']).optional().default('asc'),
+});
+
+const detailQuery = z.object({
+  year:  z.coerce.number().int().min(2000).max(2100),
+  month: z.coerce.number().int().min(1).max(12),
+  cycleStartDay: z.coerce.number().int().min(1).max(28).optional(),
+});
+
+/* ───────── helpers ───────── */
+function uniqKstDates(dates: Date[]): number {
+  const s = new Set<string>();
+  for (const d of dates) {
+    const k = toKst(d);
+    s.add(`${k.getUTCFullYear()}-${k.getUTCMonth()+1}-${k.getUTCDate()}`);
+  }
+  return s.size;
+}
 // 소수점 절사(원 단위) 규칙: 각 세목을 개별 절사 → 합계
 const floorWon = (n: number) => Math.floor(n);
 
@@ -665,3 +705,199 @@ export const payrollOverview: (req: AuthRequiredRequest, res: Response) => Promi
   });
 
   };
+
+/* ───────────────── 목록: /api/admin/shops/:shopId/payroll/employees ───────────────── */
+export const getEmployeeStatusList = async (req: AuthRequiredRequest, res: Response) => {
+  const shopId = Number(req.params.shopId);
+  if (req.user.shopId !== shopId) { res.status(403).json({ error: '다른 가게는 조회할 수 없습니다.' }); return; }
+
+  const { year, month, cycleStartDay, q, position, settlement, sort, order } = listQuery.parse(req.query);
+
+  // 가게 설정 또는 환경변수에서 기본 시작일을 끌어오도록 필요시 교체
+  const startDay = cycleStartDay ?? Number(process.env.CYCLE_START_DAY ?? '1');
+  const cycle = buildCycle(year, month, startDay);
+
+  // 직원 목록(검색/포지션 필터)
+  const employees = await prisma.employee.findMany({
+    where: {
+      shopId,
+      ...(q ? { name: { contains: q } } : {}),
+      ...(position ? { position } : {}),
+    },
+    select: { id: true, name: true, position: true, pay: true, payUnit: true }
+  });
+
+  const empIds = employees.map(e => e.id);
+  if (empIds.length === 0) {
+    res.json({
+      year, month,
+      cycle: { start: cycle.start, end: cycle.end, label: cycle.label, startDay: cycle.startDay },
+      summary: { employeeCount: 0, paidCount: 0, pendingCount: 0, totalAmount: 0 },
+      items: []
+    });
+    return;
+  }
+
+  // 시프트 집계: COMPLETED & 사이클 내부 (연장급액/추가근무 없음)
+  const shiftAgg = await prisma.workShift.groupBy({
+    by: ['employeeId'],
+    where: {
+      shopId,
+      employeeId: { in: empIds },
+      status: 'COMPLETED' as any,
+      startAt: { gte: cycle.start },
+      endAt:   { lte: cycle.end },
+    },
+    _sum: {
+      workedMinutes: true,
+      finalPayAmount: true,
+    }
+  });
+
+  const aggByEmp = new Map<number, { workedMinutes: number; finalPayAmount: number }>();
+  for (const g of shiftAgg) {
+    aggByEmp.set(g.employeeId, {
+      workedMinutes: g._sum.workedMinutes ?? 0,
+      finalPayAmount: g._sum.finalPayAmount ?? 0
+    });
+  }
+
+  // 정산 상태
+  const settlements = await prisma.payrollSettlement.findMany({
+    where: { shopId, cycleStart: cycle.start, cycleEnd: cycle.end, employeeId: { in: empIds } },
+    select: { id: true, employeeId: true, settledAt: true, totalPay: true }
+  });
+  const paidSet = new Map<number, { id: number; settledAt: Date | null }>();
+  for (const s of settlements) paidSet.set(s.employeeId, { id: s.id, settledAt: s.settledAt ?? null });
+
+  // merge
+  const items = employees.map(e => {
+    const agg = aggByEmp.get(e.id) ?? { workedMinutes: 0, finalPayAmount: 0 };
+    const isHourly = e.payUnit === 'HOURLY';
+    const amount = isHourly
+      ? (agg.finalPayAmount || Math.round((agg.workedMinutes / 60) * (e.pay ?? 0)))
+      : (e.pay ?? 0);
+    const status = paidSet.has(e.id) ? 'PAID' : 'PENDING';
+    return {
+      employeeId: e.id,
+      name: e.name,
+      position: e.position ?? '',
+      payUnit: e.payUnit,
+      pay: e.pay,
+      amount,
+      workedMinutes: agg.workedMinutes,
+      daysWorked: 0, // 목록에서는 계산 비용 절약(상세에서 정확히 산출). 필요하면 distinct day 집계 추가.
+      settlement: {
+        status,
+        settlementId: paidSet.get(e.id)?.id ?? null,
+        settledAt: paidSet.get(e.id)?.settledAt ?? null
+      }
+    };
+  });
+
+  // settlement 필터
+  const filtered = settlement ? items.filter(i => i.settlement.status === settlement) : items;
+
+  // 정렬
+  const dir = order === 'desc' ? -1 : 1;
+  filtered.sort((a, b) => {
+    if (sort === 'amount') return (a.amount - b.amount) * dir;
+    if (sort === 'workedMinutes') return (a.workedMinutes - b.workedMinutes) * dir;
+    return a.name.localeCompare(b.name) * dir;
+  });
+
+  const summary = {
+    employeeCount: filtered.length,
+    paidCount: filtered.filter(i => i.settlement.status === 'PAID').length,
+    pendingCount: filtered.filter(i => i.settlement.status === 'PENDING').length,
+    totalAmount: filtered.reduce((s, i) => s + i.amount, 0)
+  };
+
+  res.json({
+    year, month,
+    cycle: { start: cycle.start, end: cycle.end, label: cycle.label, startDay: cycle.startDay },
+    summary,
+    items: filtered
+  });
+};
+
+/* ───────── 상세: /api/admin/shops/:shopId/payroll/employee-status/:employeeId ───────── */
+export const getEmployeeStatusDetail = async (req: AuthRequiredRequest, res: Response) => {
+  const shopId = Number(req.params.shopId);
+  const employeeId = Number(req.params.employeeId);
+  if (req.user.shopId !== shopId) { res.status(403).json({ error: '다른 가게는 조회할 수 없습니다.' }); return; }
+
+  const { year, month, cycleStartDay } = detailQuery.parse(req.query);
+  const startDay = cycleStartDay ?? Number(process.env.CYCLE_START_DAY ?? '1');
+  const cycle = buildCycle(year, month, startDay);
+
+  const emp = await prisma.employee.findFirst({
+    where: { id: employeeId, shopId },
+    select: { id: true, name: true, position: true, pay: true, payUnit: true }
+  });
+  if (!emp) { res.status(404).json({ error: '직원이 존재하지 않거나 다른 가게 소속입니다.' }); return; }
+
+  const settlement = await prisma.payrollSettlement.findFirst({
+    where: { shopId, employeeId, cycleStart: cycle.start, cycleEnd: cycle.end },
+    select: { id: true, settledAt: true }
+  });
+
+  const shifts = await prisma.workShift.findMany({
+    where: {
+      shopId, employeeId,
+      // 사이클과 교집합
+      startAt: { lt: cycle.end },
+      endAt:   { gt: cycle.start }
+    },
+    orderBy: { startAt: 'asc' },
+    select: {
+      id: true, startAt: true, endAt: true, status: true,
+      actualInAt: true, actualOutAt: true,
+      workedMinutes: true, actualMinutes: true,
+      finalPayAmount: true, settlementId: true
+    }
+  });
+
+  // 합계
+  const workedMinutes = shifts.reduce((s, r) => s + (r.workedMinutes ?? 0), 0);
+  const daysWorked = uniqKstDates(shifts.map(s => s.startAt));
+  const amount = emp.payUnit === 'HOURLY'
+    ? (shifts.reduce((s, r) => s + (r.finalPayAmount ?? 0), 0) || Math.round((workedMinutes / 60) * (emp.pay ?? 0)))
+    : (emp.pay ?? 0);
+
+  const logs = shifts.map(r => {
+    const k = toKst(r.startAt);
+    const date = `${k.getUTCFullYear()}-${String(k.getUTCMonth()+1).padStart(2,'0')}-${String(k.getUTCDate()).padStart(2,'0')}`;
+    return {
+      id: r.id,
+      date,
+      plannedStart: r.startAt,
+      plannedEnd: r.endAt,
+      actualInAt: r.actualInAt,
+      actualOutAt: r.actualOutAt,
+      status: r.status as any,
+      workedMinutes: r.workedMinutes ?? null,
+      actualMinutes: r.actualMinutes ?? null,
+      finalPayAmount: r.finalPayAmount ?? null,
+      settlementId: r.settlementId ?? null
+    };
+  });
+
+  res.json({
+    year, month,
+    cycle: { start: cycle.start, end: cycle.end, label: cycle.label, startDay: cycle.startDay },
+    settlement: {
+      status: settlement ? 'PAID' : 'PENDING',
+      settlementId: settlement?.id ?? null,
+      settledAt: settlement?.settledAt ?? null
+    },
+    employee: {
+      id: emp.id, name: emp.name, position: emp.position ?? '',
+      payUnit: emp.payUnit, pay: emp.pay
+    },
+    workedMinutes,
+    daysWorked,
+    amount,
+    logs
+  });
+};
