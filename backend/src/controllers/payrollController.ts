@@ -724,7 +724,7 @@ export const getEmployeeStatusList = async (req: AuthRequiredRequest, res: Respo
       ...(q ? { name: { contains: q } } : {}),
       ...(position ? { position } : {}),
     },
-    select: { id: true, name: true, position: true, pay: true, payUnit: true }
+    select: { id: true, name: true, position: true, pay: true, payUnit: true,personalColor:true }
   });
 
   const empIds = employees.map(e => e.id);
@@ -780,6 +780,7 @@ export const getEmployeeStatusList = async (req: AuthRequiredRequest, res: Respo
     const status = paidSet.has(e.id) ? 'PAID' : 'PENDING';
     return {
       employeeId: e.id,
+      personalColor:e.personalColor,
       name: e.name,
       position: e.position ?? '',
       payUnit: e.payUnit,
