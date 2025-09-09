@@ -147,67 +147,6 @@ export const getMyOverdueWorkShifts = async (req: AuthRequiredRequest, res: Resp
   });
 };
 
-// ───── [추가] 관리자/점주: OVERDUE 목록 ─────
-// GET /api/admin/shops/:shopId/workshifts/overdue
-export const getShopOverdueWorkShifts = async (req: AuthRequiredRequest, res: Response) => {
-  const shopId = Number(req.params.shopId);
-  if (req.user.shopId !== shopId) { res.status(403).json({ error: '다른 가게는 조회할 수 없습니다.' }); return; }
-
-  const { from, to, employeeId, cursor, limit } = overdueListQuery.parse(req.query);
-
-  const where: Prisma.WorkShiftWhereInput = {
-    shopId,
-    status: 'OVERDUE' as any,
-    ...(employeeId ? { employeeId } : {}),
-    ...(from || to
-      ? { startAt: { ...(from ? { gte: new Date(from) } : {}), ...(to ? { lte: new Date(to) } : {}) } }
-      : {}
-    ),
-  };
-
-  const rows = await prisma.workShift.findMany({
-    where,
-    include: { employee: { select: { name: true, position: true, section: true, pay: true, payUnit: true } } },
-    orderBy: [{ id: 'desc' }],
-    ...(cursor ? { cursor: { id: Number(cursor) }, skip: 1 } : {}),
-    take: limit,
-  });
-
-  // 기존 WorkShiftWithEmployee 형태로 맞춰서 응답(필요시 그대로 rows 반환해도 됨)
-  const items = rows.map(r => ({
-    id: r.id,
-    shopId: r.shopId,
-    employeeId: r.employeeId,
-    startAt: r.startAt,
-    endAt: r.endAt,
-    status: r.status,
-    actualInAt: r.actualInAt,
-    actualOutAt: r.actualOutAt,
-    late: r.late,
-    leftEarly: r.leftEarly,
-    workedMinutes: r.workedMinutes,
-    actualMinutes: r.actualMinutes,
-    settlementId: r.settlementId,
-    createdBy: r.createdBy,
-    updatedBy: r.updatedBy,
-    createdAt: r.createdAt,
-    updatedAt: r.updatedAt,
-    employee: {
-      name: r.employee.name,
-      position: r.employee.position,
-      section: r.employee.section,
-      // 필요하면 지급단가/단위도 내려보내기
-      pay: r.employee.pay,
-      payUnit: r.employee.payUnit,
-    }
-  }));
-
-  res.json({
-    items,
-    nextCursor: rows.length === (limit ?? 20) ? rows[rows.length - 1].id : null,
-  });
-};
-
 /** 직원: QR/버튼으로 출퇴근 (shift 1:1) */
 export const recordAttendance = async (req: AuthRequiredRequest, res: Response) => {
   const parsed = recordAttendanceSchema.safeParse(req.body);

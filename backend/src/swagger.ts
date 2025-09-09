@@ -495,7 +495,65 @@ SettleEmployeeCycleResponse: {
     settlement: { $ref: '#/components/schemas/PayrollSettlement' }
   }
 },
-
+SettleAllEmployeesCycleRequest: {
+  type: 'object',
+  properties: {
+    note: { type: 'string', maxLength: 500, nullable: true, example: '일괄 정산' },
+    forceWithholding: {
+      type: 'boolean',
+      default: false,
+      description: 'true면 월급제도 3.3% 원천징수 강제 적용'
+    }
+  }
+},
+SettleAllEmployeesCycleCreatedItem: {
+  type: 'object',
+  properties: {
+    employeeId: { type: 'integer', example: 42 },
+    name: { type: 'string', example: '김직원' },
+    payUnit: { type: ['string','null'], enum: ['HOURLY','MONTHLY',null], example: 'HOURLY' },
+    workedMinutes: { type: 'integer', example: 10560 },
+    basePay: { type: 'integer', example: 2100000 },
+    totalPay: { type: 'integer', example: 2100000 },
+    incomeTax: { type: 'integer', example: 63000 },
+    localIncomeTax: { type: 'integer', example: 6300 },
+    otherTax: { type: 'integer', example: 0 },
+    netPay: { type: 'integer', example: 2030700 },
+    settlementId: { type: 'integer', example: 77 }
+  }
+},
+SettleAllEmployeesCycleSkippedItem: {
+  type: 'object',
+  properties: {
+    employeeId: { type: 'integer', example: 43 },
+    name: { type: 'string', example: '이직원' },
+    reason: {
+      type: 'string',
+      enum: ['ALREADY_SETTLED','NO_CONFIRMED_SHIFTS','NO_PAY','NO_PAYUNIT','ERROR'],
+      example: 'ALREADY_SETTLED'
+    },
+    details: { type: 'string', nullable: true, example: '이미 정산된 사이클' },
+    settlementId: { type: 'integer', nullable: true, example: 55 }
+  }
+},
+SettleAllEmployeesCycleResponse: {
+  type: 'object',
+  properties: {
+    ok: { type: 'boolean', example: true },
+    cycle: {
+      type: 'object',
+      properties: {
+        start: { type: 'string', format: 'date-time' },
+        end: { type: 'string', format: 'date-time' },
+        startDay: { type: 'integer', example: 7 }
+      }
+    },
+    createdCount: { type: 'integer', example: 3 },
+    skippedCount: { type: 'integer', example: 2 },
+    created: { type: 'array', items: { $ref: '#/components/schemas/SettleAllEmployeesCycleCreatedItem' } },
+    skipped: { type: 'array', items: { $ref: '#/components/schemas/SettleAllEmployeesCycleSkippedItem' } }
+  }
+},
 // ───────────────── Payroll Overview (프리랜서 3.3% 반영) ─────────────────
 PayrollCycleLite: {
   type: 'object',
@@ -1010,6 +1068,80 @@ AttendanceCreateRequest: {
       }
     }
   },
+  // swaggerDocument.paths 안에 추가
+'/api/admin/shops/{shopId}/payroll/settlements': {
+  post: {
+    tags: ['Payroll'],
+    summary: '사이클 전체 일괄 정산',
+    description:
+      '선택한 연/월 및 사이클 시작일 기준으로 **해당 매장 모든 직원**의 정산 스냅샷을 생성합니다.\n' +
+      '- HOURLY: COMPLETED & settlementId=null 시프트의 **finalPayAmount 합**으로 계산. 없으면 건너뜀.\n' +
+      '- MONTHLY: 월급 사용(근무가 0이어도 가능). pay가 없으면 건너뜀.\n' +
+      '- 이미 해당 사이클로 정산된 직원은 건너뜀.\n' +
+      '- 처리된 시프트는 생성된 settlementId로 연결됩니다.',
+    security: [{ bearerAuth: [] }],
+    parameters: [
+      { name: 'shopId', in: 'path', required: true, schema: { type: 'integer' } },
+      { name: 'year', in: 'query', required: true, schema: { type: 'integer', minimum: 2000, maximum: 2100 } },
+      { name: 'month', in: 'query', required: true, schema: { type: 'integer', minimum: 1, maximum: 12 } },
+      { name: 'cycleStartDay', in: 'query', required: false, schema: { type: 'integer', minimum: 1, maximum: 28 },
+        description: '사이클 시작일 override(미지정 시 매장 payday 사용)' }
+    ],
+    requestBody: {
+      required: false,
+      content: {
+        'application/json': {
+          schema: { $ref: '#/components/schemas/SettleAllEmployeesCycleRequest' },
+          examples: {
+            default: { value: { note: '9월 일괄 정산' } },
+            forceWithholding: { value: { note: '용역 형태, 전체 3.3% 적용', forceWithholding: true } }
+          }
+        }
+      }
+    },
+    responses: {
+      '201': {
+        description: 'Created',
+        content: {
+          'application/json': {
+            schema: { $ref: '#/components/schemas/SettleAllEmployeesCycleResponse' },
+            examples: {
+              sample: {
+                value: {
+                  ok: true,
+                  cycle: {
+                    start: '2025-09-07T00:00:00.000Z',
+                    end: '2025-10-06T23:59:59.999Z',
+                    startDay: 7
+                  },
+                  createdCount: 3,
+                  skippedCount: 2,
+                  created: [
+                    {
+                      employeeId: 1, name: '김철수', payUnit: 'HOURLY',
+                      workedMinutes: 10560, basePay: 2100000, totalPay: 2100000,
+                      incomeTax: 63000, localIncomeTax: 6300, otherTax: 0, netPay: 2030700,
+                      settlementId: 77
+                    }
+                  ],
+                  skipped: [
+                    { employeeId: 4, name: '박월급', reason: 'NO_PAY' },
+                    { employeeId: 7, name: '이미정산', reason: 'ALREADY_SETTLED', settlementId: 55 }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      '400': { description: 'Bad Request' },
+      '401': { description: 'Unauthorized' },
+      '403': { description: 'Forbidden' },
+      '404': { description: 'Shop not found' }
+    }
+  }
+},
+
     '/api/admin/shops/{shopId}/qr': {
       get: { tags: ['QR'], summary: '매장 QR PNG 생성', parameters: [ { name:'shopId',in:'path',required:true,schema:{type:'integer'} }, { name:'download',in:'query',schema:{type:'integer', minimum:0, maximum:1} }, { name:'format', in:'query', schema:{ type:'string', enum:['raw','base64','json'] }, description:'QR 페이로드 포맷 (기본 raw)' } ], responses: { '200': { description: 'PNG' }, '404': { description: 'Not Found' } } }
     },
