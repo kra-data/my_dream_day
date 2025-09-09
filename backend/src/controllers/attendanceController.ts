@@ -327,9 +327,8 @@ if (nextStatus === ('COMPLETED' as any) && computedWorkedMinutes != null) {
 
   // 리뷰 관련 패치(관리자 수정 = resolve)
   const reviewPatch: Prisma.WorkShiftUpdateInput = {};
-  if (shift.needsReview || shift.status === ('REVIEW' as any)) {
+  if (shift.status === ('REVIEW' as any)) {
     // 기존 리뷰를 이번 수정으로 해소
-    (reviewPatch as any).needsReview = false;
     (reviewPatch as any).reviewResolvedAt = new Date();
     (reviewPatch as any).reviewedBy = req.user.userId;
     // admin이 명시적으로 status를 REVIEW로 유지하길 원하지 않는 한,
@@ -403,7 +402,6 @@ if (!shift) { res.status(404).json({ error: '근무일정을 찾을 수 없습�
         where: { id: shiftId },
         data: {
           status: 'REVIEW',
-          needsReview: true,
           reviewReason: 'LATE_IN' as any,
           reviewNote: memo ?? undefined,
           actualInAt: now,
@@ -462,7 +460,6 @@ if (!shift) { res.status(404).json({ error: '근무일정을 찾을 수 없습�
         where: { id: shiftId },
         data: {
           status: 'REVIEW',
-          needsReview: true,
           reviewReason: 'EARLY_OUT' as any,
           actualOutAt: now,
           leftEarly: true,
