@@ -120,7 +120,7 @@ model WorkShift {
 
   // ✅ 리뷰/알림/메모
   reviewReason     ShiftReviewReason?
-  reviewNote       String?
+  memo       String?
   reviewResolvedAt DateTime?
   reviewedBy       Int?
 

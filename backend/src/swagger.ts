@@ -67,9 +67,9 @@ export const swaggerDocument: any = {
         properties: {
           startAt: { type: 'string', format: 'date-time' },
           endAt:   { type: 'string', format: 'date-time' },
-          reviewNote: { type: 'string', maxLength: 500 }
+          memo: { type: 'string', maxLength: 500 }
         },
-        description: 'startAt / endAt / reviewNote 중 최소 1개 필요'
+        description: 'startAt / endAt / memo 중 최소 1개 필요'
       },
       WorkShiftEmployeeUpdateResponse: {
         type: 'object',
@@ -85,7 +85,7 @@ export const swaggerDocument: any = {
               endAt:   { type: 'string', format: 'date-time' },
               status:  { $ref: '#/components/schemas/WorkShiftStatus' },
               reviewReason: { $ref: '#/components/schemas/ShiftReviewReason', nullable: true },
-              reviewNote:   { type: 'string', nullable: true },
+              memo:   { type: 'string', nullable: true },
               updatedAt:    { type: 'string', format: 'date-time' }
             }
           }
@@ -112,7 +112,7 @@ WorkShift: {
     endAt:       { type: 'string', format: 'date-time', example: '2025-09-01T10:00:00.000Z' },
     status:      { $ref: '#/components/schemas/WorkShiftStatus' },
           reviewReason:  { $ref: '#/components/schemas/ShiftReviewReason', nullable: true },
-          reviewNote:    { type: 'string', nullable: true },
+          memo:    { type: 'string', nullable: true },
           reviewResolvedAt: { type: 'string', format: 'date-time', nullable: true },
 
     // ✅ 실적 필드
@@ -1291,7 +1291,7 @@ AttendanceCreateRequest: {
                       endAt: { type: 'string', format: 'date-time' },
                       status: { $ref: '#/components/schemas/WorkShiftStatus' },
                       reviewReason: { $ref: '#/components/schemas/ShiftReviewReason' },
-                      reviewNote: { type: 'string', nullable: true },
+                      memo: { type: 'string', nullable: true },
                       reviewResolvedAt:{ type: 'string', format: 'date-time', nullable: true },
                       actualInAt: { type: 'string', format: 'date-time', nullable: true },
                       actualOutAt:{ type: 'string', format: 'date-time', nullable: true },
@@ -1404,12 +1404,12 @@ AttendanceCreateRequest: {
                   value: {
                     startAt: '2025-09-10T00:00:00.000Z',
                     endAt: '2025-09-10T08:00:00.000Z',
-                    reviewNote: '개인 사정으로 30분 당김'
+                    memo: '개인 사정으로 30분 당김'
                   }
                 },
                 noteOnly: {
                   value: {
-                    reviewNote: '출근을 깜빡해서 09:10에 찍었습니다. 확인 부탁드려요.'
+                    memo: '출근을 깜빡해서 09:10에 찍었습니다. 확인 부탁드려요.'
                   }
                 }
               }
@@ -1529,7 +1529,7 @@ AttendanceCreateRequest: {
                     actualMinutes: { type: 'integer', nullable: true },
                     workedMinutes: { type: 'integer', nullable: true },
                     reviewReason:  { $ref: '#/components/schemas/ShiftReviewReason', nullable: true },
-                    reviewNote:    { type: 'string', nullable: true },
+                    memo:    { type: 'string', nullable: true },
                     reviewResolvedAt: { type: 'string', format: 'date-time', nullable: true },
                     createdBy: { type: 'integer', nullable: true },
                     updatedBy: { type: 'integer', nullable: true },
