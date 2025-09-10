@@ -119,33 +119,6 @@ const overdueListQuery = z.object({
   limit:  z.coerce.number().int().min(1).max(50).optional().default(20),
 });
 
-// ───── [추가] 직원: OVERDUE 목록 ─────
-// GET /api/attendance/me/overdue
-export const getMyOverdueWorkShifts = async (req: AuthRequiredRequest, res: Response) => {
-  const employeeId = req.user.userId;
-  const { from, to, cursor, limit } = overdueListQuery.parse(req.query);
-
-  const where: Prisma.WorkShiftWhereInput = {
-    employeeId,
-    status: 'OVERDUE' as any,
-    ...(from || to
-      ? { startAt: { ...(from ? { gte: new Date(from) } : {}), ...(to ? { lte: new Date(to) } : {}) } }
-      : {}
-    ),
-  };
-
-  const rows = await prisma.workShift.findMany({
-    where,
-    orderBy: [{ id: 'desc' }],
-    ...(cursor ? { cursor: { id: Number(cursor) }, skip: 1 } : {}),
-    take: limit,
-  });
-
-  res.json({
-    items: rows,
-    nextCursor: rows.length === (limit ?? 20) ? rows[rows.length - 1].id : null,
-  });
-};
 
 /** 직원: QR/버튼으로 출퇴근 (shift 1:1) */
 export const recordAttendance = async (req: AuthRequiredRequest, res: Response) => {

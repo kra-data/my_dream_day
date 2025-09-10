@@ -50,13 +50,13 @@ const listQuerySchema = z.object({
   from: z.string().datetime().optional(),
   to:   z.string().datetime().optional(),
   employeeId: z.coerce.number().int().positive().optional(), // admin 전용
-  status: z.enum(['SCHEDULED','IN_PROGRESS','COMPLETED','CANCELED','OVERDUE','REVIEW']).optional(),
+  status: z.enum(['SCHEDULED','IN_PROGRESS','COMPLETED','CANCELED','REVIEW']).optional(),
 });
 
 const updateShiftSchema = z.object({
   startAt: z.string().datetime().optional(),
   endAt:   z.string().datetime().optional(),
-  status:  z.enum(['SCHEDULED','IN_PROGRESS','COMPLETED','CANCELED','OVERDUE','REVIEW']).optional(),
+  status:  z.enum(['SCHEDULED','IN_PROGRESS','COMPLETED','CANCELED','REVIEW']).optional(),
 });
 const resolveReviewSchema = z.object({
   // 필요한 보정값을 선택적으로 허용 (없으면 현행 유지)

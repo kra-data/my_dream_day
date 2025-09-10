@@ -10,7 +10,6 @@ import {
   getAttendanceRecords,
   getMyAttendance,
   getMyCurrentStatus,
-    getMyOverdueWorkShifts,
 } from '../controllers/attendanceController';
 import {
   requireUser,
@@ -66,13 +65,5 @@ router.get(
 );
 
 
-// 직원: OVERDUE 시프트 목록
-router.get(
-  '/me/overdue',
-  authenticateJWT,
-  requireUser,
-  requireRoles('employee'),
-  withUser((req: AuthRequiredRequest, res, next) => getMyOverdueWorkShifts(req, res))
-);
 
 export default router;

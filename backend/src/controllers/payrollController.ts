@@ -491,14 +491,21 @@ export const settleEmployeeCycle: (req: AuthRequiredRequest, res: Response) => P
       res.status(403).json({ error: '다른 가게는 처리할 수 없습니다.' });
       return;
     }
-
-    const parsedQ = q.safeParse(req.query);
-    if (!parsedQ.success) { res.status(400).json({ error: 'Invalid query' }); return; }
-    const { year, month } = parsedQ.data;
+    const settleEmployeeCycleBody = z.object({
+      year: z.coerce.number().int().min(2000).max(2100),
+      month: z.coerce.number().int().min(1).max(12),
+      cycleStartDay: z.coerce.number().int().min(1).max(28).optional(),
+    });
+    const parsedB = settleEmployeeCycleBody.safeParse(req.body ?? {});
+    if (!parsedB.success) {
+      res.status(400).json({ error: 'Invalid payload', detail: parsedB.error.flatten() });
+      return;
+    }
+    const { year, month, cycleStartDay } = parsedB.data;
 
     const shop = await prisma.shop.findUnique({ where: { id: shopId }, select: { payday: true } });
     if (!shop) { res.status(404).json({ error: 'Shop not found' }); return; }
-    const startDay = parsedQ.data.cycleStartDay ?? Math.min(Math.max(shop.payday ?? 1, 1), 28);
+    const startDay = cycleStartDay ?? Math.min(Math.max(shop.payday ?? 1, 1), 28);
     const cycle = kstCycle(year, month, startDay);
 
     // 직원 조회(같은 매장 소속인지)
@@ -603,7 +610,11 @@ export const settleEmployeeCycle: (req: AuthRequiredRequest, res: Response) => P
     });
   };
 
-
+    const settleEmployeeCycleBody = z.object({
+      year: z.coerce.number().int().min(2000).max(2100),
+      month: z.coerce.number().int().min(1).max(12),
+      cycleStartDay: z.coerce.number().int().min(1).max(28).optional(),
+    });
 
 export const settleAllEmployeesCycle: (req: AuthRequiredRequest, res: Response) => Promise<void> =
   async (req, res) => {
@@ -615,23 +626,14 @@ export const settleAllEmployeesCycle: (req: AuthRequiredRequest, res: Response) 
     }
 
     // query: year, month, cycleStartDay(선택)
-    const qSchema = z.object({
-      year: z.coerce.number().int().min(2000).max(2100),
-      month: z.coerce.number().int().min(1).max(12),
-      cycleStartDay: z.coerce.number().int().min(1).max(28).optional()
-    });
-    const parsedQ = qSchema.safeParse(req.query);
-    if (!parsedQ.success) { res.status(400).json({ error: 'Invalid query' }); return; }
-    const { year, month, cycleStartDay } = parsedQ.data;
 
-    // body: note(선택), forceWithholding(선택)
-    const bSchema = z.object({
-      note: z.string().max(500).optional().nullable(),
-      forceWithholding: z.boolean().optional().default(false)
-    });
-    const parsedB = bSchema.safeParse(req.body ?? {});
-    if (!parsedB.success) { res.status(400).json({ error: 'Invalid body' }); return; }
-    const { note, forceWithholding } = parsedB.data;
+    const parsedB = settleEmployeeCycleBody.safeParse(req.body ?? {});
+    if (!parsedB.success) {
+      res.status(400).json({ error: 'Invalid payload', detail: parsedB.error.flatten() });
+      return;
+    }
+    const { year, month, cycleStartDay } = parsedB.data;
+
 
     const shop = await prisma.shop.findUnique({ where: { id: shopId }, select: { payday: true } });
     if (!shop) { res.status(404).json({ error: 'Shop not found' }); return; }
@@ -732,7 +734,7 @@ export const settleAllEmployeesCycle: (req: AuthRequiredRequest, res: Response) 
 
         // 세금 계산 (정책: HOURLY 기본 적용, forceWithholding=true 이면 MONTHLY에도 적용)
         let incomeTax = 0, localIncomeTax = 0, otherTax = 0, netPay = totalPay;
-        const shouldWithhold = forceWithholding || emp.payUnit === 'HOURLY';
+        const shouldWithhold =  emp.payUnit === 'HOURLY';
         if (shouldWithhold) {
           const t = calcTaxesTruncate(totalPay);
           incomeTax = t.incomeTax;
@@ -757,7 +759,7 @@ export const settleAllEmployeesCycle: (req: AuthRequiredRequest, res: Response) 
               otherTax,
               netPay,
               processedBy: req.user.userId ?? null,
-              note,
+
               settledAt: new Date()
             },
             select: { id: true }
