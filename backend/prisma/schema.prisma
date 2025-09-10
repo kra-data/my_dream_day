@@ -43,6 +43,7 @@ enum WorkShiftStatus {
   COMPLETED
   CANCELED
   REVIEW
+  OVERDUE
 }
 
 model Shop {
