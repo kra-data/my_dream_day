@@ -41,58 +41,42 @@ export const todaySummary = async (req: AuthRequest, res: Response) => {
   const { start, end } = getTodayRange();
   const now = new Date();
 
-  // 전체 직원 수
-  const employees = await prisma.employee.findMany({
-    where: { shopId },
-    select: { id: true }
-  });
-
-  // 오늘(KST) 근무일정(겹치는 시프트)
-  const todays = await prisma.workShift.findMany({
+  // 오늘(KST)과 교집합 있는, 취소되지 않은 시프트만 집계
+  const shifts = await prisma.workShift.findMany({
     where: {
       shopId,
+      status: { not: 'CANCELED' as any },
       startAt: { lt: end },
       endAt:   { gt: start },
     },
-    select: { employeeId: true, startAt: true, endAt: true, actualInAt: true }
+    select: {
+      id: true,
+      startAt: true,
+      endAt: true,
+      actualInAt: true,
+    }
   });
 
-  // 오늘 IN 찍은 직원(실제 출근 시간 actualInAt 이 오늘 KST 범위에 들어온 경우)
-  const checkedSet = new Set(
-    todays
-      .filter(s => s.actualInAt && s.actualInAt >= start && s.actualInAt <= end)
-      .map(s => s.employeeId)
-  );
+  const totalShifts = shifts.length;
 
-  // 직원별 오늘 시프트 묶기
-  const byEmp = new Map<number, typeof todays>();
-  todays.forEach(s => {
-    const arr = byEmp.get(s.employeeId) ?? [];
-    arr.push(s);
-    byEmp.set(s.employeeId, arr);
-  });
+  // 출근: actualInAt 이 존재하는 모든 시프트 (교대 중/완료 포함)
+  const checkedIn = shifts.filter(s => !!s.actualInAt).length;
 
-  // 지각/결근 집계(직원 단위):
-  // - 오늘 시프트가 없는 직원은 제외
-  // - 오늘 IN 안 찍었고:
-  //   · now < 최초 시작 → 아직 근무 전 (카운트X)
-  //   · 최초 시작 ≤ now ≤ 최종 종료 → 지각
-  //   · now > 최종 종료 → 결근
-  let late = 0, absent = 0;
-  for (const [empId, shifts] of byEmp.entries()) {
-    if (checkedSet.has(empId)) continue; // 이미 출근 처리됨
-    const firstStart = new Date(Math.min(...shifts.map(s => +s.startAt)));
-    const lastEnd    = new Date(Math.max(...shifts.map(s => +s.endAt)));
-    if (now < firstStart) continue;
-    if (now <= lastEnd) late++;
-    else absent++;
-  }
+  // 지각: 아직 출근 안 했고, 현재가 시프트 창 안인 경우
+  const late = shifts.filter(s =>
+    !s.actualInAt && now >= s.startAt && now <= s.endAt
+  ).length;
+
+  // 결근: 아직 출근 안 했고, 시프트 종료가 이미 지난 경우
+  const absent = shifts.filter(s =>
+    !s.actualInAt && now > s.endAt
+  ).length;
 
   res.json({
-    totalEmployees: employees.length,
-    checkedIn:      checkedSet.size,
+    totalShifts,
+    checkedIn,
     late,
-    absent
+    absent,
   });
 };
 

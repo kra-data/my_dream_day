@@ -425,7 +425,7 @@ CursorWorkShiftWithEmployeePage: {
       DashboardTodaySummary: {
         type: 'object',
         properties: {
-          totalEmployees: { type: 'integer', example: 17 },
+          totalShifts: { type: 'integer', example: 17 },
           checkedIn:      { type: 'integer', example: 9 },
           late:           { type: 'integer', example: 2 },
           absent:         { type: 'integer', example: 1 }
@@ -1152,7 +1152,9 @@ AttendanceCreateRequest: {
     '/api/admin/shops/{shopId}/dashboard/today': {
       get: {
         tags: ['Dashboard'],
-        summary: '오늘 현황(전체 · 출근 · 지각 · 결근)',
+        summary: '오늘 현황(근무일정 기준: 전체·출근·지각·결근)',
+        description: '오늘(KST)과 교집합 있는 CANCELED 제외 모든 시프트를 대상으로, 출근/지각/결근을 시프트 단위로 집계합니다.',
+
         parameters: [
           { name: 'shopId', in: 'path', required: true, schema: { type: 'integer' } }
         ],
