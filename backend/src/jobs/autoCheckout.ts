@@ -1,37 +1,61 @@
 import { prisma } from '../db/prisma';
+import { Prisma, WorkShiftStatus } from '@prisma/client';
 
-export type AutoCheckoutResult = {
-  processedCount: number;
-};
+// 2시간(120분) 기본, 필요하면 ENV로 조정
+const NO_ATTENDANCE_TOLERANCE_MIN =
+  Number(process.env.NO_ATTENDANCE_TOLERANCE_MIN ?? '120');
 
-/* ───── KST 자정 계산 유틸 ───── */
-const toKst = (d: Date) => new Date(d.getTime() + 9 * 60 * 60 * 1000);
-const fromKstParts = (y: number, m1: number, d: number, hh=0, mm=0, ss=0, ms=0) =>
-  new Date(Date.UTC(y, m1, d, hh - 9, mm, ss, ms));
-const startOfKstDay = (anchor: Date) => {
-  const k = toKst(anchor);
-  return fromKstParts(k.getUTCFullYear(), k.getUTCMonth(), k.getUTCDate(), 0, 0, 0, 0);
-};
+type NoAttendanceRow = Prisma.WorkShiftGetPayload<{
+  select: { id: true; actualInAt: true; actualOutAt: true }
+}>;
 
 /**
- * 전날(또는 그 이전)에 출근했지만 아직 퇴근이 없는 시프트를 OVERDUE로 마킹.
- * 강제 OUT/시간 계산은 하지 않는다.
- * (보정은 관리자 화면/보정 API에서 수행)
+ * 출근/퇴근 기록이 모두 없고(endAt+2h 경과), 상태가 SCHEDULED 또는 IN_PROGRESS인 시프트를 REVIEW로 전환
+ * - reviewReason: 'NO_ATTENDANCE'
+ * - memo: 'AUTO_REVIEW_NO_IN_OUT'
  */
-export async function autoCheckoutOpenAttendances(now: Date = new Date()): Promise<AutoCheckoutResult> {
-  const startOfTodayKst = startOfKstDay(now);
+export async function autoReviewNoInNoOut(now: Date = new Date()): Promise<{ processedCount: number }> {
+  const threshold = new Date(now.getTime() - NO_ATTENDANCE_TOLERANCE_MIN * 60_000);
 
-  // actualInAt < 오늘 00:00(KST) && actualOutAt IS NULL && 상태가 이미 OVERDUE가 아닌 것
-  const result = await prisma.workShift.updateMany({
-    where: {
-      actualInAt: { lt: startOfTodayKst },
-      actualOutAt: null,
-      status: { not: 'OVERDUE' }
-    },
-    data: {
-      status: 'OVERDUE'
-    }
-  });
+  let processedCount = 0;
+  let cursorId: number | null = null;
+  const pageSize = 500;
 
-  return { processedCount: result.count };
+  for (;;) {
+    const rows: NoAttendanceRow[] = await prisma.workShift.findMany({
+      where: {
+        // 퇴근 예정시간 + tolerance 경과
+        endAt: { lt: threshold },
+        // 실제 기록이 전혀 없음
+        actualInAt: null,
+        actualOutAt: null,
+        // 아직 완료/취소가 아닌 예정/진행 상태만
+        status: { in: ['SCHEDULED', 'IN_PROGRESS'] as WorkShiftStatus[] },
+      },
+      select: { id: true, actualInAt: true, actualOutAt: true },
+      orderBy: { id: 'asc' },
+      ...(cursorId ? { cursor: { id: cursorId }, skip: 1 } : {}),
+      take: pageSize,
+    });
+
+    if (rows.length === 0) break;
+
+    const ids = rows.map(r => r.id);
+
+    const res = await prisma.workShift.updateMany({
+      where: { id: { in: ids } },
+      data: {
+        status: 'REVIEW' as WorkShiftStatus,
+        reviewReason: 'NO_ATTENDANCE', // reviewReason이 enum이 아니면 any 캐스팅
+        reviewResolvedAt: null,
+        memo: 'AUTO_REVIEW_NO_IN_OUT',
+        updatedBy: null,
+      },
+    });
+
+    processedCount += res.count;
+    cursorId = rows[rows.length - 1].id;
+  }
+
+  return { processedCount };
 }
