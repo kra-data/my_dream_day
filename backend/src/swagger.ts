@@ -328,7 +328,9 @@ PayrollEmployeeStatusDetailResponse: {
         name:     { type: 'string',  example: '김철수' },
         position: { type: 'string',  example: '매니저' },
         payUnit:  { type: 'string',  enum: ['HOURLY','MONTHLY'], example: 'HOURLY' },
-        pay:      { type: ['integer','null'], example: 12000 }
+        pay:      { type: ['integer','null'], example: 12000 },
+        accountNumber: { type: 'string',  example: '1234423321' },
+                bank: { type: 'string',  example: '국민은행' },
       }
     },
     workedMinutes: { type: 'integer', example: 10560 },

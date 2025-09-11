@@ -1040,7 +1040,7 @@ export const getEmployeeStatusDetail = async (req: AuthRequiredRequest, res: Res
 
   const emp = await prisma.employee.findFirst({
     where: { id: employeeId, shopId },
-    select: { id: true, name: true, position: true, pay: true, payUnit: true }
+    select: { id: true, name: true, position: true, pay: true, payUnit: true,accountNumber:true,bank:true }
   });
   if (!emp) { res.status(404).json({ error: '직원이 존재하지 않거나 다른 가게 소속입니다.' }); return; }
 
@@ -1100,7 +1100,7 @@ export const getEmployeeStatusDetail = async (req: AuthRequiredRequest, res: Res
     },
     employee: {
       id: emp.id, name: emp.name, position: emp.position ?? '',
-      payUnit: emp.payUnit, pay: emp.pay
+      payUnit: emp.payUnit, pay: emp.pay,accountNumber:emp.accountNumber,bank:emp.bank
     },
     workedMinutes,
     daysWorked,
