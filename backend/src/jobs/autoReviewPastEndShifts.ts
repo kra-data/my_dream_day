@@ -9,7 +9,7 @@ export type AutoReviewPastEndResult = {
 // tolerances & batch 설정 (ENV로 조정 가능)
 const PAST_END_TOLERANCE_MIN = Number(process.env.PAST_END_TOLERANCE_MIN ?? '120'); // 2h
 const REVIEW_JOB_BATCH_SIZE  = Number(process.env.REVIEW_JOB_BATCH_SIZE ?? '500');
-const REVIEW_MEMO_PAST_END   = process.env.REVIEW_MEMO_PAST_END ?? 'AUTO_REVIEW_PAST_END';
+const REVIEW_MEMO_PAST_END   = process.env.REVIEW_MEMO_PAST_END ?? '퇴근처리가 되지 않아 관리자 승인이 필요합니다.';
 
 /**
  * 퇴근 예정시간(endAt) + tolerance 경과했는데 OUT 기록이 없고

@@ -48,7 +48,7 @@ export async function autoReviewNoInNoOut(now: Date = new Date()): Promise<{ pro
         status: 'REVIEW' as WorkShiftStatus,
         reviewReason: 'NO_ATTENDANCE' as any, // reviewReason이 enum이 아니면 any 캐스팅
         reviewResolvedAt: null,
-        memo: 'AUTO_REVIEW_NO_IN_OUT',
+        memo: '퇴근처리가 되지 않아 관리자 승인이 필요합니다.',
         updatedBy: null,
       },
     });

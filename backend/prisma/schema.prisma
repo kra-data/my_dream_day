@@ -1,9 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -13,123 +7,73 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum Position {
-  OWNER // 점주·사장
-  MANAGER // 매니저
-  STAFF // 직원
-  PART_TIME // 알바
-}
-
-enum Section {
-  HALL // 홀
-  KITCHEN // 주방
-}
-
-enum PayUnit {
-  MONTHLY // 월급제
-  HOURLY // 시급제
-}
-
-enum ShiftReviewReason {
-  LATE_IN // 시작 +10분 초과 지각 → REVIEW
-  EARLY_OUT // 종료 -10분 이내 조퇴 → REVIEW
-  LATE_OUT // 종료 초과 퇴근 (연장근무 수정 시 REVIEW로 전환)
-  EXTENDED // 근로자/관리자가 근무일정을 연장 수정함
-  NO_ATTENDANCE
-}
-
-enum WorkShiftStatus {
-  SCHEDULED
-  IN_PROGRESS
-  COMPLETED
-  CANCELED
-  REVIEW
-}
-
 model Shop {
-  id         Int      @id @default(autoincrement())
-  name       String
-  hourlyWage Int
-  payday     Int
-  qrSecret   String
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-
+  id                 Int                 @id @default(autoincrement())
+  name               String
+  hourlyWage         Int
+  payday             Int
+  qrSecret           String
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
   employees          Employee[]
   payrollSettlements PayrollSettlement[]
-  // 🔹 추가
   workShifts         WorkShift[]
 }
 
 model Employee {
-  id            Int      @id @default(autoincrement())
-  shopId        Int
-  name          String
-  accountNumber String
-  bank          String   @default("")
-  phone         String
-  schedule      Json
-  position      Position @default(STAFF)
-  section       Section  @default(HALL)
-  pay           Int
-  payUnit       PayUnit
-  role          String   @default("employee")
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-
+  id                   Int                 @id @default(autoincrement())
+  shopId               Int
+  name                 String
+  accountNumber        String
+  phone                String
+  schedule             Json
+  role                 String              @default("employee")
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+  bank                 String              @default("")
+  position             Position            @default(STAFF)
+  section              Section             @default(HALL)
+  pay                  Int
+  payUnit              PayUnit
+  nationalIdEnc        String?
+  nationalIdHash       String?             @db.VarChar(64)
+  nationalIdMasked     String?             @db.VarChar(32)
+  personalColor        String?             @default("#1F6FEB") @db.VarChar(7)
   shop                 Shop                @relation(fields: [shopId], references: [id], onDelete: Cascade)
   payrollSettlements   PayrollSettlement[] @relation("SettlementEmployee")
   processedSettlements PayrollSettlement[] @relation("SettlementProcessedBy")
-personalColor String?  @db.VarChar(7) @default("#1F6FEB")
-  // 🔹 신규 컬럼(처음엔 전부 NULL 허용)
-  nationalIdEnc    String? @db.Text
-  nationalIdHash   String? @db.VarChar(64)
-  nationalIdMasked String? @db.VarChar(32)
+  workShifts           WorkShift[]
 
-  // 🔹 추가
-  workShifts WorkShift[]
-
-  @@index([nationalIdHash], name: "idx_employee_nationalIdHash") // 우선 일반 인덱스
+  @@index([nationalIdHash], map: "idx_employee_nationalIdHash")
 }
 
 model WorkShift {
-  id         Int @id @default(autoincrement())
-  shopId     Int
-  employeeId Int
-
-  // 계획
-  startAt DateTime
-  endAt   DateTime
-  status  WorkShiftStatus @default(SCHEDULED)
-
-  // 실적
-  actualInAt  DateTime?
-  actualOutAt DateTime?
-  late        Boolean?  @default(false)
-  leftEarly   Boolean?  @default(false)
-
-  // 정산 스냅샷용
-  workedMinutes Int? // payable(시프트 교집합)
-  actualMinutes Int? // 실제 근무 분
-  settlementId  Int?
-  settlement    PayrollSettlement? @relation(fields: [settlementId], references: [id])
-
-  finalPayAmount Int?              // 확정 급여(원) — REVIEW 해제 & COMPLETED 시점에 계산/저장
-  isSettled      Boolean @default(false) // 해당 시프트가 정산(스냅샷)에 포함되었는지 플래그
-
-  // ✅ 리뷰/알림/메모
+  id               Int                @id @default(autoincrement())
+  shopId           Int
+  employeeId       Int
+  startAt          DateTime
+  endAt            DateTime
+  actualInAt       DateTime?
+  actualOutAt      DateTime?
+  late             Boolean?           @default(false)
+  leftEarly        Boolean?           @default(false)
+  createdAt        DateTime           @default(now())
+  createdBy        Int?
+  updatedAt        DateTime           @updatedAt
+  updatedBy        Int?
+  actualMinutes    Int?
+  settlementId     Int?
+  workedMinutes    Int?
+  status           WorkShiftStatus    @default(SCHEDULED)
   reviewReason     ShiftReviewReason?
-  memo       String?
   reviewResolvedAt DateTime?
   reviewedBy       Int?
-
-  shop     Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
-  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-
-  createdBy Int?
-  updatedBy Int?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  finalPayAmount   Int?
+  isSettled        Boolean            @default(false)
+  memo             String?
+  employee         Employee           @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  settlement       PayrollSettlement? @relation(fields: [settlementId], references: [id])
+  shop             Shop               @relation(fields: [shopId], references: [id], onDelete: Cascade)
 
   @@index([shopId, employeeId, startAt])
   @@index([employeeId, status])
@@ -138,31 +82,62 @@ model WorkShift {
 }
 
 model PayrollSettlement {
-  id            Int      @id @default(autoincrement())
-  shopId        Int
-  employeeId    Int
-  cycleStart    DateTime @db.Timestamp(3)
-  cycleEnd      DateTime @db.Timestamp(3)
-  workedMinutes Int
-  basePay       Int
-  totalPay      Int
-  settledAt     DateTime @default(now())
-  processedBy   Int?
-  note          String?
-
-  incomeTax        Int   @default(0) // 소득세
-  localIncomeTax   Int   @default(0) // 지방소득세
-  otherTax         Int   @default(0)
-  netPay           Int   @default(0)           // 실지급액 (totalPay - 위 공제 합)
-
-  shop            Shop      @relation(fields: [shopId], references: [id], onDelete: Restrict)
-  employee        Employee  @relation("SettlementEmployee", fields: [employeeId], references: [id], onDelete: Restrict)
-  processedByUser Employee? @relation("SettlementProcessedBy", fields: [processedBy], references: [id], onDelete: SetNull)
-
-  workShifts WorkShift[]
+  id              Int         @id @default(autoincrement())
+  shopId          Int
+  employeeId      Int
+  cycleStart      DateTime
+  cycleEnd        DateTime
+  workedMinutes   Int
+  basePay         Int
+  totalPay        Int
+  settledAt       DateTime    @default(now())
+  processedBy     Int?
+  note            String?
+  incomeTax       Int         @default(0)
+  localIncomeTax  Int         @default(0)
+  netPay          Int         @default(0)
+  otherTax        Int         @default(0)
+  employee        Employee    @relation("SettlementEmployee", fields: [employeeId], references: [id])
+  processedByUser Employee?   @relation("SettlementProcessedBy", fields: [processedBy], references: [id])
+  shop            Shop        @relation(fields: [shopId], references: [id])
+  workShifts      WorkShift[]
 
   @@unique([employeeId, cycleStart, cycleEnd])
   @@index([shopId])
   @@index([shopId, cycleStart, cycleEnd])
   @@index([employeeId, cycleStart, cycleEnd])
+}
+
+enum Position {
+  OWNER
+  MANAGER
+  STAFF
+  PART_TIME
+}
+
+enum Section {
+  HALL
+  KITCHEN
+}
+
+enum PayUnit {
+  MONTHLY
+  HOURLY
+}
+
+enum ShiftReviewReason {
+  LATE_IN
+  EARLY_OUT
+  LATE_OUT
+  EXTENDED
+  NO_ATTENDANCE
+}
+
+enum WorkShiftStatus {
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  CANCELED
+  MISSED
+  REVIEW
 }
