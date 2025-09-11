@@ -5,12 +5,13 @@ import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import morgan from 'morgan';
 import { swaggerServe, swaggerSetup } from './swagger';
+import type { ScheduledTask } from 'node-cron';
 import { registerSchedulers } from './scheduler';
 import { errorHandler, notFound } from './middlewares/errorHandler';
 import { prisma } from './db/prisma';
 
 const app = express();
-
+let cronTasks: ScheduledTask[] = [];
 /* ✅ Caddy(프록시) 뒤에 있으므로 반드시 설정 */
 app.set('trust proxy', ['loopback', 'linklocal', 'uniquelocal', '172.16.0.0/12']);
 // 단일 프록시면 app.set('trust proxy', true) 도 가능
@@ -66,15 +67,14 @@ if (process.env.NODE_ENV !== 'test') {
   server = app.listen(3001, '0.0.0.0', () => {       // 컨테이너 내에서 외부 노출
     console.log(`🚀 Server is running on port ${PORT}`);
   });
-  try {
-    registerSchedulers();
-  } catch (e) {
-    console.error('Failed to register schedulers', e);
-  }
+  cronTasks = registerSchedulers();
+
 }
 
 const shutdown = async () => {
   try {
+    cronTasks.forEach(t => t.stop());
+    cronTasks = [];
     await prisma.$disconnect();
     server?.close(() => process.exit(0));
   } catch {
