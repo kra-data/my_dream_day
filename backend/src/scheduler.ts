@@ -1,23 +1,32 @@
-import cron from 'node-cron';
-import { autoCheckoutOpenAttendances } from './jobs/autoCheckout';
+// src/schedulers.ts
+import cron, { ScheduledTask } from 'node-cron';
+import { autoReviewPastEndShifts } from './jobs/autoReviewPastEndShifts';
+import { autoReviewNoInNoOut } from './jobs/autoCheckout'; // ← 경로 확인!
 
-/**
- * Register cron jobs. Call from app startup (but avoid during tests).
- */
-export function registerSchedulers(): void {
-  // Run every day at 00:05 local time to avoid DST edge at 00:00
-  const schedule = process.env.AUTO_CHECKOUT_CRON ?? '5 0 * * *';
+export function registerSchedulers(): ScheduledTask[] {
+  if (process.env.CRON_ENABLED === '0') {
+    console.log('⏸️  Schedulers disabled (CRON_ENABLED=0)');
+    return [];
+  }
 
-  cron.schedule(schedule, async () => {
-    try {
-      const result = await autoCheckoutOpenAttendances();
-      if (process.env.NODE_ENV !== 'production') {
-        console.log(`[autoCheckout] processed: ${result.processedCount}`);
+  const tasks: ScheduledTask[] = [];
+
+  // 10분마다 (KST 기준으로 돌리고 싶으면 timezone 옵션 추가)
+  const job = cron.schedule(
+    '*/10 * * * *',
+    async () => {
+      try {
+        const a = await autoReviewPastEndShifts();
+        const b = await autoReviewNoInNoOut();
+        console.log(`[cron] review jobs - pastEnd=${a.processedCount}, noInOut=${b.processedCount}`);
+      } catch (e) {
+        console.error('[cron] review jobs error', e);
       }
-    } catch (err) {
-      console.error('[autoCheckout] error', err);
-    }
-  });
+    },
+    { timezone: process.env.CRON_TZ || 'Asia/Seoul' }
+  );
+
+  tasks.push(job);
+  console.log('⏰ Schedulers registered (*/10 * * * *)');
+  return tasks;
 }
-
-

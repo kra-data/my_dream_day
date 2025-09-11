@@ -46,7 +46,7 @@ export async function autoReviewNoInNoOut(now: Date = new Date()): Promise<{ pro
       where: { id: { in: ids } },
       data: {
         status: 'REVIEW' as WorkShiftStatus,
-        reviewReason: 'NO_ATTENDANCE', // reviewReason이 enum이 아니면 any 캐스팅
+        reviewReason: 'NO_ATTENDANCE' as any, // reviewReason이 enum이 아니면 any 캐스팅
         reviewResolvedAt: null,
         memo: 'AUTO_REVIEW_NO_IN_OUT',
         updatedBy: null,
