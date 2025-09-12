@@ -1,5 +1,5 @@
 /* ==========================================
-   🎨 마이드림데이 출퇴근 시스템 - 메인 스타일
+   마이드림데이 출퇴근 시스템 - 메인 스타일
    ========================================== */
 
 @import './base.css';
@@ -7,7 +7,7 @@
 @import './components.css';
 
 /* ==========================================
-   🎨 Global Reset & Base Styles
+   Global Reset & Base Styles
    ========================================== */
 
 *,
@@ -38,7 +38,7 @@ body {
 }
 
 /* ==========================================
-   🎨 App Layout
+   App Layout
    ========================================== */
 
 #app {
@@ -56,7 +56,7 @@ body {
 }
 
 /* ==========================================
-   🎨 Navigation Styles
+   Navigation Styles
    ========================================== */
 
 .navbar {
@@ -83,16 +83,83 @@ body {
   align-items: center;
 }
 
+.nav-logo {
+  height: 2.5rem; /* 40px base size */
+  width: auto;
+  margin-right: var(--space-3);
+  object-fit: contain;
+  transition: transform var(--transition-fast);
+  /* 🚀 Performance optimizations */
+  will-change: transform;
+  backface-visibility: hidden;
+  /* 🎨 Image quality improvements */
+  image-rendering: crisp-edges;
+  image-rendering: -webkit-optimize-contrast;
+}
+
+.nav-logo:hover {
+  transform: scale(1.05);
+}
+
+/* 🎯 Responsive logo sizing for different screen sizes */
+@media (min-width: 768px) {
+  .nav-logo {
+    height: 3rem; /* 48px on tablets and up */
+  }
+}
+
+@media (min-width: 1024px) {
+  .nav-logo {
+    height: 3.5rem; /* 56px on desktop */
+  }
+}
+
+/* Ensure logo doesn't get too large on very wide screens */
+@media (min-width: 1440px) {
+  .nav-logo {
+    height: 4rem; /* 64px max size */
+  }
+}
+
+/* 📱 Mobile-specific logo optimizations */
+@media (max-width: 640px) {
+  .nav-logo {
+    height: 2.25rem; /* Slightly smaller on very small screens */
+  }
+}
+
+/* 🖥️ High-DPI display optimizations */
+@media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
+  .nav-logo {
+    /* Ensure sharp rendering on retina displays */
+    image-rendering: -webkit-optimize-contrast;
+    image-rendering: crisp-edges;
+  }
+}
+
+/* 🔄 Reduce motion for users who prefer it */
+@media (prefers-reduced-motion: reduce) {
+  .nav-logo {
+    transition: none;
+  }
+  
+  .nav-logo:hover {
+    transform: none;
+  }
+}
+
 .brand-link {
+  display: flex;
+  align-items: center;
   font-size: var(--text-xl);
-  font-weight: var(--font-bold);
-  color: var(--primary-600);
+  font-weight: var(--font-semibold);
+  color: var(--gray-900);
   text-decoration: none;
   transition: color var(--transition-fast);
 }
 
 .brand-link:hover {
-  color: var(--primary-700);
+  color: var(--gray-700);
 }
 
 .nav-menu {
@@ -116,27 +183,59 @@ body {
 
 .nav-link:hover,
 .nav-link.router-link-active {
-  color: var(--primary-600);
-  background-color: var(--primary-50);
+  color: var(--gray-900);
+  background-color: var(--gray-100);
 }
 
 .nav-user {
   display: flex;
   align-items: center;
-  gap: var(--space-4);
+  gap: var(--space-3);
 }
 
 .user-name {
   font-size: var(--text-sm);
   font-weight: var(--font-medium);
   color: var(--color-text-primary);
+  padding: var(--space-2) var(--space-3);
+  background-color: var(--gray-50);
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-md);
+  white-space: nowrap;
+  transition: all var(--transition-fast);
+}
+
+.user-name:hover {
+  background-color: var(--gray-100);
+  border-color: var(--gray-300);
+  box-shadow: var(--shadow-xs);
 }
 
 .logout-btn {
-  @apply btn btn-sm btn-danger;
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+  color: var(--gray-600);
+  background-color: transparent;
+  border: 1px solid var(--gray-300);
+  border-radius: var(--radius-md);
+  padding: var(--space-2) var(--space-3);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all var(--transition-fast);
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
+}
+
+.logout-btn:hover {
+  color: var(--red-600);
+  border-color: var(--red-300);
+  background-color: var(--red-50);
+}
+
+.logout-btn:focus {
+  outline: 2px solid var(--red-500);
+  outline-offset: 2px;
 }
 
 /* Mobile Menu Toggle */
@@ -157,11 +256,11 @@ body {
 }
 
 /* ==========================================
-   🎨 Footer Styles
+   Footer Styles
    ========================================== */
 
 .footer {
-  background-color: var(--color-bg-primary);
+  background-color: var(--gray-100);
   border-top: 1px solid var(--color-border-light);
   padding: var(--space-8) 0;
   margin-top: auto;
@@ -192,7 +291,7 @@ body {
 }
 
 .footer-link {
-  color: var(--primary-600);
+  color: var(--gray-600);
   text-decoration: none;
   font-size: var(--text-sm);
   font-weight: var(--font-medium);
@@ -200,12 +299,12 @@ body {
 }
 
 .footer-link:hover {
-  color: var(--primary-700);
+  color: var(--gray-800);
   text-decoration: underline;
 }
 
 /* ==========================================
-   🎨 Loading Overlay
+   Loading Overlay
    ========================================== */
 
 .loading-overlay {
@@ -232,7 +331,7 @@ body {
 }
 
 /* ==========================================
-   🎨 Notification System
+   Notification System
    ========================================== */
 
 .notification {
@@ -288,7 +387,7 @@ body {
 }
 
 /* ==========================================
-   🎨 Force Light Mode Only
+   Force Light Mode Only
    ========================================== */
 
 /* Force light mode regardless of system preference */
@@ -307,7 +406,7 @@ html, body {
 }
 
 /* ==========================================
-   🎨 Responsive Design
+   Responsive Design
    ========================================== */
 
 /* Tablet and below */
@@ -368,6 +467,12 @@ html, body {
   
   .user-name {
     font-size: var(--text-xs);
+    padding: calc(var(--space-1) + 1px) var(--space-2);
+  }
+  
+  .logout-btn {
+    font-size: var(--text-xs);
+    padding: calc(var(--space-1) + 1px) var(--space-2);
   }
   
   .footer-content {

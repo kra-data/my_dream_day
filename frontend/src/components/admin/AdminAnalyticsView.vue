@@ -1,7 +1,7 @@
 <template>
   <div class="tab-content">
     <div class="analytics-section">
-      <h2>📈 통계 분석</h2>
+      <h2><AppIcon name="chart" :size="20" class="mr-2" />통계 분석</h2>
       
       <!-- 주간 통계 -->
       <div class="chart-section">
@@ -49,28 +49,28 @@
 
       <!-- 월별 근무 시간 통계 -->
       <div class="monthly-stats">
-        <h3>📊 월별 근무 통계 ({{ currentMonth }}월)</h3>
+        <h3><AppIcon name="stats" :size="20" class="mr-2" />월별 근무 통계 ({{ currentMonth }}월)</h3>
         <div class="stats-grid">
           <div class="stat-box primary">
-            <div class="stat-icon">⏰</div>
+            <div class="stat-icon"><AppIcon name="clock" :size="32" /></div>
             <div class="stat-title">이번 달 총 근무 시간</div>
             <div class="stat-value">{{ totalMonthlyHours.display }}</div>
             <div class="stat-subtitle">{{ totalMonthlyHours.minutes }}분</div>
           </div>
           <div class="stat-box success">
-            <div class="stat-icon">📈</div>
+            <div class="stat-icon"><AppIcon name="chart" :size="32" /></div>
             <div class="stat-title">평균 일일 근무 시간</div>
             <div class="stat-value">{{ averageDailyHours.display }}</div>
             <div class="stat-subtitle">직원 1명당 평균</div>
           </div>
           <div class="stat-box warning">
-            <div class="stat-icon">⭐</div>
+            <div class="stat-icon"><AppIcon name="star" :size="32" /></div>
             <div class="stat-title">가장 활발한 요일</div>
             <div class="stat-value">{{ mostActiveDayOfWeek.day }}</div>
             <div class="stat-subtitle">{{ mostActiveDayOfWeek.count }}회 출근</div>
           </div>
           <div class="stat-box info">
-            <div class="stat-icon">📅</div>
+            <div class="stat-icon"><AppIcon name="calendar" :size="32" /></div>
             <div class="stat-title">총 출근 일수</div>
             <div class="stat-value">{{ totalWorkDays }}일</div>
             <div class="stat-subtitle">{{ workingDaysInMonth }}일 중</div>
@@ -79,7 +79,7 @@
 
         <!-- 추가 세부 통계 -->
         <div class="detailed-stats">
-          <h4>📋 세부 통계</h4>
+          <h4><AppIcon name="clipboard" :size="18" class="mr-2" />세부 통계</h4>
           <div class="detail-grid">
             <div class="detail-item">
               <span class="detail-label">출근률</span>
@@ -108,9 +108,13 @@
 import { computed } from 'vue'
 import { useEmployeesStore } from '@/stores/employees'
 import { useAttendanceStore } from '@/stores/attendance'
+import AppIcon from '@/components/AppIcon.vue'
 
 export default {
   name: 'AdminAnalyticsView',
+  components: {
+    AppIcon
+  },
   setup() {
     const employeesStore = useEmployeesStore()
     const attendanceStore = useAttendanceStore()

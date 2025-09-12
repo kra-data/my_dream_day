@@ -2,14 +2,22 @@
   <div class="modal-backdrop" @click="handleBackdropClick">
     <div class="modal" @click.stop>
       <div class="modal-header">
-        <h3>✏️ 근무 일정 변경 요청</h3>
-        <button @click="$emit('close')" class="close-btn">✕</button>
+        <h3>
+          <AppIcon name="edit" :size="18" class="inline-block mr-2" />
+          근무 일정 변경 요청
+        </h3>
+        <button @click="$emit('close')" class="close-btn">
+          <AppIcon name="close" :size="16" />
+        </button>
       </div>
       
       <div class="modal-body">
         <!-- 현재 일정 정보 -->
         <div class="current-shift-info">
-          <h4>📅 현재 일정</h4>
+          <h4>
+            <AppIcon name="calendar" :size="16" class="inline-block mr-2" />
+            현재 일정
+          </h4>
           <div class="shift-details">
             <div class="detail-item">
               <span class="detail-label">날짜:</span>
@@ -75,10 +83,6 @@
                 <span class="preview-label">근무 시간:</span>
                 <span class="preview-value">{{ newWorkDuration }}</span>
               </div>
-              <div class="preview-item">
-                <span class="preview-label">휴게 시간:</span>
-                <span class="preview-value">{{ newBreakTime }}</span>
-              </div>
             </div>
           </template>
 
@@ -97,7 +101,9 @@
 
           <!-- 안내 메시지 -->
           <div class="warning-message">
-            <div class="warning-icon">⚠️</div>
+            <div class="warning-icon">
+              <AppIcon name="warning" :size="16" />
+            </div>
             <div class="warning-content">
               <p><strong>변경 요청 안내</strong></p>
               <ul>
@@ -192,23 +198,6 @@ export default {
       return `${diffHours}시간 ${diffMinutes}분`
     })
     
-    // 새로운 휴게 시간 계산
-    const newBreakTime = computed(() => {
-      if (!isValidNewTime.value) return '0분'
-      
-      const start = new Date(`2000-01-01T${form.value.newStartTime}:00`)
-      const end = new Date(`2000-01-01T${form.value.newEndTime}:00`)
-      const diffMs = end - start
-      const diffHours = diffMs / (1000 * 60 * 60)
-      
-      if (diffHours >= 8) {
-        return '1시간'
-      } else if (diffHours >= 4) {
-        return '30분'
-      } else {
-        return '해당없음'
-      }
-    })
     
     const handleSubmit = async () => {
       if (!isFormValid.value) {
@@ -268,7 +257,8 @@ export default {
       const formatTime = (date) => {
         return date.toLocaleTimeString('ko-KR', {
           hour: '2-digit',
-          minute: '2-digit'
+          minute: '2-digit',
+          hour12: false
         })
       }
       
@@ -310,7 +300,6 @@ export default {
       isFormValid,
       isValidNewTime,
       newWorkDuration,
-      newBreakTime,
       handleSubmit,
       handleBackdropClick,
       formatDate,

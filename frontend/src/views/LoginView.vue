@@ -3,7 +3,18 @@
     <div class="login-container">
       <div class="login-card">
         <div class="login-header">
-          <h1>🏢 마이드림데이 출퇴근 관리</h1>
+          <div class="brand-logo">
+            <img 
+              src="/src/assets/logo.png" 
+              alt="MY DREAM DAY 로고" 
+              class="logo-image logo-base logo-hover" 
+              loading="eager"
+              decoding="async"
+              width="100" 
+              height="100"
+            />
+          </div>
+          <h1>마이드림데이 출퇴근 관리</h1>
           <p>로그인하여 서비스를 이용하세요</p>
         </div>
 
@@ -49,13 +60,18 @@
             :disabled="authStore.loading || !isFormValid"
             style="width: 100%; margin-top: 0.5rem;"
           >
-            <span v-if="!authStore.loading">🔐 로그인</span>
+            <span v-if="!authStore.loading">
+              <AppIcon name="shield" :size="16" class="mr-1" />
+              로그인
+            </span>
             <span v-else>로그인 중...</span>
           </button>
         </form>
 
         <div v-if="error" class="alert alert-danger alert-icon">
-          <div class="alert-icon-content">⚠️</div>
+          <div class="alert-icon-content">
+            <AppIcon name="warning" :size="18" />
+          </div>
           <div>{{ error }}</div>
         </div>
 

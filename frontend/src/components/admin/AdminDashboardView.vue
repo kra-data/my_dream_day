@@ -1,47 +1,39 @@
 <template>
   <div class="tab-content">
-    <div class="dashboard-grid">
-      <!-- 오늘 통계 -->
-      <div class="stats-overview">
-        <h2>📊 오늘의 현황</h2>
-        <div class="stats-cards">
-          <div class="stat-card">
-            <div class="stat-icon">👥</div>
-            <div class="stat-content">
-              <span class="stat-number">{{ attendanceStore.todaySummary.totalEmployees }}</span>
-              <span class="stat-label">전체 직원</span>
-            </div>
-          </div>
-          
-          <div class="stat-card success">
-            <div class="stat-icon">✅</div>
-            <div class="stat-content">
-              <span class="stat-number">{{ attendanceStore.todaySummary.checkedIn }}</span>
-              <span class="stat-label">출근 완료</span>
-            </div>
-          </div>
-          
-          <div class="stat-card warning">
-            <div class="stat-icon">⏰</div>
-            <div class="stat-content">
-              <span class="stat-number">{{ attendanceStore.todaySummary.late }}</span>
-              <span class="stat-label">지각</span>
-            </div>
-          </div>
-          
-          <div class="stat-card error">
-            <div class="stat-icon">❌</div>
-            <div class="stat-content">
-              <span class="stat-number">{{ attendanceStore.todaySummary.absent }}</span>
-              <span class="stat-label">결근</span>
-            </div>
-          </div>
+    <!-- 오늘 통계 - 컴팩트한 한 줄 레이아웃 -->
+    <div class="stats-bar">
+      <h2><AppIcon name="stats" :size="20" class="mr-2" /> 오늘의 근무 현황</h2>
+      <div class="stats-row">
+        <div class="stat-item">
+          <AppIcon name="users" :size="18" class="stat-icon" />
+          <span class="stat-number">{{ attendanceStore.todaySummary.totalShifts }}</span>
+          <span class="stat-label">전체</span>
+        </div>
+        <div class="stat-separator">|</div>
+        <div class="stat-item success">
+          <AppIcon name="success" :size="18" class="stat-icon" />
+          <span class="stat-number">{{ attendanceStore.todaySummary.checkedIn }}</span>
+          <span class="stat-label">출근</span>
+        </div>
+        <div class="stat-separator">|</div>
+        <div class="stat-item warning">
+          <AppIcon name="clock" :size="18" class="stat-icon" />
+          <span class="stat-number">{{ attendanceStore.todaySummary.late }}</span>
+          <span class="stat-label">지각</span>
+        </div>
+        <div class="stat-separator">|</div>
+        <div class="stat-item error">
+          <AppIcon name="error" :size="18" class="stat-icon" />
+          <span class="stat-number">{{ attendanceStore.todaySummary.absent }}</span>
+          <span class="stat-label">결근</span>
         </div>
       </div>
+    </div>
 
+    <div class="dashboard-content">
       <!-- 수동 출퇴근 관리 -->
       <div class="manual-attendance">
-        <h2>👨‍💼 수동 출퇴근 관리</h2>
+        <h2><AppIcon name="user" :size="20" class="mr-2" />수동 출퇴근 관리</h2>
         <div class="manual-controls">
           <div v-if="employeesStore.employees.length === 0" class="no-data">
             등록된 직원이 없습니다
@@ -53,7 +45,10 @@
             class="employee-control-item"
           >
             <div class="employee-info">
-              <div class="employee-avatar">
+              <div 
+                class="employee-avatar" 
+                :style="{ backgroundColor: employee.personalColor || getDefaultPersonalColor(employee.position) }"
+              >
                 {{ employee.name.charAt(0) }}
               </div>
               <div class="employee-details">
@@ -78,7 +73,7 @@
                   :class="{ 'btn-loading': attendanceStore.loading && processingEmployeeId === employee.id }"
                 >
                   <span v-if="attendanceStore.loading && processingEmployeeId === employee.id">처리중...</span>
-                  <span v-else>📥 출근</span>
+                  <span v-else><AppIcon name="arrow-right" :size="16" class="mr-1" />출근</span>
                 </button>
                 
                 <button 
@@ -88,18 +83,17 @@
                   :class="{ 'btn-loading': attendanceStore.loading && processingEmployeeId === employee.id }"
                 >
                   <span v-if="attendanceStore.loading && processingEmployeeId === employee.id">처리중...</span>
-                  <span v-else>📤 퇴근</span>
+                  <span v-else><AppIcon name="arrow-left" :size="16" class="mr-1" />퇴근</span>
                 </button>
               </div>
             </div>
           </div>
         </div>
       </div>
-    </div>
 
-    <!-- 최근 활동 -->
+      <!-- 최근 활동 -->
     <div class="recent-activity">
-      <h2>📝 최근 출퇴근 활동</h2>
+      <h2><AppIcon name="clipboard" :size="20" class="mr-2" />최근 출퇴근 활동</h2>
       <div class="activity-list">
         <div v-if="attendanceStore.recentActivities.length === 0" class="no-data">
           최근 출퇴근 활동이 없습니다
@@ -111,7 +105,7 @@
           class="activity-item"
         >
           <div class="activity-icon">
-            {{ activity.type === 'IN' ? '📥' : '📤' }}
+            <AppIcon :name="activity.type === 'IN' ? 'arrow-right' : 'arrow-left'" :size="20" />
           </div>
           <div class="activity-content">
             <div class="activity-text">
@@ -127,19 +121,22 @@
         </div>
       </div>
     </div>
+    </div>
   </div>
 </template>
 
 <script>
 import { ref } from 'vue'
 import StatusBadge from '@/components/StatusBadge.vue'
+import AppIcon from '@/components/AppIcon.vue'
 import { useAttendanceStore } from '@/stores/attendance'
 import { useEmployeesStore } from '@/stores/employees'
 
 export default {
   name: 'AdminDashboardView',
   components: {
-    StatusBadge
+    StatusBadge,
+    AppIcon
   },
   setup() {
     const attendanceStore = useAttendanceStore()
@@ -174,12 +171,15 @@ export default {
     formatTime(timestamp) {
       return new Date(timestamp).toLocaleTimeString('ko-KR', {
         hour: '2-digit',
-        minute: '2-digit'
+        minute: '2-digit',
+        hour12: false
       })
     },
     
     formatDateTime(timestamp) {
-      return new Date(timestamp).toLocaleString('ko-KR')
+      return new Date(timestamp).toLocaleString('ko-KR', {
+        hour12: false
+      })
     },
     
     formatWorkDuration(workedMinutes) {
@@ -255,6 +255,16 @@ export default {
       } finally {
         this.processingEmployeeId = null
       }
+    },
+
+    getDefaultPersonalColor(position) {
+      const positionColors = {
+        'OWNER': '#8b5cf6',
+        'MANAGER': '#06b6d4',
+        'STAFF': '#10b981',
+        'PART_TIME': '#f59e0b'
+      }
+      return positionColors[position] || '#3b82f6'
     }
   }
 }
@@ -270,68 +280,97 @@ export default {
   to { opacity: 1; transform: translateY(0); }
 }
 
-.dashboard-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 30px;
-  margin-bottom: 30px;
+/* 컴팩트한 통계 바 스타일 */
+.stats-bar {
+  background: white;
+  border-radius: 12px;
+  padding: 20px 24px;
+  margin-bottom: 24px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
 }
 
-.stats-overview, .manual-attendance {
+.stats-bar h2 {
+  margin-bottom: 16px;
+  color: #1f2937;
+  font-size: 1.25rem;
+}
+
+.stats-row {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+
+.stat-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: #f8fafc;
+  transition: all 0.2s;
+}
+
+.stat-item:hover {
+  background: #f1f5f9;
+  transform: translateY(-1px);
+}
+
+.stat-item .stat-icon {
+  color: #6b7280;
+}
+
+.stat-item.success .stat-icon {
+  color: #10b981;
+}
+
+.stat-item.warning .stat-icon {
+  color: #f59e0b;
+}
+
+.stat-item.error .stat-icon {
+  color: #ef4444;
+}
+
+.stat-number {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #1f2937;
+  margin: 0 4px;
+}
+
+.stat-label {
+  font-size: 0.875rem;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.stat-separator {
+  color: #d1d5db;
+  font-weight: 300;
+  font-size: 1.25rem;
+}
+
+/* 대시보드 콘텐츠 레이아웃 */
+.dashboard-content {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 24px;
+}
+
+.manual-attendance {
   background: white;
   border-radius: 12px;
   padding: 24px;
   box-shadow: 0 1px 3px rgba(0,0,0,0.1);
 }
 
-.stats-overview h2, .manual-attendance h2 {
+.manual-attendance h2 {
   margin-bottom: 20px;
   color: #1f2937;
 }
 
-.stats-cards {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 16px;
-}
-
-.stat-card {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 16px;
-  border-radius: 8px;
-  background: #f8fafc;
-  border-left: 4px solid #e5e7eb;
-}
-
-.stat-card.success {
-  border-left-color: #10b981;
-}
-
-.stat-card.warning {
-  border-left-color: #f59e0b;
-}
-
-.stat-card.error {
-  border-left-color: #ef4444;
-}
-
-.stat-icon {
-  font-size: 1.5rem;
-}
-
-.stat-number {
-  display: block;
-  font-size: 1.5rem;
-  font-weight: 700;
-  color: #1f2937;
-}
-
-.stat-label {
-  font-size: 0.9rem;
-  color: #6b7280;
-}
 
 .status-list {
   max-height: 400px;
@@ -353,15 +392,18 @@ export default {
 }
 
 .employee-avatar {
-  width: 40px;
-  height: 40px;
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
-  background: #3b82f6;
   color: white;
   display: flex;
   align-items: center;
   justify-content: center;
   font-weight: 600;
+  font-size: 14px;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  border: 2px solid white;
 }
 
 .employee-details {
@@ -448,10 +490,11 @@ export default {
   justify-content: space-between;
   align-items: center;
   padding: 16px;
-  border-bottom: 1px solid #f3f4f6;
-  border-radius: 8px;
-  margin-bottom: 8px;
-  background: #f8fafc;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  margin-bottom: 12px;
+  background: white;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
   transition: all 0.2s;
 }
 
@@ -463,6 +506,7 @@ export default {
   display: flex;
   align-items: center;
   gap: 16px;
+  flex-shrink: 0;
 }
 
 .current-status {
@@ -482,18 +526,23 @@ export default {
 .control-buttons {
   display: flex;
   gap: 8px;
+  min-width: 0;
 }
 
 .btn {
   padding: 8px 16px;
   border: none;
-  border-radius: 6px;
+  border-radius: 8px;
   cursor: pointer;
   font-weight: 600;
   text-decoration: none;
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   transition: all 0.2s;
   font-size: 0.875rem;
+  white-space: nowrap;
+  min-width: 0;
 }
 
 .btn:disabled {
@@ -536,18 +585,130 @@ export default {
 }
 
 @media (max-width: 1024px) {
-  .dashboard-grid {
-    grid-template-columns: 1fr;
+  .stats-row {
+    gap: 16px;
   }
   
-  .stats-cards {
-    grid-template-columns: repeat(2, 1fr);
+  .stat-item {
+    padding: 6px 10px;
+  }
+  
+  .stat-number {
+    font-size: 1.25rem;
   }
 }
 
 @media (max-width: 768px) {
-  .stats-cards {
-    grid-template-columns: 1fr;
+  .stats-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+  
+  .stat-separator {
+    display: none;
+  }
+  
+  .stat-item {
+    justify-content: center;
+    padding: 12px 16px;
+    border-radius: 8px;
+    background: white;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  }
+  
+  .dashboard-content {
+    gap: 20px;
+    padding: 0 4px;
+  }
+  
+  /* Mobile employee control improvements */
+  .employee-control-item {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 16px;
+    padding: 16px 12px;
+  }
+  
+  .employee-info {
+    justify-self: flex-start;
+  }
+  
+  .attendance-controls {
+    flex-direction: column;
+    gap: 12px;
+    width: 100%;
+  }
+  
+  .current-status {
+    flex-direction: row;
+    justify-content: center;
+    min-width: auto;
+    gap: 12px;
+    padding: 8px;
+    background: rgba(59, 130, 246, 0.1);
+    border-radius: 6px;
+  }
+  
+  .control-buttons {
+    justify-content: stretch;
+    gap: 12px;
+  }
+  
+  .control-buttons .btn {
+    flex: 1;
+    padding: 12px 16px;
+    font-size: 0.9rem;
+  }
+}
+
+/* Extra small mobile devices */
+@media (max-width: 480px) {
+  .stats-bar h2 {
+    font-size: 1.2rem;
+    text-align: center;
+  }
+  
+  .stat-item {
+    padding: 10px 12px;
+  }
+  
+  .stat-number {
+    font-size: 1.5rem;
+  }
+  
+  .stat-label {
+    font-size: 0.8rem;
+  }
+  
+  .employee-control-item {
+    padding: 12px 8px;
+    margin-bottom: 8px;
+  }
+  
+  .employee-name {
+    font-size: 0.9rem;
+  }
+  
+  .employee-dept {
+    font-size: 0.75rem;
+  }
+  
+  .control-buttons .btn {
+    padding: 10px 12px;
+    font-size: 0.85rem;
+  }
+  
+  .activity-item {
+    padding: 12px;
+  }
+  
+  .activity-time {
+    font-size: 0.75rem;
+  }
+  
+  .activity-details span {
+    font-size: 0.8rem;
   }
 }
 </style>

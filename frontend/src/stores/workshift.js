@@ -6,9 +6,10 @@ export const useWorkshiftStore = defineStore('workshift', () => {
   // State
   const workshifts = ref([])
   const myWorkshifts = ref([])
+  const reviewWorkshifts = ref([])
   const loading = ref(false)
   const error = ref(null)
-  const selectedDate = ref(new Date(2025, 8, 1)) // September 2025
+  const selectedDate = ref(new Date()) // Today's date as default
   const calendarWorkshifts = ref([])
 
   // Get API instance from auth store
@@ -18,24 +19,37 @@ export const useWorkshiftStore = defineStore('workshift', () => {
   }
 
   // Employee APIs
-  const fetchMyWorkshifts = async (from = null, to = null) => {
+  const fetchMyWorkshifts = async (month = null, year = null) => {
     loading.value = true
     error.value = null
     
     try {
       const api = getApiInstance()
       const params = {}
-      if (from) params.from = from
-      if (to) params.to = to
+      
+      // If no month/year provided, use current month
+      const targetDate = new Date()
+      if (year !== null) targetDate.setFullYear(year)
+      if (month !== null) targetDate.setMonth(month - 1) // month is 1-based
+      
+      // Calculate month boundaries - Date.toISOString() automatically converts to UTC
+      const startOfMonth = new Date(targetDate.getFullYear(), targetDate.getMonth(), 1)
+      const endOfMonth = new Date(targetDate.getFullYear(), targetDate.getMonth() + 1, 0, 23, 59, 59)
+      
+      // toISOString() automatically converts local time to UTC for backend API
+      params.from = startOfMonth.toISOString()
+      params.to = endOfMonth.toISOString()
       
       const response = await api.get('/my/workshifts', { params })
       myWorkshifts.value = response.data || []
       
+      console.log(`내 근무 일정 조회 완료 (${targetDate.getFullYear()}년 ${targetDate.getMonth() + 1}월):`, myWorkshifts.value.length, '건')
       return myWorkshifts.value
     } catch (err) {
       error.value = err.response?.data?.message || '내 근무 일정을 불러오는데 실패했습니다'
       console.error('Failed to fetch my workshifts:', err)
-      throw err
+      myWorkshifts.value = []
+      return []
     } finally {
       loading.value = false
     }
@@ -65,7 +79,12 @@ export const useWorkshiftStore = defineStore('workshift', () => {
       
       return newShift
     } catch (err) {
-      error.value = err.response?.data?.message || '근무 일정 생성에 실패했습니다'
+      // Handle specific error cases
+      if (err.response?.status === 409) {
+        error.value = err.response?.data?.error || '이미 겹치는 근무일정이 있습니다.'
+      } else {
+        error.value = err.response?.data?.message || '근무 일정 생성에 실패했습니다'
+      }
       console.error('Failed to create my workshift:', err)
       throw err
     } finally {
@@ -211,7 +230,67 @@ export const useWorkshiftStore = defineStore('workshift', () => {
     }
   }
 
-  // Simple calendar workshifts fetch - NO COMPLEX CACHING
+  const fetchReviewWorkshifts = async (shopId) => {
+    if (!shopId) {
+      throw new Error('shopId is required for fetching review workshifts')
+    }
+    
+    loading.value = true
+    error.value = null
+    
+    try {
+      const api = getApiInstance()
+      const response = await api.get(`/admin/shops/${shopId}/workshifts/review`, {
+      })
+      reviewWorkshifts.value = response.data?.items || []
+      
+      return reviewWorkshifts.value
+    } catch (err) {
+      error.value = err.response?.data?.message || '검토 필요한 근무 일정을 불러오는데 실패했습니다'
+      console.error('Failed to fetch review workshifts:', err)
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+
+  const resolveReviewWorkshift = async (shopId, workshiftId, newStatus, updateData = {}) => {
+    if (!shopId) {
+      throw new Error('shopId is required for resolving review workshift')
+    }
+    if (!workshiftId) {
+      throw new Error('workshiftId is required for resolving review workshift')
+    }
+    if (!newStatus || !['SCHEDULED', 'COMPLETED', 'CANCELLED'].includes(newStatus)) {
+      throw new Error('Valid status (SCHEDULED/COMPLETED/CANCELLED) is required')
+    }
+    
+    // Find the workshift to get its current data
+    const workshift = reviewWorkshifts.value.find(shift => shift.id === workshiftId)
+    if (!workshift) {
+      throw new Error('Workshift not found')
+    }
+    
+    try {
+      // Use the existing updateWorkshift function with the new status and updated times
+      const updatedWorkshift = await updateWorkshift(shopId, workshiftId, {
+        startAt: updateData.startAt || workshift.startAt,
+        endAt: updateData.endAt || workshift.endAt,
+        status: newStatus,
+        adminNote: updateData.adminNote
+      })
+      
+      // Remove resolved workshift from review list
+      reviewWorkshifts.value = reviewWorkshifts.value.filter(shift => shift.id !== workshiftId)
+      
+      return updatedWorkshift
+    } catch (err) {
+      error.value = err.response?.data?.message || '근무 일정 검토 처리에 실패했습니다'
+      console.error('Failed to resolve review workshift:', err)
+      throw err
+    }
+  }
+
   const fetchCalendarWorkshifts = async (shopId = null, employeeId = null) => {
     const authStore = useAuthStore()
     const currentUser = authStore.user
@@ -246,7 +325,6 @@ export const useWorkshiftStore = defineStore('workshift', () => {
           params.employeeId = employeeId
         }
         
-        console.log('Fetching workshifts:', { targetShopId, from, to, employeeId })
         const response = await api.get(`/admin/shops/${targetShopId}/workshifts`, { params })
         
         const shifts = response.data || []
@@ -316,7 +394,8 @@ export const useWorkshiftStore = defineStore('workshift', () => {
     const formatTime = (date) => {
       return date.toLocaleTimeString('ko-KR', {
         hour: '2-digit',
-        minute: '2-digit'
+        minute: '2-digit',
+        hour12: false
       })
     }
     
@@ -360,10 +439,56 @@ export const useWorkshiftStore = defineStore('workshift', () => {
     error.value = null
   }
 
+  // New filtering utilities for EmployeeView - using UTC for internal logic
+  const getTodayWorkshifts = () => {
+    const today = new Date()
+    // Use local date for comparison, not UTC
+    const todayDateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
+    
+    return myWorkshifts.value.filter(shift => {
+      // Convert UTC time to local date for comparison
+      const shiftDate = new Date(shift.startAt)
+      const shiftDateStr = `${shiftDate.getFullYear()}-${String(shiftDate.getMonth() + 1).padStart(2, '0')}-${String(shiftDate.getDate()).padStart(2, '0')}`
+      const status = shift.status || 'SCHEDULED'
+      return shiftDateStr === todayDateStr && status !== 'CANCELED'
+    })
+  }
+  
+  const getThisWeekWorkshifts = () => {
+    const today = new Date()
+    const day = today.getDay()
+    const diff = today.getDate() - day + (day === 0 ? -6 : 1) // Monday is first day
+    
+    const startOfWeek = new Date(today.getFullYear(), today.getMonth(), diff)
+    const endOfWeek = new Date(today.getFullYear(), today.getMonth(), diff + 6)
+    
+    const startDateStr = startOfWeek.toISOString().split('T')[0]
+    const endDateStr = endOfWeek.toISOString().split('T')[0]
+    
+    return myWorkshifts.value.filter(shift => {
+      const shiftDateStr = new Date(shift.startAt).toISOString().split('T')[0]
+      const status = shift.status || 'SCHEDULED'
+      return shiftDateStr >= startDateStr && shiftDateStr <= endDateStr && status !== 'CANCELED'
+    })
+  }
+  
+  const getWorkshiftsByDateRange = (startDate, endDate) => {
+    const start = new Date(startDate)
+    const end = new Date(endDate)
+    
+    return myWorkshifts.value.filter(shift => {
+      const shiftStart = new Date(shift.startAt)
+      // Hide CANCELED workshifts from employee view
+      const status = shift.status || 'SCHEDULED'
+      return shiftStart >= start && shiftStart <= end && status !== 'CANCELED'
+    })
+  }
+  
   const resetState = () => {
     workshifts.value = []
     myWorkshifts.value = []
     calendarWorkshifts.value = []
+    reviewWorkshifts.value = []
     error.value = null
     loading.value = false
   }
@@ -373,6 +498,7 @@ export const useWorkshiftStore = defineStore('workshift', () => {
     workshifts,
     myWorkshifts,
     calendarWorkshifts,
+    reviewWorkshifts,
     loading,
     error,
     selectedDate,
@@ -386,6 +512,8 @@ export const useWorkshiftStore = defineStore('workshift', () => {
     createEmployeeWorkshift,
     updateWorkshift,
     deleteWorkshift,
+    fetchReviewWorkshifts,
+    resolveReviewWorkshift,
 
     // Calendar actions
     fetchCalendarWorkshifts,
@@ -402,6 +530,11 @@ export const useWorkshiftStore = defineStore('workshift', () => {
     
     // State management
     clearError,
-    resetState
+    resetState,
+    
+    // New filtering utilities
+    getTodayWorkshifts,
+    getThisWeekWorkshifts,
+    getWorkshiftsByDateRange
   }
 })

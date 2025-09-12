@@ -9,7 +9,7 @@
     <!-- Error State -->
     <div v-else-if="attendanceStore.error" class="error-container">
       <div class="error-message">
-        <h3>⚠️ 오류가 발생했습니다</h3>
+        <h3><AppIcon name="warning" :size="20" class="mr-2" />오류가 발생했습니다</h3>
         <p>{{ attendanceStore.error }}</p>
         <button @click="retryFetchRecords" class="btn btn-primary">다시 시도</button>
       </div>
@@ -19,7 +19,7 @@
     <div v-else class="records-section">
       <div class="section-header">
         <div class="header-info">
-          <h2>📋 출퇴근 기록</h2>
+          <h2><AppIcon name="clipboard" :size="20" class="mr-2" />출퇴근 기록</h2>
           <p class="records-count">총 {{ attendanceStore.records.length }}건의 기록</p>
         </div>
         <div class="filters">
@@ -50,7 +50,7 @@
             <option value="incomplete">미완료</option>
           </select>
           <button @click="exportRecords" class="btn btn-success">
-            📄 엑셀 내보내기
+            <AppIcon name="document" :size="16" class="mr-1" />엑셀 내보내기
           </button>
         </div>
       </div>
@@ -59,7 +59,7 @@
       <div class="records-table-container">
         <!-- Empty State -->
         <div v-if="attendanceStore.isEmpty" class="empty-state">
-          <div class="empty-icon">📋</div>
+          <div class="empty-icon"><AppIcon name="clipboard" :size="64" /></div>
           <h3>출퇴근 기록이 없습니다</h3>
           <p>아직 등록된 출퇴근 기록이 없습니다.</p>
         </div>
@@ -75,7 +75,9 @@
               <div class="table-cell">출근시간</div>
               <div class="table-cell">퇴근시간</div>
               <div class="table-cell">근무시간</div>
+              <div class="table-cell">급여</div>
               <div class="table-cell">상태</div>
+              <div class="table-cell">메모</div>
               <div class="table-cell">관리</div>
             </div>
           </div>
@@ -125,15 +127,40 @@
                 <span v-else class="time-empty">-</span>
               </div>
               <div class="table-cell duration-cell">
-                <span class="work-duration">
-                  {{ formatWorkDuration(record.workedMinutes) }}
+                <div class="duration-info">
+                  <span class="work-duration">
+                    {{ formatWorkDuration(record.actualMinutes || record.workedMinutes) }}
+                  </span>
+                  <span v-if="record.extraMinutes > 0" class="extra-time">
+                    +{{ formatWorkDuration(record.extraMinutes) }}
+                  </span>
+                  <span v-if="record.actualMinutes && record.actualMinutes !== record.workedMinutes" class="actual-time">
+                    (실제: {{ formatWorkDuration(record.actualMinutes) }})
+                  </span>
+                </div>
+              </div>
+              <div class="table-cell pay-cell">
+                <span v-if="record.finalPayAmount > 0" class="pay-amount">
+                  {{ formatCurrency(record.finalPayAmount) }}
                 </span>
-                <span v-if="record.extraMinutes > 0" class="extra-time">
-                  +{{ formatWorkDuration(record.extraMinutes) }}
+                <span v-else-if="record.payRate" class="pay-rate">
+                  {{ formatCurrency(record.payRate) }}/시
                 </span>
+                <span v-else class="pay-empty">-</span>
               </div>
               <div class="table-cell status-cell">
                 <StatusBadge :status="getRecordStatus(record)" />
+              </div>
+              <div class="table-cell memo-cell">
+                <span 
+                  v-if="record.memo" 
+                  class="memo-text clickable" 
+                  :title="record.memo"
+                  @click="openMemoModal(record)"
+                >
+                  {{ record.memo.length > 10 ? record.memo.substring(0, 10) + '...' : record.memo }}
+                </span>
+                <span v-else class="memo-empty">-</span>
               </div>
               <div class="table-cell action-cell">
                 <button 
@@ -162,11 +189,37 @@
       </div>
     </div>
 
+    <!-- 메모 내용 모달 -->
+    <div v-if="showMemoModal" class="modal-overlay" @click="closeMemoModal">
+      <div class="modal-content memo-modal-content" @click.stop>
+        <div class="modal-header">
+          <h3><AppIcon name="message-square" :size="20" class="mr-2" />메모 내용</h3>
+          <button @click="closeMemoModal" class="modal-close">&times;</button>
+        </div>
+        <div class="memo-modal-body" v-if="selectedMemoRecord">
+          <div class="employee-info-section">
+            <div class="employee-name-memo">{{ selectedMemoRecord.employeeName }}</div>
+            <div class="memo-date">{{ formatDate(selectedMemoRecord.clockInAt || selectedMemoRecord.date) }} ({{ formatWeekday(selectedMemoRecord.clockInAt || selectedMemoRecord.date) }})</div>
+          </div>
+          <div class="memo-content-section">
+            <div class="memo-full-content">
+              {{ selectedMemoRecord.memo }}
+            </div>
+          </div>
+        </div>
+        <div class="memo-modal-actions">
+          <button @click="closeMemoModal" class="btn btn-primary">
+            닫기
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- 출퇴근 기록 수정 모달 -->
     <div v-if="showEditModal" class="modal-overlay" @click="closeEditModal">
       <div class="modal-content edit-modal-content" @click.stop>
         <div class="modal-header">
-          <h3>📝 출퇴근 기록 수정</h3>
+          <h3><AppIcon name="edit" :size="20" class="mr-2" />출퇴근 기록 수정</h3>
           <button @click="closeEditModal" class="modal-close">&times;</button>
         </div>
         <div class="edit-form" v-if="editingRecord">
@@ -210,8 +263,8 @@
               취소
             </button>
             <button @click="saveEditedRecord" class="btn btn-primary" :disabled="attendanceStore.loading">
-              <span v-if="attendanceStore.loading">💾 저장 중...</span>
-              <span v-else>✏️ 수정 완료</span>
+              <span v-if="attendanceStore.loading"><AppIcon name="save" :size="16" class="mr-1" />저장 중...</span>
+              <span v-else><AppIcon name="edit" :size="16" class="mr-1" />수정 완료</span>
             </button>
           </div>
         </div>
@@ -223,13 +276,15 @@
 <script>
 import { ref, computed, onMounted } from 'vue'
 import StatusBadge from '@/components/StatusBadge.vue'
+import AppIcon from '@/components/AppIcon.vue'
 import { useEmployeesStore } from '@/stores/employees'
 import { useAttendanceStore } from '@/stores/attendance'
 
 export default {
   name: 'AdminRecordsView',
   components: {
-    StatusBadge
+    StatusBadge,
+    AppIcon
   },
   setup() {
     const employeesStore = useEmployeesStore()
@@ -248,6 +303,10 @@ export default {
       clockInAt: '',
       clockOutAt: ''
     })
+    
+    // 메모 모달 상태
+    const showMemoModal = ref(false)
+    const selectedMemoRecord = ref(null)
     
     // 필터링된 기록
     const filteredRecords = computed(() => {
@@ -336,7 +395,9 @@ export default {
       loadMore,
       showEditModal,
       editingRecord,
-      editForm
+      editForm,
+      showMemoModal,
+      selectedMemoRecord
     }
   },
   methods: {
@@ -353,7 +414,7 @@ export default {
       const positions = {
         'MANAGER': '매니저',
         'STAFF': '직원',
-        'PART_TIME': '파트타임'
+        'PART_TIME': '알바'
       }
       return positions[position] || position
     },
@@ -365,9 +426,29 @@ export default {
     getSectionClass(section) {
       return `section-${section?.toLowerCase() || 'unknown'}`
     },
+
+    formatCurrency(amount) {
+      if (!amount || amount <= 0) return '0원'
+      return `${amount.toLocaleString()}원`
+    },
     
     getRecordStatus(record) {
-      // Use new paired field if available
+      // Use new status field or enhanced status logic
+      if (record.status) {
+        const statusMap = {
+          'COMPLETED': 'completed',
+          'IN_PROGRESS': 'working',
+          'CANCELLED': 'cancelled',
+          'PENDING': 'pending'
+        }
+        return statusMap[record.status] || 'unknown'
+      }
+      
+      // Use enhanced computed status fields
+      if (record.isCompleted) return 'completed'
+      if (record.isInProgress) return 'working'
+      
+      // Legacy fallback with paired field
       if ('paired' in record) {
         return record.paired ? 'completed' : 'working'
       }
@@ -381,7 +462,8 @@ export default {
       return new Date(timestamp).toLocaleTimeString('ko-KR', {
         hour: '2-digit',
         minute: '2-digit',
-        second: '2-digit'
+        second: '2-digit',
+        hour12: false
       })
     },
     
@@ -447,6 +529,17 @@ export default {
       link.click()
     },
 
+    // 메모 모달 관련 메서드
+    openMemoModal(record) {
+      this.selectedMemoRecord = record
+      this.showMemoModal = true
+    },
+
+    closeMemoModal() {
+      this.showMemoModal = false
+      this.selectedMemoRecord = null
+    },
+
     // 출퇴근 기록 수정 관련 메서드
     editRecord(record) {
       this.editingRecord = record
@@ -480,13 +573,13 @@ export default {
 
         await this.attendanceStore.editAttendanceRecord(this.editingRecord.id, updateData)
         
-        alert('✅ 출퇴근 기록이 성공적으로 수정되었습니다')
+        alert('출퇴근 기록이 성공적으로 수정되었습니다')
         this.closeEditModal()
         
         // 기록 목록 새로고침
         await this.retryFetchRecords()
       } catch (error) {
-        alert('❌ 출퇴근 기록 수정에 실패했습니다: ' + error.message)
+        alert('출퇴근 기록 수정에 실패했습니다: ' + error.message)
       }
     },
 
@@ -529,8 +622,6 @@ export default {
 </script>
 
 <style scoped>
-@import '@/assets/design-system.css';
-
 .tab-content {
   animation: fadeIn 0.3s ease-in;
   padding: var(--space-6);
@@ -560,10 +651,6 @@ export default {
   animation: spin 1s linear infinite;
 }
 
-@keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
-}
 
 .error-container {
   display: flex;
@@ -673,6 +760,7 @@ export default {
   overflow: hidden;
   box-shadow: var(--shadow-sm);
   border: 1px solid var(--color-border-light);
+  position: relative;
 }
 
 .records-table {
@@ -686,7 +774,7 @@ export default {
 
 .table-row {
   display: grid;
-  grid-template-columns: 120px 140px 80px 100px 100px 100px 120px 100px 80px;
+  grid-template-columns: 120px 140px 80px 100px 100px 100px 120px 100px 80px 100px 80px;
   gap: var(--space-2);
   align-items: center;
 }
@@ -751,6 +839,123 @@ export default {
   margin-top: var(--space-1);
 }
 
+.duration-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.work-duration {
+  font-weight: var(--font-medium);
+  color: var(--color-text-primary);
+}
+
+.extra-time {
+  font-size: var(--text-xs);
+  color: var(--warning-600);
+  margin-top: var(--space-1);
+}
+
+.actual-time {
+  font-size: var(--text-xs);
+  color: var(--color-text-tertiary);
+  margin-top: var(--space-1);
+}
+
+.memo-cell {
+  max-width: 100px;
+}
+
+.memo-text {
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: help;
+}
+
+.memo-text.clickable {
+  cursor: pointer;
+  color: var(--primary-600);
+  transition: var(--transition-base);
+}
+
+.memo-text.clickable:hover {
+  color: var(--primary-700);
+  text-decoration: underline;
+}
+
+.memo-empty {
+  color: var(--color-text-tertiary);
+  font-style: italic;
+}
+
+.action-cell {
+  text-align: center;
+}
+
+.btn-sm {
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--text-xs);
+}
+
+.btn-secondary {
+  background: var(--gray-500);
+  color: white;
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: var(--gray-600);
+}
+
+.pay-amount {
+  color: var(--success-600);
+  font-weight: var(--font-semibold);
+}
+
+.pay-rate {
+  color: var(--color-text-secondary);
+  font-size: var(--text-xs);
+}
+
+.pay-empty {
+  color: var(--color-text-tertiary);
+  font-style: italic;
+}
+
+/* Cell Specific Styles */
+.date-cell {
+  display: flex;
+  flex-direction: column;
+}
+
+.date-main {
+  font-weight: var(--font-medium);
+  color: var(--color-text-primary);
+}
+
+.date-sub {
+  font-size: var(--text-xs);
+  color: var(--color-text-tertiary);
+  margin-top: var(--space-1);
+}
+
+.employee-cell {
+  display: flex;
+  flex-direction: column;
+}
+
+.employee-name {
+  font-weight: var(--font-medium);
+  color: var(--color-text-primary);
+}
+
+.employee-id {
+  font-size: var(--text-xs);
+  color: var(--color-text-tertiary);
+  margin-top: var(--space-1);
+}
+
 .position-badge {
   display: inline-block;
   padding: var(--space-1) var(--space-2);
@@ -761,17 +966,20 @@ export default {
   letter-spacing: 0.5px;
 }
 
-.position-manager {
+.position-manager,
+.position-badge-card.position-manager {
   background: var(--primary-100);
   color: var(--primary-700);
 }
 
-.position-staff {
+.position-staff,
+.position-badge-card.position-staff {
   background: var(--success-100);
   color: var(--success-700);
 }
 
-.position-part_time {
+.position-part_time,
+.position-badge-card.position-part_time {
   background: var(--warning-100);
   color: var(--warning-700);
 }
@@ -784,17 +992,20 @@ export default {
   font-weight: var(--font-medium);
 }
 
-.section-kitchen {
+.section-kitchen,
+.section-badge-card.section-kitchen {
   background: var(--danger-100);
   color: var(--danger-700);
 }
 
-.section-hall {
+.section-hall,
+.section-badge-card.section-hall {
   background: var(--primary-100);
   color: var(--primary-700);
 }
 
-.section-unknown {
+.section-unknown,
+.section-badge-card.section-unknown {
   background: var(--gray-100);
   color: var(--gray-600);
 }
@@ -900,6 +1111,67 @@ export default {
   text-align: center;
   color: var(--color-text-secondary);
   font-style: italic;
+}
+
+/* Memo Modal Styles */
+.memo-modal-content {
+  background: white;
+  border-radius: var(--radius-xl);
+  padding: 0;
+  max-width: 600px;
+  width: 90%;
+  max-height: 80vh;
+  overflow: hidden;
+  box-shadow: var(--shadow-lg);
+}
+
+.memo-modal-body {
+  padding: var(--space-6);
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.employee-info-section {
+  background: var(--color-bg-secondary);
+  padding: var(--space-4);
+  border-radius: var(--radius-lg);
+  margin-bottom: var(--space-6);
+  text-align: center;
+}
+
+.employee-name-memo {
+  font-size: var(--text-xl);
+  font-weight: var(--font-semibold);
+  color: var(--color-text-primary);
+  margin-bottom: var(--space-2);
+}
+
+.memo-date {
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+}
+
+.memo-content-section {
+  background: var(--warning-50);
+  border: 1px solid var(--warning-200);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+}
+
+.memo-full-content {
+  font-size: var(--text-base);
+  line-height: 1.6;
+  color: var(--warning-800);
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.memo-modal-actions {
+  background: var(--color-bg-secondary);
+  padding: var(--space-4) var(--space-6);
+  border-top: 1px solid var(--color-border-light);
+  display: flex;
+  justify-content: flex-end;
 }
 
 /* Edit Modal Styles */
@@ -1049,7 +1321,17 @@ export default {
 /* Responsive Design */
 @media (max-width: 1200px) {
   .table-row {
-    grid-template-columns: 100px 120px 70px 80px 90px 90px 100px 80px 70px;
+    grid-template-columns: 100px 120px 70px 80px 90px 90px 100px 80px 70px 90px 70px;
+  }
+  
+  .section-header {
+    flex-direction: column;
+    gap: 16px;
+  }
+  
+  .filters {
+    flex-wrap: wrap;
+    gap: 12px;
   }
 }
 
@@ -1061,10 +1343,17 @@ export default {
   .section-header {
     flex-direction: column;
     align-items: stretch;
+    gap: 16px;
+  }
+  
+  .header-info h2 {
+    font-size: var(--text-xl);
   }
   
   .filters {
-    flex-direction: column;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
     align-items: stretch;
   }
   
@@ -1073,15 +1362,24 @@ export default {
   .section-filter, 
   .status-filter {
     min-width: auto;
+    padding: var(--space-3) var(--space-3);
+    font-size: var(--text-sm);
+  }
+  
+  .btn {
+    grid-column: span 2;
+    padding: var(--space-3) var(--space-4);
+    justify-self: center;
   }
   
   .records-table-container {
     overflow-x: auto;
+    border-radius: var(--radius-lg);
   }
   
   .table-row {
-    grid-template-columns: 80px 100px 60px 70px 80px 80px 90px 70px 60px;
-    min-width: 700px;
+    grid-template-columns: 80px 100px 60px 70px 80px 80px 90px 70px 60px 80px 60px;
+    min-width: 800px;
   }
   
   .data-row .table-cell {
@@ -1092,13 +1390,115 @@ export default {
   .header-row .table-cell {
     padding: var(--space-3) var(--space-2);
     font-size: var(--text-xs);
+    font-weight: var(--font-bold);
+  }
+  
+  /* Mobile-friendly modal */
+  .edit-modal-content {
+    width: 95%;
+    max-width: none;
+    margin: 16px;
+  }
+  
+  .employee-info-header {
+    padding: var(--space-3);
+  }
+  
+  .form-actions {
+    flex-direction: column;
+    gap: var(--space-3);
+  }
+  
+  .form-actions .btn {
+    width: 100%;
   }
 }
 
 @media (max-width: 480px) {
+  .tab-content {
+    padding: var(--space-3);
+  }
+  
+  .section-header {
+    gap: 12px;
+  }
+  
+  .header-info h2 {
+    font-size: var(--text-lg);
+  }
+  
+  .records-count {
+    font-size: var(--text-xs);
+  }
+  
+  .filters {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+  
+  .btn {
+    grid-column: span 1;
+    font-size: var(--text-sm);
+    padding: var(--space-2) var(--space-3);
+  }
+  
   .table-row {
-    grid-template-columns: 70px 90px 50px 60px 70px 70px 80px 60px 50px;
-    min-width: 600px;
+    grid-template-columns: 60px 80px 45px 55px 65px 65px 70px 55px 45px 70px 50px;
+    min-width: 650px;
+  }
+  
+  .data-row .table-cell {
+    padding: var(--space-2) var(--space-1);
+    font-size: 0.7rem;
+  }
+  
+  .header-row .table-cell {
+    padding: var(--space-2) var(--space-1);
+    font-size: 0.7rem;
+  }
+  
+  .employee-name {
+    font-size: 0.75rem;
+  }
+  
+  .employee-id {
+    font-size: 0.65rem;
+  }
+  
+  .date-main {
+    font-size: 0.7rem;
+  }
+  
+  .date-sub {
+    font-size: 0.6rem;
+  }
+  
+  .position-badge,
+  .section-badge {
+    font-size: 0.6rem;
+    padding: var(--space-1);
+  }
+  
+  .btn-sm {
+    padding: 4px 8px;
+    font-size: 0.7rem;
+  }
+  
+  /* Extra small modal adjustments */
+  .edit-modal-content {
+    padding: var(--space-4);
+  }
+  
+  .modal-header h3 {
+    font-size: var(--text-lg);
+  }
+  
+  .employee-name {
+    font-size: var(--text-base);
+  }
+  
+  .employee-details {
+    font-size: var(--text-sm);
   }
 }
 </style>

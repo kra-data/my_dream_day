@@ -2,7 +2,7 @@
   <div class="tab-content">
     <div class="employees-section">
       <div class="section-header">
-        <h2>👥 직원 관리</h2>
+        <h2><AppIcon name="users" :size="20" class="mr-2" />직원 관리</h2>
         <button @click="showAddEmployeeModal = true" class="btn btn-primary">
           + 직원 추가
         </button>
@@ -29,7 +29,10 @@
             <tr v-else v-for="employee in employeesStore.employees" :key="employee.id">
               <td>
                 <div class="employee-cell">
-                  <div class="employee-avatar">
+                  <div 
+                    class="employee-avatar" 
+                    :style="{ backgroundColor: employee.personalColor || getDefaultColor(employee.position) }"
+                  >
                     {{ employee.name.charAt(0) }}
                   </div>
                   {{ employee.name }}
@@ -98,7 +101,7 @@
             </div>
           </div>
           <p>직원이 이 QR 코드를 스캔하여 출퇴근할 수 있습니다</p>
-          <button @click="printQR" class="btn btn-primary">🖨️ 인쇄</button>
+          <button @click="printQR" class="btn btn-primary"><AppIcon name="printer" :size="16" class="mr-1" />인쇄</button>
         </div>
       </div>
     </div>
@@ -113,7 +116,7 @@
         <div class="employee-form">
           <!-- 기본 정보 섹션 -->
           <div class="form-section">
-            <h4 class="section-title">👤 기본 정보</h4>
+            <h4 class="section-title"><AppIcon name="user" :size="18" class="mr-2" />기본 정보</h4>
             <div class="form-row">
               <div class="form-group">
                 <label>이름 *</label>
@@ -123,7 +126,10 @@
                   placeholder="홍길동"
                   required
                   class="form-input"
+                  :readonly="showEditEmployeeModal"
+                  :class="{ 'readonly-field': showEditEmployeeModal }"
                 >
+                <small v-if="showEditEmployeeModal" class="field-note">보안상 이름은 수정할 수 없습니다</small>
               </div>
               
               <div class="form-group">
@@ -147,14 +153,40 @@
                 placeholder="000000-0000000"
                 required
                 class="form-input"
+                :readonly="showEditEmployeeModal"
+                :class="{ 'readonly-field': showEditEmployeeModal }"
                 @input="formatNationalId"
               >
+              <small v-if="showEditEmployeeModal" class="field-note">보안상 주민등록번호는 수정할 수 없습니다</small>
+            </div>
+
+            <div class="form-group">
+              <label>개인 컬러</label>
+              <div class="color-palette">
+                <div 
+                  v-for="color in colorOptions" 
+                  :key="color.value"
+                  class="color-option"
+                  :class="{ active: employeeForm.personalColor === color.value }"
+                  :style="{ backgroundColor: color.value }"
+                  @click="employeeForm.personalColor = color.value"
+                  :title="color.name"
+                >
+                  <AppIcon v-if="employeeForm.personalColor === color.value" name="check" :size="14" />
+                </div>
+              </div>
+              <div class="color-preview" v-if="employeeForm.personalColor">
+                <div class="preview-avatar" :style="{ backgroundColor: employeeForm.personalColor }">
+                  {{ employeeForm.name.charAt(0) || 'A' }}
+                </div>
+                <span class="preview-text">미리보기</span>
+              </div>
             </div>
           </div>
 
           <!-- 급여 정보 섹션 -->
           <div class="form-section">
-            <h4 class="section-title">💰 급여 정보</h4>
+            <h4 class="section-title"><AppIcon name="money" :size="18" class="mr-2" />급여 정보</h4>
             <div class="form-row">
               <div class="form-group">
                 <label>급여 단위 *</label>
@@ -167,7 +199,7 @@
                       required
                       @change="updatePayPlaceholder"
                     >
-                    <span class="radio-text">💵 시급</span>
+                    <span class="radio-text"><AppIcon name="money" :size="16" class="mr-1" />시급</span>
                   </label>
                   <label class="radio-option">
                     <input 
@@ -177,7 +209,7 @@
                       required
                       @change="updatePayPlaceholder"
                     >
-                    <span class="radio-text">💼 월급</span>
+                    <span class="radio-text"><AppIcon name="briefcase" :size="16" class="mr-1" />월급</span>
                   </label>
                 </div>
               </div>
@@ -237,16 +269,16 @@
 
           <!-- 근무 정보 섹션 -->
           <div class="form-section">
-            <h4 class="section-title">🏢 근무 정보</h4>
+            <h4 class="section-title"><AppIcon name="hall" :size="18" class="mr-2" />근무 정보</h4>
             <div class="form-row">
               <div class="form-group">
                 <label>직위 *</label>
                 <select v-model="employeeForm.position" required class="form-select">
                   <option value="">직위를 선택하세요</option>
-                  <option value="OWNER">👑 오너</option>
-                  <option value="MANAGER">👨‍💼 매니저</option>
-                  <option value="STAFF">👩‍💻 스태프</option>
-                  <option value="PART_TIME">⏰ 아르바이트</option>
+                  <option value="OWNER"><AppIcon name="crown" :size="16" class="mr-1" />오너</option>
+                  <option value="MANAGER"><AppIcon name="user-tie" :size="16" class="mr-1" />매니저</option>
+                  <option value="STAFF"><AppIcon name="user-laptop" :size="16" class="mr-1" />스태프</option>
+                  <option value="PART_TIME"><AppIcon name="clock" :size="16" class="mr-1" />아르바이트</option>
                 </select>
               </div>
               
@@ -260,7 +292,7 @@
                       value="HALL" 
                       required
                     >
-                    <span class="radio-text">🍽️ 홀</span>
+                    <span class="radio-text"><AppIcon name="utensils" :size="16" class="mr-1" />홀</span>
                   </label>
                   <label class="radio-option">
                     <input 
@@ -269,7 +301,7 @@
                       value="KITCHEN" 
                       required
                     >
-                    <span class="radio-text">👨‍🍳 주방</span>
+                    <span class="radio-text"><AppIcon name="chef-hat" :size="16" class="mr-1" />주방</span>
                   </label>
                 </div>
               </div>
@@ -278,16 +310,16 @@
 
           <!-- 근무 시간표 섹션 -->
           <div class="form-section">
-            <h4 class="section-title">⏰ 근무 시간표</h4>
+            <h4 class="section-title"><AppIcon name="clock" :size="18" class="mr-2" />근무 시간표</h4>
             <p class="section-description">근무하지 않는 날은 비워두세요</p>
             
             <div class="schedule-container">
               <div class="schedule-quick-actions">
                 <button type="button" @click="applyWeekdaySchedule" class="btn-quick">
-                  📅 평일 일괄 적용 (09:00-18:00)
+                  <AppIcon name="calendar" :size="16" class="mr-1" />평일 일괄 적용 (09:00-18:00)
                 </button>
                 <button type="button" @click="clearSchedule" class="btn-quick">
-                  🗑️ 전체 초기화
+                  <AppIcon name="trash" :size="16" class="mr-1" />전체 초기화
                 </button>
               </div>
 
@@ -339,8 +371,8 @@
               취소
             </button>
             <button @click="saveEmployee" class="btn btn-primary" :disabled="employeesStore.loading">
-              <span v-if="employeesStore.loading">💾 저장 중...</span>
-              <span v-else>{{ showEditEmployeeModal ? '✏️ 수정 완료' : '➕ 직원 추가' }}</span>
+              <span v-if="employeesStore.loading"><AppIcon name="save" :size="16" class="mr-1" />저장 중...</span>
+              <span v-else><AppIcon :name="showEditEmployeeModal ? 'edit' : 'plus'" :size="16" class="mr-1" />{{ showEditEmployeeModal ? '수정 완료' : '직원 추가' }}</span>
             </button>
           </div>
         </div>
@@ -352,13 +384,15 @@
 <script>
 import { ref } from 'vue'
 import StatusBadge from '@/components/StatusBadge.vue'
+import AppIcon from '@/components/AppIcon.vue'
 import { useEmployeesStore } from '@/stores/employees'
 import { useAttendanceStore } from '@/stores/attendance'
 
 export default {
   name: 'AdminEmployeeView',
   components: {
-    StatusBadge
+    StatusBadge,
+    AppIcon
   },
   emits: ['retry-fetch'],
   setup(props, { emit }) {
@@ -386,6 +420,22 @@ export default {
     
     const payPlaceholder = ref('급여 단위를 먼저 선택하세요')
     
+    // 색상 옵션
+    const colorOptions = [
+      { name: '블루', value: '#3b82f6' },
+      { name: '그린', value: '#10b981' },
+      { name: '퍼플', value: '#8b5cf6' },
+      { name: '핑크', value: '#ec4899' },
+      { name: '옐로우', value: '#f59e0b' },
+      { name: '레드', value: '#ef4444' },
+      { name: '인디고', value: '#6366f1' },
+      { name: '시안', value: '#06b6d4' },
+      { name: '에메랄드', value: '#059669' },
+      { name: '로즈', value: '#f43f5e' },
+      { name: '바이올렛', value: '#7c3aed' },
+      { name: '앰버', value: '#d97706' }
+    ]
+    
     const employeeForm = ref({
       name: '',
       nationalId: '',
@@ -396,6 +446,7 @@ export default {
       section: '',
       pay: 0,
       payUnit: '',
+      personalColor: '#3b82f6', // 기본값으로 블루 설정
       schedule: {
         mon: { start: '', end: '' },
         tue: { start: '', end: '' },
@@ -419,6 +470,7 @@ export default {
       dayLabels,
       employeeForm,
       payPlaceholder,
+      colorOptions,
       emit
     }
   },
@@ -468,7 +520,8 @@ export default {
     formatTime(timestamp) {
       return new Date(timestamp).toLocaleTimeString('ko-KR', {
         hour: '2-digit',
-        minute: '2-digit'
+        minute: '2-digit',
+        hour12: false
       })
     },
     
@@ -533,6 +586,7 @@ export default {
         section: '',
         pay: 0,
         payUnit: '',
+        personalColor: '#3b82f6',
         schedule: {
           mon: { start: '', end: '' },
           tue: { start: '', end: '' },
@@ -663,16 +717,16 @@ export default {
         
         if (this.showEditEmployeeModal) {
           await this.employeesStore.updateEmployee(this.editingEmployeeId, employeeData)
-          alert('✅ 직원 정보가 성공적으로 수정되었습니다')
+          alert('직원 정보가 성공적으로 수정되었습니다')
         } else {
           await this.employeesStore.addEmployee(employeeData)
-          alert('✅ 새 직원이 성공적으로 추가되었습니다')
+          alert('새 직원이 성공적으로 추가되었습니다')
         }
         
         this.closeEmployeeModal()
         this.emit('retry-fetch')
       } catch (error) {
-        alert('❌ 저장에 실패했습니다: ' + error.message)
+        alert('저장에 실패했습니다: ' + error.message)
       }
     },
 
@@ -680,10 +734,10 @@ export default {
     async clockInEmployee(employeeId) {
       try {
         await this.attendanceStore.manualAttendance(employeeId, 'IN')
-        alert('✅ 출근 처리가 완료되었습니다')
+        alert('출근 처리가 완료되었습니다')
         this.emit('retry-fetch')
       } catch (error) {
-        alert('❌ 출근 처리에 실패했습니다: ' + error.message)
+        alert('출근 처리에 실패했습니다: ' + error.message)
       }
     },
 
@@ -691,11 +745,31 @@ export default {
     async clockOutEmployee(employeeId) {
       try {
         await this.attendanceStore.manualAttendance(employeeId, 'OUT')
-        alert('✅ 퇴근 처리가 완료되었습니다')
+        alert('퇴근 처리가 완료되었습니다')
         this.emit('retry-fetch')
       } catch (error) {
-        alert('❌ 퇴근 처리에 실패했습니다: ' + error.message)
+        alert('퇴근 처리에 실패했습니다: ' + error.message)
       }
+    },
+
+    getEmployeeAvatarClass(position) {
+      const positionClasses = {
+        'OWNER': 'avatar-owner',
+        'MANAGER': 'avatar-manager', 
+        'STAFF': 'avatar-staff',
+        'PART_TIME': 'avatar-part-time'
+      }
+      return positionClasses[position] || 'avatar-staff'
+    },
+
+    getDefaultColor(position) {
+      const positionColors = {
+        'OWNER': '#8b5cf6',
+        'MANAGER': '#06b6d4',
+        'STAFF': '#10b981',
+        'PART_TIME': '#f59e0b'
+      }
+      return positionColors[position] || '#3b82f6'
     }
   }
 }
@@ -757,13 +831,15 @@ th {
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  background: #3b82f6;
   color: white;
   display: flex;
   align-items: center;
   justify-content: center;
   font-weight: 600;
   font-size: 14px;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  border: 2px solid white;
 }
 
 .action-buttons {
@@ -1177,6 +1253,72 @@ th {
   font-style: italic;
 }
 
+/* Color Palette Styles */
+.color-palette {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.color-option {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 3px solid transparent;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.color-option:hover {
+  transform: scale(1.1);
+  box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+}
+
+.color-option.active {
+  border-color: #374151;
+  transform: scale(1.1);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+
+.color-option .app-icon {
+  color: white;
+  filter: drop-shadow(0 1px 2px rgba(0,0,0,0.8));
+}
+
+.color-preview {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  background: #f8fafc;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+}
+
+.preview-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 14px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.preview-text {
+  font-size: 0.9rem;
+  color: #6b7280;
+  font-weight: 500;
+}
+
 @media (max-width: 768px) {
   .employees-table {
     overflow-x: auto;
@@ -1226,5 +1368,21 @@ th {
     transform: rotate(90deg);
     margin: 4px 0;
   }
+}
+
+/* Readonly field styles */
+.readonly-field {
+  background: #f8fafc !important;
+  color: #64748b !important;
+  cursor: not-allowed;
+  border-color: #e2e8f0 !important;
+}
+
+.field-note {
+  display: block;
+  margin-top: 4px;
+  font-size: 0.75rem;
+  color: #64748b;
+  font-style: italic;
 }
 </style>

@@ -4,7 +4,8 @@
     <div class="modal-content qr-modal" @click.stop>
       <div class="modal-header">
         <h3>
-          {{ action === 'check-in' ? '📱 출근 QR 스캔' : '📱 퇴근 QR 스캔' }}
+          <AppIcon name="qr" :size="18" class="inline-block mr-2" />
+          {{ action === 'check-in' ? '출근 QR 스캔' : '퇴근 QR 스캔' }}
         </h3>
         <button @click="$emit('close')" class="modal-close">&times;</button>
       </div>
@@ -15,13 +16,15 @@
             @click="activeTab = 'camera'"
             :class="['tab-btn', { 'active': activeTab === 'camera' }]"
           >
-            📹 카메라 스캔
+            <AppIcon name="eye" :size="16" class="mr-1" />
+            카메라 스캔
           </button>
           <button 
             @click="activeTab = 'manual'"
             :class="['tab-btn', { 'active': activeTab === 'manual' }]"
           >
-            ⌨️ 수동 입력
+            <AppIcon name="keyboard" :size="16" class="mr-1" />
+            수동 입력
           </button>
         </div>
 
@@ -45,14 +48,14 @@
               class="btn btn-primary btn-base"
               :disabled="loading"
             >
-              📹 카메라 시작
+              <AppIcon name="camera" :size="16" class="mr-1" />카메라 시작
             </button>
             <button 
               v-else
               @click="stopCamera" 
               class="btn btn-secondary btn-base"
             >
-              🛑 카메라 정지
+              <AppIcon name="stop" :size="16" class="mr-1" />카메라 정지
             </button>
           </div>
 
@@ -93,7 +96,7 @@
         <div v-if="scanResult" class="scan-result">
           <div :class="['alert', `alert-${scanResult.type}`, 'alert-icon']">
             <div class="alert-icon-content">
-              {{ scanResult.type === 'success' ? '✅' : '❌' }}
+              <AppIcon :name="scanResult.type === 'success' ? 'check-circle' : 'x-circle'" :size="18" />
             </div>
             <div>{{ scanResult.message }}</div>
           </div>
@@ -104,8 +107,11 @@
 </template>
 
 <script>
+import AppIcon from '@/components/AppIcon.vue'
+
 export default {
   name: 'QRModal',
+  components: { AppIcon },
   props: {
     show: {
       type: Boolean,

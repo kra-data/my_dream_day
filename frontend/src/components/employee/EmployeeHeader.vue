@@ -1,24 +1,29 @@
 <template>
   <div class="employee-header">
     <div class="welcome-section">
-      <h1>안녕하세요, {{ user.name }}님! 👋</h1>
+      <h1>안녕하세요, {{ user.name }}님! <AppIcon name="hand" :size="24" class="ml-2" /></h1>
       <p>{{ currentDate }} · {{ currentTime }}</p>
     </div>
     
     <div class="user-actions">
       <button @click="$emit('show-my-page')" class="btn btn-base btn-outline">
-        📊 마이페이지
+        <AppIcon name="stats" :size="18" class="mr-2" />마이페이지
       </button>
       <button @click="$emit('logout')" class="btn btn-base btn-ghost">
-        🚪 로그아웃
+        <AppIcon name="arrow-right" :size="18" class="mr-2" />로그아웃
       </button>
     </div>
   </div>
 </template>
 
 <script>
+import AppIcon from '@/components/AppIcon.vue'
+
 export default {
   name: 'EmployeeHeader',
+  components: {
+    AppIcon
+  },
   props: {
     user: {
       type: Object,
@@ -42,24 +47,27 @@ export default {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  color: var(--color-text-inverse);
+  color: var(--color-text-primary);
   margin-bottom: var(--space-8);
   padding: var(--space-6);
-  background: rgba(255, 255, 255, 0.1);
-  backdrop-filter: blur(10px);
+  background: var(--color-bg-primary);
   border-radius: var(--radius-xl);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  border: 1px solid var(--color-border-light);
+  box-shadow: var(--shadow-sm);
 }
 
 .welcome-section h1 {
   font-size: var(--text-3xl);
   font-weight: var(--font-bold);
   margin-bottom: var(--space-2);
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  background: linear-gradient(135deg, var(--primary-600), var(--primary-800));
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
 
 .welcome-section p {
-  opacity: 0.9;
+  color: var(--color-text-secondary);
   font-size: var(--text-lg);
   font-weight: var(--font-medium);
 }
@@ -69,17 +77,19 @@ export default {
   gap: var(--space-3);
 }
 
-/* 사용자 지정 버튼 스타일 */
+/* 라이트 테마 버튼 스타일 */
 .user-actions .btn {
-  background: rgba(255, 255, 255, 0.15);
-  border-color: rgba(255, 255, 255, 0.3);
-  color: var(--color-text-inverse);
-  backdrop-filter: blur(10px);
+  background: var(--color-bg-secondary);
+  border-color: var(--color-border-light);
+  color: var(--color-text-primary);
+  transition: all var(--transition-fast);
 }
 
 .user-actions .btn:hover {
-  background: rgba(255, 255, 255, 0.25);
+  background: var(--color-bg-tertiary);
+  border-color: var(--color-border);
   transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
 }
 
 /* 반응형 디자인 */

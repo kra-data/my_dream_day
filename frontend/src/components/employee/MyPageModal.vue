@@ -3,14 +3,14 @@
   <div v-if="show" class="modal-overlay" @click="$emit('close')">
     <div class="modal-content mypage-modal" @click.stop>
       <div class="modal-header">
-        <h3>📊 마이페이지</h3>
+        <h3><AppIcon name="stats" :size="20" class="mr-2" />마이페이지</h3>
         <button @click="$emit('close')" class="modal-close">&times;</button>
       </div>
       
       <div class="mypage-content">
         <!-- 개인 정보 -->
         <div class="info-section">
-          <h4>👤 개인 정보</h4>
+          <h4><AppIcon name="user" :size="18" class="mr-2" />개인 정보</h4>
           <div class="info-grid">
             <div class="info-item">
               <span class="info-label">이름</span>
@@ -36,8 +36,8 @@
               <span class="info-label">은행</span>
               <div class="bank-info">
                 <span class="bank-name">{{ settlementData?.profile?.bank || '정보 없음' }}</span>
-                <span v-if="!settlementData?.profile?.bankRegistered" class="bank-warning">⚠️ 계좌 등록 필요</span>
-                <span v-else class="bank-registered">✓ 등록완료</span>
+                <span v-if="!settlementData?.profile?.bankRegistered" class="bank-warning"><AppIcon name="warning" :size="16" class="mr-1" />계좌 등록 필요</span>
+                <span v-else class="bank-registered"><AppIcon name="check" :size="16" class="mr-1" />등록완료</span>
               </div>
             </div>
           </div>
@@ -45,7 +45,7 @@
 
         <!-- 정산 정보 -->
         <div class="settlement-section">
-          <h4>💳 정산 정보</h4>
+          <h4><AppIcon name="currency" :size="18" class="mr-2" />정산 정보</h4>
           <div class="settlement-card">
             <div class="settlement-period-info">
               <div class="period-badge current">
@@ -55,21 +55,9 @@
             </div>
             
             <div class="settlement-amounts">
-              <div class="amount-row unsettled">
-                <span class="amount-icon">⏳</span>
-                <div class="amount-content">
-                  <span class="amount-label">현재 사이클 미정산 금액</span>
-                  <span class="amount-value">{{ formatCurrency(settlementData?.cards?.current?.amount || 0) }}</span>
-                </div>
-                <div class="amount-status">
-                  <span class="status-badge" :class="getStatusClass(settlementData?.cards?.current?.status)">
-                    {{ getStatusText(settlementData?.cards?.current?.status) }}
-                  </span>
-                </div>
-              </div>
-              
+              <!-- 정산 완료된 금액만 표시 -->
               <div class="amount-row settled">
-                <span class="amount-icon">✅</span>
+                <span class="amount-icon"><AppIcon name="success" :size="16" /></span>
                 <div class="amount-content">
                   <span class="amount-label">이전 사이클 정산 금액</span>
                   <span class="amount-value">{{ formatCurrency(settlementData?.cards?.previous?.amount || 0) }}</span>
@@ -89,7 +77,7 @@
 
         <!-- 이번 달 급여 정보 -->
         <div class="salary-section">
-          <h4>💰 {{ settlementData?.month?.year }}년 {{ settlementData?.month?.month }}월 급여 정보</h4>
+          <h4><AppIcon name="money" :size="18" class="mr-2" />{{ settlementData?.month?.year }}년 {{ settlementData?.month?.month }}월 급여 정보</h4>
           <div class="salary-card">
             <div class="salary-item">
               <span class="salary-label">총 근무 시간</span>
@@ -112,7 +100,7 @@
 
         <!-- 출근 통계 -->
         <div class="stats-section">
-          <h4>📈 출근 통계</h4>
+          <h4><AppIcon name="chart" :size="18" class="mr-2" />출근 통계</h4>
           <div class="stats-grid">
             <div class="stat-item">
               <span class="stat-number">{{ settlementData?.stats?.presentDays || 0 }}</span>
@@ -140,9 +128,13 @@
 <script>
 import { ref, watch } from 'vue'
 import { useAttendanceStore } from '@/stores/attendance'
+import AppIcon from '@/components/AppIcon.vue'
 
 export default {
   name: 'MyPageModal',
+  components: {
+    AppIcon
+  },
   props: {
     show: {
       type: Boolean,
@@ -268,11 +260,8 @@ export default {
     },
 
     formatCurrency(amount) {
-      if (!amount && amount !== 0) return '₩0'
-      return new Intl.NumberFormat('ko-KR', {
-        style: 'currency',
-        currency: 'KRW'
-      }).format(amount)
+      if (!amount && amount !== 0) return '0원'
+      return `${amount.toLocaleString('ko-KR')}원`
     },
 
     formatSettlementDate(dateString) {

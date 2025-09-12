@@ -1,9 +1,14 @@
 <template>
-  <div class="modal-backdrop" @click="handleBackdropClick">
+  <div class="modal-backdrop" @click="handleClose">
     <div class="modal" @click.stop>
       <div class="modal-header">
-        <h3>➕ 근무 일정 등록</h3>
-        <button @click="$emit('close')" class="close-btn">✕</button>
+        <h3>
+          <AppIcon name="plus" :size="18" class="inline-block mr-2" />
+          근무 일정 등록
+        </h3>
+        <button @click="handleClose" class="close-btn">
+          <AppIcon name="close" :size="16" />
+        </button>
       </div>
       
       <div class="modal-body">
@@ -51,33 +56,36 @@
               <span class="preview-label">근무 시간:</span>
               <span class="preview-value">{{ workDuration }}</span>
             </div>
-            <div class="preview-item">
-              <span class="preview-label">휴게 시간:</span>
-              <span class="preview-value">{{ breakTime }}</span>
-            </div>
           </div>
 
           <!-- 안내 메시지 -->
           <div class="info-message">
-            <div class="info-icon">ℹ️</div>
+            <div class="info-icon">
+              <AppIcon name="info" :size="16" />
+            </div>
             <div class="info-content">
               <p><strong>근무 일정 등록 안내</strong></p>
               <ul>
-                <li>등록한 일정은 관리자 승인 후 확정됩니다</li>
-                <li>4시간 이상 근무시 30분, 8시간 이상 근무시 1시간 휴게시간이 포함됩니다</li>
+                <li>등록한 일정은 수정 및 삭제 가능합니다.</li>
                 <li>급여는 실제 근무시간을 기준으로 계산됩니다</li>
               </ul>
             </div>
           </div>
 
           <!-- 에러 메시지 -->
-          <div v-if="error" class="error-message">
-            {{ error }}
+          <div v-if="displayError" class="error-message">
+            <div class="error-icon">
+              <AppIcon name="alert-triangle" :size="16" />
+            </div>
+            <div class="error-content">
+              <strong>일정 등록 실패</strong>
+              <p>{{ displayError }}</p>
+            </div>
           </div>
 
           <!-- 버튼들 -->
           <div class="modal-actions">
-            <button type="button" @click="$emit('close')" class="btn btn-secondary">
+            <button type="button" @click="handleClose" class="btn btn-secondary">
               취소
             </button>
             <button type="submit" :disabled="!isFormValid || loading" class="btn btn-primary">
@@ -100,6 +108,10 @@ export default {
     selectedDate: {
       type: Date,
       default: null
+    },
+    storeError: {
+      type: String,
+      default: ''
     }
   },
   emits: ['create', 'close'],
@@ -163,23 +175,11 @@ export default {
       return `${diffHours}시간 ${diffMinutes}분`
     })
     
-    // 휴게 시간 계산
-    const breakTime = computed(() => {
-      if (!isValidTime.value) return '0분'
-      
-      const start = new Date(`2000-01-01T${form.value.startTime}:00`)
-      const end = new Date(`2000-01-01T${form.value.endTime}:00`)
-      const diffMs = end - start
-      const diffHours = diffMs / (1000 * 60 * 60)
-      
-      if (diffHours >= 8) {
-        return '1시간'
-      } else if (diffHours >= 4) {
-        return '30분'
-      } else {
-        return '해당없음'
-      }
+    // 표시할 에러 메시지 (로컬 에러 또는 스토어 에러)
+    const displayError = computed(() => {
+      return error.value || props.storeError
     })
+    
     
     const handleSubmit = async () => {
       if (!isFormValid.value) {
@@ -212,6 +212,12 @@ export default {
       emit('close')
     }
     
+    // 모달이 닫힐 때 에러 초기화
+    const handleClose = () => {
+      error.value = ''
+      emit('close')
+    }
+    
     // 선택된 날짜가 있으면 폼에 설정
     watch(() => props.selectedDate, (newDate) => {
       if (newDate) {
@@ -227,12 +233,11 @@ export default {
     }, { immediate: true })
     
     onMounted(() => {
-      // 기본값으로 내일 설정
+      // 기본값으로 오늘 설정
       if (!form.value.date) {
-        const tomorrow = new Date()
-        tomorrow.setDate(tomorrow.getDate() + 1)
-        form.value.date = `${tomorrow.getFullYear()}-${String(tomorrow.getMonth() + 1).padStart(2, '0')}-${String(tomorrow.getDate()).padStart(2, '0')}`
-      }
+          const today = new Date()
+          form.value.date = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
+        }
     })
     
     return {
@@ -244,9 +249,10 @@ export default {
       isValidDate,
       isValidTime,
       workDuration,
-      breakTime,
+      displayError,
       handleSubmit,
-      handleBackdropClick
+      handleBackdropClick,
+      handleClose
     }
   }
 }
@@ -404,13 +410,39 @@ export default {
 }
 
 .error-message {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
   color: #dc2626;
   background: #fef2f2;
   border: 1px solid #fecaca;
   border-radius: 6px;
-  padding: 12px;
+  padding: 14px;
   margin-bottom: 18px;
   font-size: 0.9rem;
+}
+
+.error-icon {
+  font-size: 1.1rem;
+  margin-top: 1px;
+  flex-shrink: 0;
+}
+
+.error-content {
+  flex: 1;
+}
+
+.error-content strong {
+  display: block;
+  margin-bottom: 4px;
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+
+.error-content p {
+  margin: 0;
+  line-height: 1.4;
+  font-size: 0.85rem;
 }
 
 .modal-actions {

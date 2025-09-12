@@ -2,6 +2,51 @@
    🧩 재사용 컴포넌트 스타일
    ========================================== */
 
+/* 🎨 Logo Component Utilities */
+.logo-base {
+  object-fit: contain;
+  transition: transform var(--transition-fast);
+  will-change: transform;
+  backface-visibility: hidden;
+  image-rendering: crisp-edges;
+  image-rendering: -webkit-optimize-contrast;
+}
+
+.logo-hover:hover {
+  transform: scale(1.05);
+}
+
+.logo-loading {
+  background: linear-gradient(90deg, 
+    var(--gray-200) 25%, 
+    var(--gray-100) 50%, 
+    var(--gray-200) 75%
+  );
+  background-size: 200% 100%;
+  animation: logo-shimmer 1.5s infinite;
+}
+
+@keyframes logo-shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+/* Accessibility improvements for reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .logo-base {
+    transition: none;
+  }
+  
+  .logo-hover:hover {
+    transform: none;
+  }
+  
+  .logo-loading {
+    animation: none;
+    background: var(--gray-200);
+  }
+}
+
 /* ==========================================
    🧩 Button Components
    ========================================== */
@@ -63,22 +108,20 @@
 
 /* Button Variants */
 .btn-primary {
-  background-color: var(--primary-500);
-  border-color: var(--primary-500);
-  color: var(--color-text-inverse);
+  background-color: var(--gray-900);
+  border-color: var(--gray-900);
+  color: white;
+  font-weight: var(--font-medium);
 }
 
 .btn-primary:hover:not(:disabled) {
-  background-color: var(--primary-600);
-  border-color: var(--primary-600);
-  transform: translateY(-1px);
-  box-shadow: var(--shadow-md);
+  background-color: var(--gray-800);
+  border-color: var(--gray-800);
 }
 
 .btn-primary:active {
-  background-color: var(--primary-700);
-  transform: translateY(0);
-  box-shadow: var(--shadow-sm);
+  background-color: var(--gray-700);
+  border-color: var(--gray-700);
 }
 
 .btn-success {
@@ -221,8 +264,8 @@
 
 .form-control:focus {
   outline: none;
-  border-color: var(--primary-400);
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  border-color: var(--gray-400);
+  box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.1);
 }
 
 .form-control:disabled {
@@ -286,15 +329,15 @@
 
 .card {
   background-color: var(--color-bg-primary);
-  border: var(--card-border);
+  border: 1px solid var(--color-border-light);
   border-radius: var(--card-radius);
-  box-shadow: var(--card-shadow);
+  box-shadow: var(--shadow-sm);
   transition: all var(--transition-fast);
 }
 
 .card:hover {
   box-shadow: var(--shadow-md);
-  transform: translateY(-1px);
+  border-color: var(--color-border-medium);
 }
 
 .card-header {
@@ -448,8 +491,8 @@
   vertical-align: middle;
   border-radius: var(--radius-full);
   overflow: hidden;
-  background-color: var(--primary-500);
-  color: var(--color-text-inverse);
+  background-color: var(--gray-500);
+  color: white;
   font-weight: var(--font-semibold);
   user-select: none;
   flex-shrink: 0;
@@ -688,4 +731,10 @@
 
 .notification-toast.info {
   border-left: 4px solid var(--primary-500);
+}
+
+/* Global animations */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
 }

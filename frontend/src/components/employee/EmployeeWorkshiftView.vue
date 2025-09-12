@@ -4,15 +4,20 @@
       <!-- 헤더 -->
       <div class="section-header">
         <div class="header-content">
-          <h3>📅 내 근무 일정</h3>
+          <h3>
+            <AppIcon name="calendar" :size="18" class="inline-block mr-2" />
+            내 근무 일정
+          </h3>
           <p>이번 주 근무 일정을 확인하고 새 일정을 등록하세요</p>
         </div>
         <div class="header-actions">
-          <button @click="showCreateModal = true" class="btn btn-primary btn-sm">
-            ➕ 일정 추가
+          <button @click="openCreateModal" class="btn btn-primary btn-sm">
+            <AppIcon name="plus" :size="14" class="mr-1" />
+            일정 추가
           </button>
           <button @click="refreshWorkshifts" class="btn btn-secondary btn-sm" :disabled="workshiftStore.loading">
-            🔄 새로고침
+            <AppIcon name="arrows-up-down" :size="14" class="mr-1" />
+            새로고침
           </button>
         </div>
       </div>
@@ -20,9 +25,13 @@
       <!-- 이번 주 근무 일정 -->
       <div class="weekly-shifts">
         <div class="week-nav">
-          <button @click="previousWeek" class="week-nav-btn">◀️</button>
+          <button @click="previousWeek" class="week-nav-btn">
+            <AppIcon name="chevron-left" :size="16" />
+          </button>
           <h4>{{ currentWeekLabel }}</h4>
-          <button @click="nextWeek" class="week-nav-btn">▶️</button>
+          <button @click="nextWeek" class="week-nav-btn">
+            <AppIcon name="chevron-right" :size="16" />
+          </button>
         </div>
 
         <div v-if="workshiftStore.loading" class="loading-container">
@@ -31,9 +40,11 @@
         </div>
 
         <div v-else-if="weeklyShifts.length === 0" class="empty-state">
-          <div class="empty-icon">📋</div>
+          <div class="empty-icon">
+            <AppIcon name="clipboard" :size="48" />
+          </div>
           <p>이번 주 근무 일정이 없습니다</p>
-          <button @click="showCreateModal = true" class="btn btn-primary">
+          <button @click="openCreateModal" class="btn btn-primary">
             첫 번째 일정 등록하기
           </button>
         </div>
@@ -74,7 +85,7 @@
                 class="action-btn edit-btn"
                 title="일정 수정"
               >
-                ✏️
+                <AppIcon name="edit" :size="14" />
               </button>
             </div>
           </div>
@@ -83,7 +94,7 @@
 
       <!-- 다가오는 근무 일정 -->
       <div v-if="upcomingShifts.length > 0" class="upcoming-shifts">
-        <h4>🔜 다가오는 근무 일정</h4>
+        <h4><AppIcon name="clock" :size="16" class="inline-block mr-1" />다가오는 근무 일정</h4>
         <div class="upcoming-list">
           <div
             v-for="shift in upcomingShifts.slice(0, 3)"
@@ -110,7 +121,9 @@
       <!-- 에러 메시지 -->
       <div v-if="workshiftStore.error" class="error-message">
         {{ workshiftStore.error }}
-        <button @click="workshiftStore.clearError" class="error-close">✕</button>
+        <button @click="workshiftStore.clearError" class="error-close">
+          <AppIcon name="close" :size="16" />
+        </button>
       </div>
     </div>
 
@@ -118,6 +131,7 @@
     <EmployeeWorkshiftCreateModal
       v-if="showCreateModal"
       :selected-date="createModalDate"
+      :store-error="workshiftStore.error"
       @create="handleCreateWorkshift"
       @close="closeCreateModal"
     />
@@ -223,15 +237,11 @@ export default {
     }
     
     const refreshWorkshifts = async () => {
-      const startOfWeek = getStartOfWeek(currentWeek.value)
-      const endOfWeek = getEndOfWeek(currentWeek.value)
-      
-      // 향후 2주간의 일정도 함께 로드
-      const extendedEnd = new Date(endOfWeek.getTime() + 14 * 24 * 60 * 60 * 1000)
-      
+      // Fetch current month data
+      const now = new Date()
       await workshiftStore.fetchMyWorkshifts(
-        startOfWeek.toISOString(),
-        extendedEnd.toISOString()
+        now.getMonth() + 1, // month is 1-based
+        now.getFullYear()
       )
     }
     
@@ -288,11 +298,12 @@ export default {
     const handleCreateWorkshift = async (shiftData) => {
       try {
         await workshiftStore.createMyWorkshift(shiftData)
+        // 성공시에만 모달 닫기
         closeCreateModal()
         await refreshWorkshifts()
       } catch (error) {
         console.error('Failed to create workshift:', error)
-        // 에러는 store에서 처리되므로 추가 처리 불필요
+        // 에러 발생시 모달을 닫지 않음 - 사용자가 에러 메시지를 볼 수 있도록
       }
     }
     
@@ -314,7 +325,15 @@ export default {
       }
     }
     
+    const openCreateModal = () => {
+      // 새 모달을 열 때 이전 에러 제거
+      workshiftStore.error = ''
+      showCreateModal.value = true
+    }
+    
     const closeCreateModal = () => {
+      // 모달 닫을 때 에러도 함께 제거
+      workshiftStore.error = ''
       showCreateModal.value = false
       createModalDate.value = null
     }
@@ -355,6 +374,7 @@ export default {
       handleCreateWorkshift,
       handleEditShift,
       handleUpdateWorkshift,
+      openCreateModal,
       closeCreateModal,
       closeEditModal
     }
@@ -487,9 +507,6 @@ export default {
   margin: 0 auto 12px;
 }
 
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
 
 .empty-state {
   text-align: center;

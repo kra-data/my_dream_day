@@ -2,8 +2,13 @@
   <div class="modal-backdrop" @click="handleBackdropClick">
     <div class="modal" @click.stop>
       <div class="modal-header">
-        <h3>✏️ 근무 일정 수정</h3>
-        <button @click="$emit('close')" class="close-btn">✕</button>
+        <h3>
+          <AppIcon name="edit" :size="18" class="inline-block mr-2" />
+          근무 일정 수정
+        </h3>
+        <button @click="$emit('close')" class="close-btn">
+          <AppIcon name="close" :size="16" />
+        </button>
       </div>
       
       <div class="modal-body">
@@ -87,10 +92,6 @@
             <div class="preview-item">
               <span class="preview-label">근무 시간:</span>
               <span class="preview-value">{{ workDuration }}</span>
-            </div>
-            <div class="preview-item">
-              <span class="preview-label">휴게 시간:</span>
-              <span class="preview-value">{{ breakTime }}</span>
             </div>
             <div class="preview-item">
               <span class="preview-label">현재 상태:</span>
@@ -215,23 +216,6 @@ export default {
       return `${diffHours}시간 ${diffMinutes}분`
     })
     
-    // 휴게 시간 계산
-    const breakTime = computed(() => {
-      if (!isValidTime.value) return '0분'
-      
-      const start = new Date(`2000-01-01T${form.value.startTime}:00`)
-      const end = new Date(`2000-01-01T${form.value.endTime}:00`)
-      const diffMs = end - start
-      const diffHours = diffMs / (1000 * 60 * 60)
-      
-      if (diffHours >= 8) {
-        return '1시간'
-      } else if (diffHours >= 4) {
-        return '30분'
-      } else {
-        return '해당없음'
-      }
-    })
     
     const handleSubmit = async () => {
       if (!isFormValid.value || !hasChanges.value) {
@@ -243,6 +227,7 @@ export default {
       error.value = ''
       
       try {
+        // 로칼 시간 입력을 서버로 전송 (toISOString이 자동으로 UTC 변환)
         const startDateTime = new Date(`${form.value.date}T${form.value.startTime}:00`)
         const endDateTime = new Date(`${form.value.date}T${form.value.endTime}:00`)
         
@@ -302,6 +287,7 @@ export default {
     const initializeForm = () => {
       if (!props.shift) return
       
+      // UTC 시간을 브라우저가 자동으로 로칼시간으로 변환하여 표시
       const startDate = new Date(props.shift.startAt)
       const endDate = new Date(props.shift.endAt)
       
@@ -330,7 +316,6 @@ export default {
       isValidTime,
       hasChanges,
       workDuration,
-      breakTime,
       handleSubmit,
       handleBackdropClick,
       formatSection,

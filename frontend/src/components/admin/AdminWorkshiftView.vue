@@ -2,7 +2,10 @@
   <div class="workshift-view">
     <div class="workshift-header">
       <div class="header-content">
-        <h2>📅 근무 일정 관리</h2>
+        <h2>
+          <AppIcon name="calendar" :size="20" class="inline-block mr-2" />
+          근무 일정 관리
+        </h2>
         <p>직원들의 근무 일정을 관리하고 달력으로 확인하세요</p>
       </div>
       <div class="header-actions">
@@ -23,10 +26,12 @@
           </select>
         </div>
         <button @click="showCreateModal = true" class="btn btn-primary">
-          ➕ 새 일정 등록
+          <AppIcon name="plus" :size="16" class="mr-1" />
+          새 일정 등록
         </button>
         <button @click="refreshData" class="btn btn-secondary" :disabled="workshiftStore.loading">
-          🔄 새로고침
+          <AppIcon name="arrows-up-down" :size="16" class="mr-1" />
+          새로고침
         </button>
       </div>
     </div>
@@ -55,7 +60,10 @@
         >
           <div class="shift-info">
             <div class="employee-info">
-              <div class="employee-avatar">
+              <div 
+                class="employee-avatar"
+                :style="{ backgroundColor: shift.employee?.personalColor || getDefaultPersonalColor(shift.employee?.position) }"
+              >
                 {{ shift.employee?.name?.charAt(0) || 'U' }}
               </div>
               <div class="employee-details">
@@ -78,10 +86,12 @@
           
           <div class="shift-actions">
             <button @click="handleEditShift(shift)" class="btn btn-sm btn-outline">
-              ✏️ 수정
+              <AppIcon name="edit" :size="14" class="mr-1" />
+              수정
             </button>
             <button @click="handleDeleteShift(shift)" class="btn btn-sm btn-danger">
-              🗑️ 삭제
+              <AppIcon name="delete" :size="14" class="mr-1" />
+              삭제
             </button>
           </div>
         </div>
@@ -287,6 +297,16 @@ export default {
         'PART_TIME': '아르바이트'
       }
       return positions[position] || position
+    },
+    
+    getDefaultPersonalColor(position) {
+      const positionColors = {
+        'OWNER': '#dc2626',     // red-600
+        'MANAGER': '#2563eb',   // blue-600  
+        'STAFF': '#059669',     // emerald-600
+        'PART_TIME': '#7c3aed'  // violet-600
+      }
+      return positionColors[position] || '#6b7280' // gray-500 as default
     }
   }
 }
@@ -426,16 +446,18 @@ export default {
 }
 
 .employee-avatar {
-  width: 40px;
-  height: 40px;
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
-  background: #3b82f6;
   color: white;
   display: flex;
   align-items: center;
   justify-content: center;
   font-weight: 600;
-  font-size: 0.9rem;
+  font-size: 14px;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  border: 2px solid white;
 }
 
 .employee-details {

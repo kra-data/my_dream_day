@@ -120,15 +120,8 @@ export const useAuthStore = defineStore('auth', () => {
       localStorage.setItem('user', JSON.stringify(userData))
       localStorage.setItem('accessToken', newAccessToken)
       localStorage.setItem('refreshToken', newRefreshToken)
-
-      // 로그인 후 완전한 직원 정보 조회 시도
-      try {
-        await fetchCompleteUserData()
-      } catch (error) {
-        console.warn('완전한 사용자 정보 조회 실패, 기본 정보로 진행:', error)
-      }
-
       return user.value
+
     } catch (error) {
       console.error('로그인 실패:', error)
       
@@ -143,88 +136,6 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  const fetchCompleteUserData = async () => {
-    try {
-      if (!user.value?.userId || !user.value?.shopId) {
-        throw new Error('사용자 기본 정보가 없습니다')
-      }
-
-      // 직원 본인 정보 조회 (관리자 권한 없이)
-      const response = await api.get('/employees/me')
-      const currentEmployee = response.data
-
-      if (currentEmployee) {
-        // 사용자 정보 업데이트
-        user.value = {
-          ...user.value,
-          id: currentEmployee.id,
-          empId: currentEmployee.id,
-          name: currentEmployee.name,
-          position: currentEmployee.position,
-          section: currentEmployee.section,
-          pay: currentEmployee.pay,
-          payUnit: currentEmployee.payUnit,
-          phone: currentEmployee.phone,
-          bank: currentEmployee.bank,
-          accountNumber: currentEmployee.accountNumber,
-          nationalId: currentEmployee.nationalId,
-          qrCode: currentEmployee.qrCode,
-          schedule: currentEmployee.schedule
-        }
-
-        // 로컬 스토리지 업데이트
-        localStorage.setItem('user', JSON.stringify(user.value))
-        
-        console.log('완전한 직원 정보 로드 완료:', user.value)
-      } else {
-        // 직원 정보를 찾지 못한 경우 기본값 설정
-        console.warn('직원 정보를 찾지 못함, 기본값으로 설정')
-        user.value = {
-          ...user.value,
-          id: user.value.userId,
-          empId: user.value.userId,
-          position: 'STAFF',
-          section: 'HALL',
-          pay: 0,
-          payUnit: 'MONTHLY',
-          phone: user.value.phoneLastFour ? `010****${user.value.phoneLastFour}` : '',
-          bank: '',
-          accountNumber: '',
-          nationalId: '',
-          qrCode: '',
-          schedule: {}
-        }
-        localStorage.setItem('user', JSON.stringify(user.value))
-      }
-    } catch (error) {
-      console.error('완전한 사용자 정보 조회 실패:', error)
-      // API 조회 실패 시 기본값으로 설정
-      user.value = {
-        ...user.value,
-        id: user.value.userId,
-        empId: user.value.userId,
-        position: 'STAFF',
-        section: 'HALL',
-        pay: 2500000,
-        payUnit: 'MONTHLY',
-        phone: user.value.phoneLastFour ? `010****${user.value.phoneLastFour}` : '',
-        bank: '미등록',
-        accountNumber: '',
-        nationalId: '',
-        qrCode: '1',
-        schedule: {
-          mon: { start: '09:00', end: '18:00' },
-          tue: { start: '09:00', end: '18:00' },
-          wed: { start: '09:00', end: '18:00' },
-          thu: { start: '09:00', end: '18:00' },
-          fri: { start: '09:00', end: '18:00' },
-          sat: { start: '', end: '' },
-          sun: { start: '', end: '' }
-        }
-      }
-      localStorage.setItem('user', JSON.stringify(user.value))
-    }
-  }
 
   const refreshAccessToken = async () => {
     try {
@@ -399,7 +310,6 @@ export const useAuthStore = defineStore('auth', () => {
     logout,
     checkAuth,
     getCurrentEmployee,
-    fetchCompleteUserData,
     refreshAccessToken,
     validateToken,
     getApiInstance,

@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { ref, computed } from 'vue'
+import { ref } from 'vue'
 import { useAuthStore } from './auth'
 
 export const usePayrollStore = defineStore('payroll', () => {
@@ -17,14 +17,14 @@ export const usePayrollStore = defineStore('payroll', () => {
     totalWorkedMinutes: 0
   })
   
-  // 직원별 급여 목록
-  const employeePayrolls = ref([])
+  // 급여 개요 데이터 (새로운 API 전용)
+  const payrollOverview = ref(null)
   
-  // 특정 직원 상세 정보
+  // 직원별 급여 현황 데이터
+  const employeePayrollList = ref(null)
+  
+  // 직원 상세 급여 데이터
   const employeeDetail = ref(null)
-
-  // 정산 관련 데이터
-  const settlements = ref([])
 
   const payrollSettings = ref({
     standardWorkHours: 8,
@@ -96,8 +96,9 @@ export const usePayrollStore = defineStore('payroll', () => {
   const activeRequests = ref(new Set())
 
   // Actions - 실제 API 연동
-  const fetchPayrollDashboard = async (year = null, month = null) => {
-    // 🛡️ 보안 검증
+
+  // 1. 직원별 급여 현황 목록 조회
+  const fetchEmployeePayrollList = async (year = null, month = null) => {
     validateAdminPermission()
     
     const targetYear = year || new Date().getFullYear()
@@ -105,26 +106,21 @@ export const usePayrollStore = defineStore('payroll', () => {
     
     validateDateParams(targetYear, targetMonth)
     
-    const requestKey = `dashboard_${targetYear}_${targetMonth}`
+    const requestKey = `employee_list_${targetYear}_${targetMonth}`
     
-    // 이미 동일한 요청이 진행 중이면 대기
     if (activeRequests.value.has(requestKey)) {
-      console.log('⚠️ 동일한 대시보드 요청이 진행 중, 대기...')
+      console.log('동일한 직원 급여 목록 요청이 진행 중, 대기...')
       return
     }
     
-    // 캐시된 데이터가 있고 5분 이내면 재사용
     const cached = requestCache.value.get(requestKey)
     if (cached && (Date.now() - cached.timestamp < 5 * 60 * 1000)) {
-      console.log('💾 캐시된 대시보드 데이터 사용')
-      payrollDashboard.value = cached.data
-      return
+      console.log('💾 캐시된 직원 급여 목록 데이터 사용')
+      employeePayrollList.value = cached.data
+      return cached.data
     }
     
-    if (loading.value) return // 이미 로딩 중이면 중복 요청 방지
-    
     activeRequests.value.add(requestKey)
-    
     loading.value = true
     error.value = null
 
@@ -132,55 +128,39 @@ export const usePayrollStore = defineStore('payroll', () => {
       const api = getApiInstance()
       const shopId = getShopId()
       
-      if (!shopId) {
-        throw new Error('매장 정보를 찾을 수 없습니다')
-      }
+      const response = await api.get(`/admin/shops/${shopId}/payroll/employees`, {
+        params: { year: targetYear, month: targetMonth }
+      })
       
-      const currentDate = new Date()
-      const targetYear = year || currentDate.getFullYear()
-      const targetMonth = month || (currentDate.getMonth() + 1)
-      
-      const params = { year: targetYear, month: targetMonth }
-      const response = await api.get(`/admin/shops/${shopId}/payroll/dashboard`, { params })
-      
-      payrollDashboard.value = response.data || {
-        year: targetYear,
-        month: targetMonth,
-        expectedExpense: 0,
-        lastMonthExpense: 0,
-        employeeCount: 0,
-        totalWorkedMinutes: 0
-      }
+      const listData = response.data
+      employeePayrollList.value = listData
       
       // 캐시에 저장
       requestCache.value.set(requestKey, {
-        data: payrollDashboard.value,
+        data: listData,
         timestamp: Date.now()
       })
 
-      console.log('급여 대시보드 조회 완료:', payrollDashboard.value)
+      console.log('직원 급여 목록 조회 완료:', listData)
+      return listData
     } catch (err) {
-      console.error('급여 대시보드 조회 실패:', err)
+      console.error('직원 급여 목록 조회 실패:', err)
       
       if (err.response?.status === 404) {
-        // 404 에러는 데이터 없음으로 처리
-        payrollDashboard.value = {
-          year: year || new Date().getFullYear(),
-          month: month || (new Date().getMonth() + 1),
-          expectedExpense: 0,
-          lastMonthExpense: 0,
-          employeeCount: 0,
-          totalWorkedMinutes: 0
+        employeePayrollList.value = {
+          year: targetYear,
+          month: targetMonth,
+          cycle: null,
+          summary: { employeeCount: 0, paidCount: 0, pendingCount: 0, totalAmount: 0 },
+          items: []
         }
         error.value = null
       } else if (err.response?.status === 401) {
         error.value = '인증에 실패했습니다. 다시 로그인해주세요.'
       } else if (err.response?.status === 403) {
         error.value = '접근 권한이 없습니다.'
-      } else if (err.response?.status >= 500) {
-        error.value = '서버에 일시적인 문제가 발생했습니다. 잠시 후 다시 시도해주세요.'
       } else {
-        error.value = err.response?.data?.message || err.message || '급여 대시보드 데이터를 불러오는데 실패했습니다'
+        error.value = err.response?.data?.message || err.message || '직원 급여 목록을 불러오는데 실패했습니다'
       }
       throw err
     } finally {
@@ -189,8 +169,8 @@ export const usePayrollStore = defineStore('payroll', () => {
     }
   }
 
-  const fetchEmployeePayrolls = async (year = null, month = null) => {
-    // 🛡️ 보안 검증
+  // 2. 직원 상세 급여 정보 조회
+  const fetchEmployeePayrollDetail = async (employeeId, year = null, month = null) => {
     validateAdminPermission()
     
     const targetYear = year || new Date().getFullYear()
@@ -198,7 +178,9 @@ export const usePayrollStore = defineStore('payroll', () => {
     
     validateDateParams(targetYear, targetMonth)
     
-    if (loading.value) return // 중복 요청 방지
+    if (!employeeId || !Number.isInteger(Number(employeeId))) {
+      throw new Error('유효하지 않은 직원 ID입니다.')
+    }
     
     loading.value = true
     error.value = null
@@ -207,69 +189,26 @@ export const usePayrollStore = defineStore('payroll', () => {
       const api = getApiInstance()
       const shopId = getShopId()
       
-      if (!shopId) {
-        throw new Error('매장 정보를 찾을 수 없습니다')
-      }
+      const response = await api.get(`/admin/shops/${shopId}/payroll/employees/${employeeId}`, {
+        params: { year: targetYear, month: targetMonth }
+      })
       
-      const currentDate = new Date()
-      const targetYear = year || currentDate.getFullYear()
-      const targetMonth = month || (currentDate.getMonth() + 1)
-      
-      const params = { year: targetYear, month: targetMonth }
-      const response = await api.get(`/admin/shops/${shopId}/payroll/employees`, { params })
-      
-      // 🔧 새로운 API 응답 구조 처리
-      if (response.data && Array.isArray(response.data.employees)) {
-        // 새 API 구조를 기존 컴포넌트가 기대하는 구조로 변환
-        employeePayrolls.value = response.data.employees.map(emp => ({
-          ...emp,
-          // 기존 settlement 객체 구조로 변환
-          settlement: {
-            status: emp.settlementStatus || 'PENDING',
-            settlementId: null, // 새 API에는 없음
-            totalPay: emp.settlementTotalPay || null,
-            settledAt: emp.settledAt || null,
-            fullyApplied: true
-          },
-          // 호환성을 위한 필드 매핑
-          salary: emp.expectedSalary || emp.salary || 0
-        }))
-        
-        // payrollDashboard도 새 API 응답의 summary 정보로 업데이트
-        if (response.data.summary) {
-          payrollDashboard.value = {
-            ...payrollDashboard.value,
-            year: response.data.year || targetYear,
-            month: response.data.month || targetMonth,
-            expectedExpense: response.data.employees.reduce((sum, emp) => sum + (emp.salary || 0), 0),
-            employeeCount: response.data.summary.employeeCount || response.data.employees.length,
-            totalWorkedMinutes: response.data.summary.totalWorkedMinutes || 0
-          }
-        }
-        
-        console.log('📊 직원 급여 목록 조회 완료:', response.data.employees.length, '건')
-        console.log('📅 정산 기간:', response.data.cycle?.label || 'N/A')
-        console.log('📈 요약:', response.data.summary)
-      } else {
-        employeePayrolls.value = []
-        console.warn('⚠️ 직원 급여 데이터 형식이 예상과 다름:', response.data)
-      }
+      const detailData = response.data
+      employeeDetail.value = detailData
+
+      console.log('직원 급여 상세 조회 완료:', detailData)
+      return detailData
     } catch (err) {
-      console.error('직원 급여 목록 조회 실패:', err)
+      console.error('직원 급여 상세 조회 실패:', err)
       
       if (err.response?.status === 404) {
-        // 404 에러는 데이터 없음으로 처리
-        employeePayrolls.value = []
-        error.value = null
-        console.log('📭 급여 데이터 없음 (404) - 빈 배열로 처리')
+        error.value = '해당 직원의 급여 정보를 찾을 수 없습니다.'
       } else if (err.response?.status === 401) {
         error.value = '인증에 실패했습니다. 다시 로그인해주세요.'
       } else if (err.response?.status === 403) {
         error.value = '접근 권한이 없습니다.'
-      } else if (err.response?.status >= 500) {
-        error.value = '서버에 일시적인 문제가 발생했습니다. 잠시 후 다시 시도해주세요.'
       } else {
-        error.value = err.response?.data?.message || err.message || '직원 급여 목록을 불러오는데 실패했습니다'
+        error.value = err.response?.data?.message || err.message || '직원 급여 상세 정보를 불러오는데 실패했습니다'
       }
       throw err
     } finally {
@@ -277,50 +216,72 @@ export const usePayrollStore = defineStore('payroll', () => {
     }
   }
 
-  const fetchEmployeePayrollDetail = async (employeeId, year = null, month = null) => {
-    loading.value = true
-    error.value = null
+  // 3. 직원 정산 처리
+  const processEmployeeSettlement = async (employeeId, year, month) => {
+  validateAdminPermission();
 
-    try {
-      const api = getApiInstance()
-      const shopId = getShopId()
-      
-      const currentDate = new Date()
-      const targetYear = year || currentDate.getFullYear()
-      const targetMonth = month || (currentDate.getMonth() + 1)
-      
-      const params = { year: targetYear, month: targetMonth }
-      const response = await api.get(`/admin/shops/${shopId}/payroll/employees/${employeeId}`, { params })
-      
-      // API 응답을 그대로 저장 (간단하게!)
-      employeeDetail.value = response.data
-      
-      console.log('직원 급여 상세 조회 완료:', employeeDetail.value)
-      return employeeDetail.value
-    } catch (err) {
-      console.error('직원 급여 상세 조회 실패:', err)
-      error.value = err.response?.data?.message || err.message || '직원 정보를 불러오는데 실패했습니다'
-      employeeDetail.value = null
-      throw err
-    } finally {
-      loading.value = false
-    }
+  if (!employeeId || isNaN(Number(employeeId))) {
+    throw new Error('유효하지 않은 직원 ID입니다.');
   }
 
-  // 엑셀 다운로드 기능 추가
-  const exportPayrollExcel = async (year = null, month = null, format = 'xlsx') => {
-    // 🛡️ 보안 검증
+  if (!year || isNaN(Number(year))) {
+    throw new Error('유효하지 않은 연도입니다.');
+  }
+
+  if (!month || isNaN(Number(month)) || month < 1 || month > 12) {
+    throw new Error('유효하지 않은 월입니다.');
+  }
+
+  loading.value = true;
+  error.value = null;
+
+  try {
+    const api = getApiInstance();
+    const shopId = getShopId();
+
+    if (!shopId || isNaN(Number(shopId))) {
+      throw new Error('유효하지 않은 shopId입니다.');
+    }
+
+    const payload = {
+      year: year,
+      month: month
+    }
+
+    const response = await api.post(`/admin/shops/${shopId}/payroll/employees/${employeeId}`, payload);
+
+    const settlementResult = response.data;
+    console.log('직원 정산 처리 완료:', settlementResult);
+    return settlementResult;
+  } catch (err) {
+    console.error('직원 정산 처리 실패:', err.response?.data || err);
+
+    if (err.response?.status === 404) {
+      error.value = '해당 직원을 찾을 수 없습니다.';
+    } else if (err.response?.status === 400) {
+      error.value = err.response?.data?.message || '정산 처리할 수 없습니다.';
+    } else if (err.response?.status === 401) {
+      error.value = '인증에 실패했습니다. 다시 로그인해주세요.';
+    } else if (err.response?.status === 403) {
+      error.value = '정산 처리 권한이 없습니다.';
+    } else {
+      error.value = err.response?.data?.message || err.message || '정산 처리에 실패했습니다';
+    }
+    throw err;
+  } finally {
+    loading.value = false;
+  }
+};
+
+  // 엑셀 다운로드 기능 (새로운 API 엔드포인트)
+  const exportPayrollExcel = async (year = null, month = null, cycleStartDay = null) => {
+    // 보안 검증
     validateAdminPermission()
     
     const targetYear = year || new Date().getFullYear()
     const targetMonth = month || (new Date().getMonth() + 1)
     
     validateDateParams(targetYear, targetMonth)
-    
-    // format 검증
-    if (!['xlsx', 'csv'].includes(format)) {
-      throw new Error('지원하지 않는 파일 형식입니다.')
-    }
     
     loading.value = true
     error.value = null
@@ -333,19 +294,19 @@ export const usePayrollStore = defineStore('payroll', () => {
         throw new Error('매장 정보를 찾을 수 없습니다')
       }
       
-      const currentDate = new Date()
-      const targetYear = year || currentDate.getFullYear()
-      const targetMonth = month || (currentDate.getMonth() + 1)
-      
       const params = { 
         year: targetYear, 
-        month: targetMonth,
-        format: format // xlsx, csv 등
+        month: targetMonth
       }
       
-      const response = await api.get(`/admin/shops/${shopId}/payroll/export`, { 
+      // cycleStartDay가 제공되고 1이 아닌 경우에만 추가 (기본값 1일은 생략)
+      if (cycleStartDay && cycleStartDay !== 1 && cycleStartDay >= 1 && cycleStartDay <= 31) {
+        params.cycleStartDay = cycleStartDay
+      }
+      
+      const response = await api.get(`/admin/shops/${shopId}/payroll/export-xlsx`, { 
         params,
-        responseType: 'blob' // 파일 다운로드를 위한 설정
+        responseType: 'blob' // XLSX binary stream을 위한 설정
       })
       
       // 브라우저에서 파일 다운로드 처리
@@ -361,7 +322,7 @@ export const usePayrollStore = defineStore('payroll', () => {
       document.body.removeChild(link)
       window.URL.revokeObjectURL(url)
       
-      console.log(`✅ 급여 엑셀 다운로드 완료: ${targetYear}년 ${targetMonth}월`)
+      console.log(`급여 엑셀 다운로드 완료: ${targetYear}년 ${targetMonth}월`)
       return { success: true, message: '엑셀 파일이 다운로드되었습니다.' }
     } catch (err) {
       console.error('급여 엑셀 다운로드 실패:', err)
@@ -381,97 +342,37 @@ export const usePayrollStore = defineStore('payroll', () => {
     }
   }
 
-  const fetchSettlements = async () => {
-    loading.value = true
-    error.value = null
 
-    try {
-      // Mock 정산 목록
-      settlements.value = [
-        {
-          id: 1,
-          period: '2025년 1월 7일 ~ 2025년 2월 6일',
-          totalAmount: 12500000,
-          employeeCount: 8,
-          status: 'completed',
-          settlementDate: '2025-02-07',
-          processedBy: '관리자'
-        },
-        {
-          id: 2,
-          period: '2025년 2월 7일 ~ 2025년 3월 6일',
-          totalAmount: 13200000,
-          employeeCount: 9,
-          status: 'pending',
-          settlementDate: null,
-          processedBy: null
-        }
-      ]
-    } catch (err) {
-      error.value = err.message || '정산 목록을 불러오는데 실패했습니다'
-      console.error('정산 목록 오류:', err)
-    } finally {
-      loading.value = false
-    }
-  }
 
-  const getEmployeeSettlement = async (employeeId) => {
-    if (loading.value) return null // 이미 로딩 중이면 중복 요청 방지
+
+
+
+  // 급여 개요 데이터 조회 (새로운 API)
+  const fetchPayrollOverview = async (year = null, month = null, cycleStartDay = null) => {
+    // 보안 검증
+    validateAdminPermission()
     
-    try {
-      const api = getApiInstance()
-      const shopId = getShopId()
-      
-      if (!shopId) {
-        throw new Error('매장 정보를 찾을 수 없습니다')
-      }
-      
-      const response = await api.get(`/admin/shops/${shopId}/payroll/settlement/${employeeId}`)
-      
-      return response.data || {
-        currentPeriod: {
-          startDate: new Date().toISOString(),
-          endDate: new Date().toISOString(),
-          amount: 0,
-          settled: false,
-          daysWorked: 0,
-          workedMinutes: 0
-        },
-        lastSettlement: {
-          amount: 0,
-          settlementDate: new Date().toISOString(),
-          settled: true
-        }
-      }
-    } catch (err) {
-      console.error('정산 정보 조회 실패:', err)
-      
-      if (err.response?.status === 404) {
-        // 404 에러는 데이터 없음으로 처리
-        return {
-          currentPeriod: {
-            startDate: new Date().toISOString(),
-            endDate: new Date().toISOString(),
-            amount: 0,
-            settled: false,
-            daysWorked: 0,
-            workedMinutes: 0
-          },
-          lastSettlement: {
-            amount: 0,
-            settlementDate: new Date().toISOString(),
-            settled: true
-          }
-        }
-      }
-      
-      error.value = err.response?.data?.message || err.message || '정산 정보를 불러오는데 실패했습니다'
-      throw err
+    const targetYear = year || new Date().getFullYear()
+    const targetMonth = month || (new Date().getMonth() + 1)
+    
+    validateDateParams(targetYear, targetMonth)
+    
+    const requestKey = `overview_${targetYear}_${targetMonth}_${cycleStartDay || 'default'}`
+    
+    // 이미 동일한 요청이 진행 중이면 대기
+    if (activeRequests.value.has(requestKey)) {
+      console.log('동일한 급여 개요 요청이 진행 중, 대기...')
+      return
     }
-  }
-
-  // 직원별 급여 요약 (summary API)
-  const fetchEmployeePayrollSummary = async (employeeId, year = null, month = null) => {
+    
+    // 캐시된 데이터가 있고 5분 이내면 재사용
+    const cached = requestCache.value.get(requestKey)
+    if (cached && (Date.now() - cached.timestamp < 5 * 60 * 1000)) {
+      console.log('💾 캐시된 급여 개요 데이터 사용')
+      return cached.data
+    }
+    
+    activeRequests.value.add(requestKey)
     loading.value = true
     error.value = null
 
@@ -483,218 +384,122 @@ export const usePayrollStore = defineStore('payroll', () => {
         throw new Error('매장 정보를 찾을 수 없습니다')
       }
       
-      const currentDate = new Date()
-      const targetYear = year || currentDate.getFullYear()
-      const targetMonth = month || (currentDate.getMonth() + 1)
+      const params = { 
+        year: targetYear, 
+        month: targetMonth 
+      }
       
-      const params = { year: targetYear, month: targetMonth }
-      const response = await api.get(`/admin/shops/${shopId}/payroll/employees/${employeeId}/summary`, { params })
+      // cycleStartDay가 제공되고 1이 아닌 경우에만 추가 (기본값 1일은 생략)
+      if (cycleStartDay && cycleStartDay !== 1 && cycleStartDay >= 1 && cycleStartDay <= 31) {
+        params.cycleStartDay = cycleStartDay
+      }
       
-      const summary = response.data || {
-        employee: { name: '알 수 없음', position: '알 수 없음' },
-        period: { year: targetYear, month: targetMonth },
-        summary: {
-          totalSalary: 0,
-          baseSalary: 0,
-          overtimePay: 0,
-          deductions: 0,
-          netSalary: 0,
-          workingDays: 0,
-          overtimeHours: 0
+      const response = await api.get(`/admin/shops/${shopId}/payroll/overview`, { params })
+      
+      const overviewData = response.data || {
+        year: targetYear,
+        month: targetMonth,
+        cycle: {
+          start: new Date().toISOString(),
+          end: new Date().toISOString(),
+          label: `${targetMonth}월 급여`,
+          startDay: 1
         },
-        breakdown: {
-          regularHours: 0,
-          overtimeHours: 0,
-          lateDeduction: 0,
-          absentDeduction: 0
+        fixed: {
+          amount: 0,
+          withholding3_3: 0,
+          netAmount: 0
+        },
+        hourly: {
+          amount: 0,
+          shiftCount: 0,
+          withholding3_3: 0,
+          netAmount: 0
+        },
+        totals: {
+          expectedPayout: 0,
+          previousExpectedPayout: 0,
+          deltaFromPrev: 0,
+          expectedPayoutNet: 0,
+          previousExpectedPayoutNet: 0,
+          deltaFromPrevNet: 0,
+          withholding3_3: {
+            current: 0,
+            previous: 0,
+            rate: 0.033
+          }
+        },
+        meta: {
+          eligibleEmployees: 0
         }
       }
       
-      console.log('직원 급여 요약 조회 완료:', summary)
-      return summary
+      // payrollOverview state에 데이터 저장
+      payrollOverview.value = overviewData
+      
+      // 기존 payrollDashboard 업데이트
+      payrollDashboard.value = {
+        ...payrollDashboard.value,
+        year: overviewData.year,
+        month: overviewData.month,
+        expectedExpense: overviewData.totals.expectedPayout,
+        lastMonthExpense: overviewData.totals.previousExpectedPayout,
+        employeeCount: overviewData.meta.eligibleEmployees,
+        totalWorkedMinutes: overviewData.hourly.shiftCount * 480 // 추정값
+      }
+      
+      // 캐시에 저장
+      requestCache.value.set(requestKey, {
+        data: overviewData,
+        timestamp: Date.now()
+      })
+
+      console.log('급여 개요 조회 완료:', overviewData)
+      return overviewData
     } catch (err) {
-      console.error('직원 급여 요약 조회 실패:', err)
+      console.error('급여 개요 조회 실패:', err)
       
       if (err.response?.status === 404) {
         // 404 에러는 데이터 없음으로 처리
-        const summary = {
-          employee: { name: '알 수 없음', position: '알 수 없음' },
-          period: { year: year || new Date().getFullYear(), month: month || (new Date().getMonth() + 1) },
-          summary: {
-            totalSalary: 0,
-            baseSalary: 0,
-            overtimePay: 0,
-            deductions: 0,
-            netSalary: 0,
-            workingDays: 0,
-            overtimeHours: 0
+        const defaultData = {
+          year: targetYear,
+          month: targetMonth,
+          cycle: {
+            start: new Date().toISOString(),
+            end: new Date().toISOString(), 
+            label: `${targetMonth}월 급여`,
+            startDay: cycleStartDay || 1
           },
-          breakdown: {
-            regularHours: 0,
-            overtimeHours: 0,
-            lateDeduction: 0,
-            absentDeduction: 0
-          }
+          fixed: { amount: 0, withholding3_3: 0, netAmount: 0 },
+          hourly: { amount: 0, shiftCount: 0, withholding3_3: 0, netAmount: 0 },
+          totals: {
+            expectedPayout: 0,
+            previousExpectedPayout: 0,
+            deltaFromPrev: 0,
+            expectedPayoutNet: 0,
+            previousExpectedPayoutNet: 0,
+            deltaFromPrevNet: 0,
+            withholding3_3: { current: 0, previous: 0, rate: 0.033 }
+          },
+          meta: { eligibleEmployees: 0 }
         }
+        // 404 에러의 경우도 payrollOverview state에 기본 데이터 설정
+        payrollOverview.value = defaultData
         error.value = null
-        return summary
+        return defaultData
       } else if (err.response?.status === 401) {
         error.value = '인증에 실패했습니다. 다시 로그인해주세요.'
       } else if (err.response?.status === 403) {
         error.value = '접근 권한이 없습니다.'
+      } else if (err.response?.status >= 500) {
+        error.value = '서버에 일시적인 문제가 발생했습니다. 잠시 후 다시 시도해주세요.'
       } else {
-        error.value = err.response?.data?.message || err.message || '직원 급여 요약 정보를 불러오는데 실패했습니다'
+        error.value = err.response?.data?.message || err.message || '급여 개요 데이터를 불러오는데 실패했습니다'
       }
       throw err
     } finally {
       loading.value = false
-    }
-  }
-
-  // 개별 직원 정산 처리 (새 API 사용)
-  const processEmployeeSettlement = async (employeeId, settlementData = {}) => {
-    // 🛡️ 보안 검증
-    validateAdminPermission()
-    
-    if (!employeeId) {
-      throw new Error('직원 ID가 필요합니다.')
-    }
-    
-    loading.value = true
-    error.value = null
-    
-    try {
-      const api = getApiInstance()
-      const shopId = getShopId()
-      
-      if (!shopId) {
-        throw new Error('매장 정보를 찾을 수 없습니다')
-      }
-      
-      // 새로운 관리자 정산 API 호출
-      const response = await api.post(`/admin/shops/${shopId}/settlements/employees/${employeeId}`, settlementData)
-      
-      const result = response.data || {
-        success: true,
-        message: '정산이 완료되었습니다',
-        employeeId: employeeId,
-        settlementId: null,
-        processedAmount: 0,
-        processedAt: new Date().toISOString()
-      }
-      
-      console.log(`✅ 직원 ${employeeId} 정산 처리 완료:`, result)
-      return result
-    } catch (err) {
-      console.error(`직원 ${employeeId} 정산 처리 실패:`, err)
-      
-      if (err.response?.status === 404) {
-        error.value = '해당 직원의 정산 정보를 찾을 수 없습니다.'
-      } else if (err.response?.status === 401) {
-        error.value = '인증에 실패했습니다. 다시 로그인해주세요.'
-      } else if (err.response?.status === 403) {
-        error.value = '정산 처리 권한이 없습니다.'
-      } else if (err.response?.status === 400) {
-        error.value = err.response?.data?.message || '잘못된 정산 요청입니다.'
-      } else {
-        error.value = err.response?.data?.message || err.message || '정산 처리에 실패했습니다'
-      }
-      
-      throw err
-    } finally {
-      loading.value = false
-    }
-  }
-
-  const processSettlement = async (settlementData) => {
-    // 🛡️ 보안 검증
-    validateAdminPermission()
-    
-    loading.value = true
-    error.value = null
-    
-    try {
-      if (!settlementData || !settlementData.employees || settlementData.employees.length === 0) {
-        throw new Error('정산할 직원 정보가 없습니다.')
-      }
-      
-      console.log('🔄 전체 정산 처리 시작:', settlementData)
-      
-      // 각 직원별로 개별 정산 처리
-      const results = []
-      const errors = []
-      
-      for (const employee of settlementData.employees) {
-        try {
-          const employeeSettlementData = {
-            amount: employee.amount,
-            workedMinutes: employee.workedMinutes,
-            daysWorked: employee.daysWorked,
-            period: settlementData.period,
-            settlementDate: settlementData.startDate || new Date().toISOString()
-          }
-          
-          const result = await processEmployeeSettlement(employee.employeeId, employeeSettlementData)
-          results.push({
-            employeeId: employee.employeeId,
-            name: employee.name,
-            amount: employee.amount,
-            success: true,
-            ...result
-          })
-        } catch (error) {
-          console.error(`직원 ${employee.employeeId} 정산 실패:`, error)
-          errors.push({
-            employeeId: employee.employeeId,
-            name: employee.name,
-            error: error.message
-          })
-        }
-      }
-      
-      // 전체 결과 정리
-      const totalProcessedAmount = results.reduce((sum, r) => sum + (r.processedAmount || 0), 0)
-      const successCount = results.length
-      const failureCount = errors.length
-      
-      const finalResult = {
-        success: successCount > 0,
-        message: errors.length > 0 
-          ? `${successCount}명 정산 완료, ${failureCount}명 실패`
-          : `${successCount}명 정산 완료`,
-        totalProcessedAmount,
-        processedEmployees: successCount,
-        failedEmployees: failureCount,
-        results,
-        errors,
-        processedAt: new Date().toISOString(),
-        processedBy: 'admin'
-      }
-      
-      // 정산 목록 업데이트 (성공한 경우만)
-      if (successCount > 0) {
-        const newSettlement = {
-          id: settlements.value.length + 1,
-          period: settlementData.period || '현재 정산 기간',
-          totalAmount: totalProcessedAmount,
-          employeeCount: successCount,
-          status: errors.length > 0 ? 'partial' : 'completed',
-          settlementDate: new Date().toISOString().split('T')[0],
-          processedBy: '관리자',
-          errors: errors.length > 0 ? errors : null
-        }
-        
-        settlements.value.unshift(newSettlement)
-      }
-      
-      console.log('✅ 전체 정산 처리 완료:', finalResult)
-      return finalResult
-    } catch (err) {
-      console.error('정산 처리 실패:', err)
-      error.value = err.response?.data?.message || err.message || '정산 처리에 실패했습니다'
-      throw err
-    } finally {
-      loading.value = false
+      activeRequests.value.delete(requestKey)
     }
   }
 
@@ -713,57 +518,75 @@ export const usePayrollStore = defineStore('payroll', () => {
     return `${amount.toLocaleString()}원`
   }
 
-  // Getters
-  const getAllEmployeeSalaries = computed(() => {
-    return employeePayrolls.value.map(payroll => ({
-      id: payroll.employeeId,
-      name: payroll.name,
-      position: payroll.position,
-      hourlyRate: payroll.hourlyPay,
-      monthlyPay: payroll.monthlyPay,
-      totalHours: Math.round((payroll.workedMinutes + payroll.extraMinutes) / 60 * 10) / 10,
-      workDays: payroll.daysWorked,
-      lateDays: 0,
-      absentDays: 0,
-      overtimeDays: payroll.extraMinutes > 0 ? Math.ceil(payroll.extraMinutes / 480) : 0,
-      overtimeHours: Math.round(payroll.extraMinutes / 60 * 10) / 10,
-      baseSalary: payroll.salary - (payroll.hourlyPay ? (payroll.hourlyPay * payroll.extraMinutes / 60 * 1.5) : 0),
-      overtimePay: payroll.hourlyPay ? (payroll.hourlyPay * payroll.extraMinutes / 60 * 1.5) : 0,
-      lateDeduction: 0,
-      absentDeduction: 0,
-      totalSalary: payroll.salary,
-      workingDaysInMonth: 22
-    }))
-  })
+  // 4. 대량 정산 처리
+  const processBulkSettlement = async (year = null, month = null) => {
+    validateAdminPermission()
+    
+    const targetYear = year || new Date().getFullYear()
+    const targetMonth = month || (new Date().getMonth() + 1)
+    
+    validateDateParams(targetYear, targetMonth)
+    
+    loading.value = true
+    error.value = null
 
-  const getTotalMonthlyCost = computed(() => {
-    return payrollDashboard.value.expectedExpense || 0
-  })
+    try {
+      const api = getApiInstance()
+      const shopId = getShopId()
+      
+      const response = await api.post(`/admin/shops/${shopId}/payroll/settlements`, {
+        year: targetYear,
+        month: targetMonth,
+        cycleStartDay: 1 // 기본값, 필요시 파라미터로 받을 수 있음
+      })
+      
+      const result = response.data
+      console.log('대량 정산 처리 완료:', result)
+      
+      // 정산 후 데이터 새로고침
+      await fetchEmployeePayrollList(targetYear, targetMonth)
+      await fetchPayrollOverview(targetYear, targetMonth)
+      
+      return result
+    } catch (err) {
+      console.error('대량 정산 처리 실패:', err)
+      
+      if (err.response?.status === 404) {
+        error.value = '정산할 급여 정보를 찾을 수 없습니다.'
+      } else if (err.response?.status === 401) {
+        error.value = '인증에 실패했습니다. 다시 로그인해주세요.'
+      } else if (err.response?.status === 403) {
+        error.value = '정산 처리 권한이 없습니다.'
+      } else if (err.response?.status === 400) {
+        error.value = err.response.data?.message || '잘못된 요청입니다.'
+      } else {
+        error.value = '정산 처리 중 오류가 발생했습니다.'
+      }
+      
+      throw new Error(error.value)
+    } finally {
+      loading.value = false
+    }
+  }
 
   return {
     // State
     loading,
     error,
     payrollDashboard,
-    employeePayrolls,
-    employeeDetail,
+    payrollOverview,
     payrollSettings,
-    settlements,
+    employeePayrollList,
+    employeeDetail,
     
     // Actions
-    fetchPayrollDashboard,
-    fetchEmployeePayrolls,
+    fetchPayrollOverview,
+    fetchEmployeePayrollList,
     fetchEmployeePayrollDetail,
-    fetchEmployeePayrollSummary,
-    exportPayrollExcel,
-    fetchSettlements,
-    getEmployeeSettlement,
-    processSettlement,
     processEmployeeSettlement,
+    processBulkSettlement,
+    exportPayrollExcel,
     
-    // Getters
-    getAllEmployeeSalaries,
-    getTotalMonthlyCost,
     getApiInstance,
     getShopId,
     

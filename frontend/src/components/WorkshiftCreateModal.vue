@@ -2,8 +2,13 @@
   <div class="modal-backdrop" @click="handleBackdropClick">
     <div class="modal" @click.stop>
       <div class="modal-header">
-        <h3>➕ 새 근무 일정 등록</h3>
-        <button @click="$emit('close')" class="close-btn">✕</button>
+        <h3>
+          <AppIcon name="plus" :size="18" class="inline-block mr-2" />
+          새 근무 일정 등록
+        </h3>
+        <button @click="$emit('close')" class="close-btn">
+          <AppIcon name="close" :size="16" />
+        </button>
       </div>
       
       <div class="modal-body">
@@ -120,10 +125,6 @@
               <span class="preview-label">근무 시간:</span>
               <span class="preview-value">{{ workDuration }}</span>
             </div>
-            <div class="preview-item">
-              <span class="preview-label">휴게 시간:</span>
-              <span class="preview-value">{{ breakTime }}</span>
-            </div>
           </div>
 
           <!-- 에러 메시지 -->
@@ -213,23 +214,6 @@ export default {
       return `${diffHours}시간 ${diffMinutes}분`
     })
     
-    // 휴게 시간 계산 (4시간 이상 근무시 30분, 8시간 이상 근무시 1시간)
-    const breakTime = computed(() => {
-      if (!isValidTime.value) return '0분'
-      
-      const start = new Date(`2000-01-01T${form.value.startTime}:00`)
-      const end = new Date(`2000-01-01T${form.value.endTime}:00`)
-      const diffMs = end - start
-      const diffHours = diffMs / (1000 * 60 * 60)
-      
-      if (diffHours >= 8) {
-        return '1시간'
-      } else if (diffHours >= 4) {
-        return '30분'
-      } else {
-        return '해당없음'
-      }
-    })
     
     const handleSubmit = async () => {
       if (!isFormValid.value) {
@@ -241,6 +225,7 @@ export default {
       error.value = ''
       
       try {
+        // 로칼 시간으로 입력된 시간을 서버로 전송 (toISOString이 자동으로 UTC 변환)
         const startDateTime = new Date(`${form.value.date}T${form.value.startTime}:00`)
         const endDateTime = new Date(`${form.value.date}T${form.value.endTime}:00`)
         
@@ -281,6 +266,7 @@ export default {
         const shiftStart = new Date(`${dateStr}T${form.value.startTime}:00`)
         const shiftEnd = new Date(`${dateStr}T${form.value.endTime}:00`)
         
+        // 반복 일정 - toISOString이 자동으로 UTC 변환
         shifts.push({
           ...baseShift,
           startAt: shiftStart.toISOString(),
@@ -355,7 +341,6 @@ export default {
       isFormValid,
       isValidTime,
       workDuration,
-      breakTime,
       handleSubmit,
       handleBackdropClick,
       formatSection,
@@ -401,6 +386,8 @@ export default {
   margin: 0;
   color: #1f2937;
   font-size: 1.25rem;
+  display: flex;
+  align-items: center;
 }
 
 .close-btn {

@@ -22,6 +22,9 @@
 
       <!-- 메인 콘텐츠 -->
       <div v-else>
+        <!-- Review Alert -->
+        <ReviewAlert />
+        
         <!-- 탭 네비게이션 -->
         <div class="tab-navigation">
           <button 
@@ -59,6 +62,7 @@ import AdminEmployeeView from '@/components/admin/AdminEmployeeView.vue'
 import AdminSalaryView from '@/components/admin/AdminSalaryView.vue'
 import AdminRecordsView from '@/components/admin/AdminRecordsView.vue'
 import AdminAnalyticsView from '@/components/admin/AdminAnalyticsView.vue'
+import ReviewAlert from '@/components/admin/ReviewAlert.vue'
 
 export default {
   name: 'AdminView',
@@ -68,7 +72,8 @@ export default {
     AdminEmployeeView,
     AdminSalaryView,
     AdminRecordsView,
-    AdminAnalyticsView
+    AdminAnalyticsView,
+    ReviewAlert
   },
   setup() {
     const employeesStore = useEmployeesStore()
@@ -98,6 +103,9 @@ export default {
           
           // 기본 대시보드 데이터만 로드
           await attendanceStore.fetchDashboardData()
+          
+          // 검토 필요한 근무 일정 로드
+          await workshiftStore.fetchReviewWorkshifts(authStore.user.shopId)
         }
       } catch (error) {
         console.error('기본 데이터 초기화 실패:', error)
