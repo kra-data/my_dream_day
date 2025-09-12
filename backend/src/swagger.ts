@@ -447,6 +447,164 @@ CursorWorkShiftWithEmployeePage: {
           clockInAt:  { type: 'string', format: 'date-time', example: '2025-08-27T09:03:12.000Z' }
         }
       },
+/** ✅ 생성 전용 요청 스키마 (nationalId 포함) */
+EmployeeCreateRequest: {
+  type: 'object',
+  required: ['name','accountNumber','nationalId','bank','phone'],
+  properties: {
+    name:          { type: 'string', minLength: 1 },
+    accountNumber: { type: 'string', minLength: 1, description: '계좌번호' },
+    nationalId: {
+      type: 'string',
+      description: '주민등록번호(서버 측 암호화/마스킹 처리). 패턴: 6자리-7자리 또는 하이픈 없이 13자리',
+      pattern: '^\\d{6}-?\\d{7}$',
+      example: '900101-1234567'
+    },
+    bank:          { type: 'string', minLength: 1 },
+    phone:         { type: 'string', minLength: 1, example: '010-1234-5678' },
+    /** schedule은 any이지만, 권장 포맷을 명시하기 위해 oneOf 사용 */
+    schedule: {
+      description: '권장: WeeklySchedule. (서버는 any 허용)',
+      oneOf: [
+        { $ref: '#/components/schemas/WeeklySchedule' },
+        { type: 'object', additionalProperties: true }
+      ]
+    },
+    position:      { $ref: '#/components/schemas/Position' },
+    section:       { $ref: '#/components/schemas/Section' },
+    pay:           { type: 'number', minimum: 0, nullable: true },
+    payUnit:       { $ref: '#/components/schemas/PayUnit', nullable: true },
+    personalColor: {
+      type: 'string',
+      nullable: true,
+      pattern: '^#[0-9A-Fa-f]{6}$',
+      description: 'HEX 색상. 미지정 시 서버 기본값/NULL'
+    }
+  }
+},
+
+/** ✅ 수정 전용 요청 스키마 (nationalId 없음) */
+EmployeeUpdateRequest: {
+  type: 'object',
+  description: '부분 업데이트: 보낸 필드만 수정됩니다.',
+  properties: {
+    name:          { type: 'string', minLength: 1 },
+    accountNumber: { type: 'string', minLength: 1 },
+    bank:          { type: 'string', minLength: 1 },
+    phone:         { type: 'string', minLength: 1 },
+    schedule: {
+      description: '권장 포맷 WeeklySchedule (서버는 any 허용)',
+      oneOf: [
+        { $ref: '#/components/schemas/WeeklySchedule' },
+        { type: 'object', additionalProperties: true }
+      ]
+    },
+    position:      { $ref: '#/components/schemas/Position' },
+    section:       { $ref: '#/components/schemas/Section' },
+    pay:           { type: 'number', minimum: 0 },
+    payUnit:       { $ref: '#/components/schemas/PayUnit' },
+    personalColor: {
+      type: 'string',
+      nullable: true,
+      pattern: '^#[0-9A-Fa-f]{6}$',
+      example: '#A7F3D0'
+    }
+  },
+  additionalProperties: false
+},
+
+/** ✅ 응답용 스키마 (민감정보 제외) */
+Employee: {
+  type: 'object',
+  properties: {
+    id:            { type: 'integer' },
+    shopId:        { type: 'integer' },
+    name:          { type: 'string' },
+    accountNumber: { type: 'string' },
+    bank:          { type: 'string' },
+    phone:         { type: 'string' },
+    schedule: {
+      description: '저장된 스케줄(JSON). 서버는 any를 저장하지만 일반적으로 WeeklySchedule 형태',
+      oneOf: [
+        { $ref: '#/components/schemas/WeeklySchedule' },
+        { type: 'object', additionalProperties: true }
+      ]
+    },
+    position:      { $ref: '#/components/schemas/Position' },
+    section:       { $ref: '#/components/schemas/Section' },
+    pay:           { type: 'integer', nullable: true },
+    payUnit:       { $ref: '#/components/schemas/PayUnit', nullable: true },
+    role:          { type: 'string', example: 'employee' },
+    personalColor: { type: 'string', nullable: true, pattern: '^#[0-9A-Fa-f]{6}$' },
+    createdAt:     { type: 'string', format: 'date-time' },
+    updatedAt:     { type: 'string', format: 'date-time' }
+  }
+},
+
+
+WeeklySchedule: {
+  type: 'object',
+  description:
+    '요일별 근무 계획. 각 요일 키(mon,tue,wed,thu,fri,sat,sun)는 선택적이며, 없으면 근무 없음.\n' +
+    '각 요일 값은 { start:"HH:MM", end:"HH:MM" } 형식.',
+  properties: {
+    mon: { $ref: '#/components/schemas/DayShift' },
+    tue: { $ref: '#/components/schemas/DayShift' },
+    wed: { $ref: '#/components/schemas/DayShift' },
+    thu: { $ref: '#/components/schemas/DayShift' },
+    fri: { $ref: '#/components/schemas/DayShift' },
+    sat: { $ref: '#/components/schemas/DayShift' },
+    sun: { $ref: '#/components/schemas/DayShift' }
+  },
+  additionalProperties: false
+},
+
+DayShift: {
+  type: 'object',
+  required: ['start', 'end'],
+  properties: {
+    start: {
+      type: 'string',
+      description: '하루 시작 시간 (HH:MM, 24h)',
+      pattern: '^\\d{2}:\\d{2}$',
+      example: '09:00'
+    },
+    end: {
+      type: 'string',
+      description: '하루 종료 시간 (HH:MM, 24h)',
+      pattern: '^\\d{2}:\\d{2}$',
+      example: '18:00'
+    }
+  },
+  additionalProperties: false
+},
+
+Position: {
+  type: 'string',
+  enum: ['STAFF', 'MANAGER', 'OWNER'],
+  description: '직급(기본값: STAFF)'
+},
+
+Section: {
+  type: 'string',
+  enum: ['HALL', 'KITCHEN'],
+  description: '근무 파트(기본값: HALL)'
+},
+
+PayUnit: {
+  type: 'string',
+  enum: ['MONTHLY', 'HOURLY'],
+  description: '급여 단위'
+},
+
+ErrorResponse: {
+  type: 'object',
+  properties: {
+    error: { type: 'string' },
+    detail: { type: 'object', nullable: true }
+  }
+},
+
       RecentActivity: {
         type: 'object',
         properties: {
@@ -980,14 +1138,212 @@ AttendanceCreateRequest: {
       put:  { tags: ['Admin'], summary: '매장 수정', parameters: [{ name: 'shopId', in: 'path', required: true, schema: { type: 'integer' } }], responses: { '200': { description: 'OK' }, '404': { description: 'Not Found' } } },
       delete: { tags: ['Admin'], summary: '매장 삭제', parameters: [{ name: 'shopId', in: 'path', required: true, schema: { type: 'integer' } }], responses: { '204': { description: 'No Content' } } }
     },
-    '/api/admin/shops/{shopId}/employees': {
-      get: { tags: ['Admin'], summary: '직원 목록', parameters: [{ name: 'shopId', in: 'path', required: true, schema: { type: 'integer' } }], responses: { '200': { description: 'OK' } } },
-      post: { tags: ['Admin'], summary: '직원 생성', parameters: [{ name: 'shopId', in: 'path', required: true, schema: { type: 'integer' } }], responses: { '201': { description: 'Created' }, '400': { description: 'Invalid payload' } } }
+// swaggerDocument.paths 안에 추가
+'/api/admin/shops/{shopId}/employees': {
+  post: {
+    tags: ['Employees'],
+    summary: '직원 생성',
+    description:
+      '해당 매장(`shopId`)에 직원을 생성합니다.\n' +
+      '- `accountNumber`, `phone`, `name`, `payUnit`, `pay`는 실사용 환경에서 필수로 쓰입니다.\n' +
+      '- `schedule`은 요일별 `{ start: "HH:MM", end: "HH:MM" }` 형식이며, 미제공/요일 누락 시 그 요일은 근무 없음으로 간주됩니다.\n' +
+      '- `personalColor`를 지정하지 않으면 서버 기본값(예: `#F5F5F5`)이 적용됩니다.',
+    security: [{ bearerAuth: [] }],
+    parameters: [
+      { name: 'shopId', in: 'path', required: true, schema: { type: 'integer' } }
+    ],
+    requestBody: {
+      required: true,
+      content: {
+        'application/json': {
+          schema: { $ref: '#/components/schemas/EmployeeCreateRequest' },
+          // (생성) /api/admin/shops/{shopId}/employees POST 의 requestBody.examples 교체/보강
+examples: {
+  hourly: {
+    summary: '시급제 + 주민번호 포함',
+    value: {
+      name: '홍길동',
+      accountNumber: '3333-12-3456789',
+      nationalId: '900101-1234567',
+      bank: '카카오뱅크',
+      phone: '010-1234-5678',
+      payUnit: 'HOURLY',
+      pay: 12000,
+      position: 'PART_TIME',
+      section: 'HALL',
+      personalColor: '#FDE68A',
+      schedule: {
+        mon: { start: '09:00', end: '13:00' },
+        wed: { start: '14:00', end: '22:00' },
+        fri: { start: '18:00', end: '23:00' }
+      }
+    }
+  },
+  monthly: {
+    summary: '월급제 + 주민번호 포함',
+    value: {
+      name: '이월급',
+      accountNumber: '110-123-456789',
+      nationalId: '9202021234567',
+      bank: '신한',
+      phone: '010-9876-5432',
+      payUnit: 'MONTHLY',
+      pay: 2500000,
+      position: 'STAFF',
+      section: 'KITCHEN',
+      personalColor: '#C7D2FE',
+      schedule: {
+        mon: { start: '09:00', end: '18:00' },
+        tue: { start: '09:00', end: '18:00' },
+        wed: { start: '09:00', end: '18:00' },
+        thu: { start: '09:00', end: '18:00' },
+        fri: { start: '09:00', end: '18:00' }
+      }
+    }
+  }
+}
+
+        }
+      }
     },
-    '/api/admin/shops/{shopId}/employees/{employeeId}': {
-      put:  { tags: ['Admin'], summary: '직원 수정', parameters: [{ name: 'shopId', in: 'path', required: true, schema: { type: 'integer' } }, { name: 'employeeId', in: 'path', required: true, schema: { type: 'integer' } }], responses: { '200': { description: 'OK' }, '404': { description: 'Not Found' } } },
-      delete:{ tags: ['Admin'], summary: '직원 삭제', parameters: [{ name: 'shopId', in: 'path', required: true, schema: { type: 'integer' } }, { name: 'employeeId', in: 'path', required: true, schema: { type: 'integer' } }], responses: { '204': { description: 'No Content' } } }
-    },
+    responses: {
+      '201': {
+        description: 'Created',
+        content: {
+          'application/json': {
+            schema: { $ref: '#/components/schemas/Employee' }
+          }
+        }
+      },
+      '400': { description: 'Bad Request(유효성 오류)' },
+      '401': { description: 'Unauthorized' },
+      '403': { description: 'Forbidden(관리자만 가능)' },
+      '404': { description: 'Shop not found' },
+      '409': { description: 'Conflict(중복 등 정책 위반)' }
+    }
+  },
+  get: {
+    tags: ['Employees'],
+    summary: '직원 목록',
+    description:
+      '해당 매장(`shopId`)의 직원 목록을 조회합니다.\n' +
+      '- 페이지네이션 파라미터가 있다면(예: `cursor`, `limit`) 서버 구현에 맞춰 추가로 기술하세요.',
+    security: [{ bearerAuth: [] }],
+    parameters: [
+      { name: 'shopId', in: 'path', required: true, schema: { type: 'integer' } }
+      // 필요 시 쿼리 파라미터 추가: { name: 'cursor', in:'query', schema:{type:'integer'} }, { name:'limit', in:'query', schema:{type:'integer', minimum:1, maximum:100}}
+    ],
+    responses: {
+      '200': {
+        description: 'OK',
+        content: {
+          'application/json': {
+            schema: {
+              type: 'array',
+              items: { $ref: '#/components/schemas/Employee' }
+            }
+          }
+        }
+      },
+      '401': { description: 'Unauthorized' },
+      '403': { description: 'Forbidden' }
+    }
+  }
+},
+
+'/api/admin/shops/{shopId}/employees/{employeeId}': {
+  put: {
+    tags: ['Employees'],
+    summary: '직원 수정',
+    description:
+      '직원 정보를 수정합니다. 부분 업데이트를 지원합니다.\n' +
+      '- `payUnit` 변경 시 정산 정책이 달라질 수 있으므로 주의하세요.\n' +
+      '- `schedule`은 전체 객체 교체(부분 갱신 지원 여부는 서버 구현에 따름).',
+    security: [{ bearerAuth: [] }],
+    parameters: [
+      { name: 'shopId', in: 'path', required: true, schema: { type: 'integer' } },
+      { name: 'employeeId', in: 'path', required: true, schema: { type: 'integer' } }
+    ],
+    requestBody: {
+  required: true,
+  content: {
+    'application/json': {
+      schema: { $ref: '#/components/schemas/EmployeeUpdateRequest' },
+      examples: {
+        allFields: {
+          summary: '가능한 모든 필드 업데이트',
+          value: {
+            name: '홍길동(수정)',
+            accountNumber: '3333-12-9999999',
+            bank: '카카오뱅크',
+            phone: '010-1111-2222',
+            schedule: {
+              mon: { start: '10:00', end: '19:00' },
+              tue: { start: '10:00', end: '19:00' },
+              wed: { start: '10:00', end: '19:00' },
+              thu: { start: '10:00', end: '19:00' },
+              fri: { start: '10:00', end: '19:00' }
+            },
+            position: 'PART_TIME',
+            section: 'HALL',
+            payUnit: 'HOURLY',
+            pay: 13000,
+            personalColor: '#A7F3D0'
+          }
+        },
+        partialMinimal: {
+          summary: '부분 업데이트(이름만 변경)',
+          value: {
+            name: '이름만 바꿈'
+          }
+        },
+        partialWage: {
+          summary: '급여 정보만 변경',
+          value: {
+            payUnit: 'MONTHLY',
+            pay: 2700000
+          }
+        }
+      }
+    }
+  }
+},
+    responses: {
+      '200': {
+        description: 'OK',
+        content: {
+          'application/json': {
+            schema: { $ref: '#/components/schemas/Employee' }
+          }
+        }
+      },
+      '400': { description: 'Bad Request' },
+      '401': { description: 'Unauthorized' },
+      '403': { description: 'Forbidden' },
+      '404': { description: 'Employee/Shop not found' },
+      '409': { description: 'Conflict(정책 위반/중복 등)' }
+    }
+  },
+  delete: {
+    tags: ['Employees'],
+    summary: '직원 삭제',
+    description:
+      '직원을 삭제합니다. 참조 무결성 제약(정산/시프트 등)으로 인해 즉시 삭제가 불가할 수 있습니다.',
+    security: [{ bearerAuth: [] }],
+    parameters: [
+      { name: 'shopId', in: 'path', required: true, schema: { type: 'integer' } },
+      { name: 'employeeId', in: 'path', required: true, schema: { type: 'integer' } }
+    ],
+    responses: {
+      '204': { description: 'No Content(삭제 완료)' },
+      '401': { description: 'Unauthorized' },
+      '403': { description: 'Forbidden' },
+      '404': { description: 'Employee/Shop not found' },
+      '409': { description: 'Conflict(관련 데이터로 삭제 불가)' }
+    }
+  }
+},
+
 '/api/admin/shops/{shopId}/payroll/export-xlsx': {
   get: {
     tags: ['Payroll'],
