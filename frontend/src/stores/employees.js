@@ -3,12 +3,10 @@ import { ref } from 'vue'
 import { useAuthStore } from './auth'
 
 export const useEmployeesStore = defineStore('employees', () => {
-  // State
   const employees = ref([])
   const loading = ref(false)
   const error = ref(null)
 
-  // API 인스턴스와 shopId 가져오기
   const getApiInstance = () => {
     const authStore = useAuthStore()
     return authStore.getApiInstance()
@@ -21,7 +19,6 @@ export const useEmployeesStore = defineStore('employees', () => {
     return authStore.user?.shopId || shopId
   }
 
-  // Actions
   const fetchEmployees = async () => {
     loading.value = true
     error.value = null
@@ -41,57 +38,6 @@ export const useEmployeesStore = defineStore('employees', () => {
     } catch (error) {
       console.error('직원 목록 조회 실패:', error)
       error.value = error.response?.data?.message || error.message || '직원 목록을 불러오는데 실패했습니다'
-      
-      // 네트워크 에러나 401 에러일 경우 임시 데이터 사용 (개발용)
-      if (import.meta.env.DEV) {
-        console.warn('개발 모드: 임시 직원 데이터를 사용합니다')
-        employees.value = [
-          {
-            id: 1,
-            name: '홍길동',
-            nationalId: '900101-1******',
-            accountNumber: '123-456-789',
-            bank: '국민',
-            phone: '01012341234',
-            position: 'MANAGER',
-            section: 'HALL',
-            pay: 3000000,
-            payUnit: 'MONTHLY',
-            qrCode: '1',
-            schedule: {
-              mon: { start: '09:00', end: '18:00' },
-              tue: { start: '09:00', end: '18:00' },
-              wed: { start: '09:00', end: '18:00' },
-              thu: { start: '09:00', end: '18:00' },
-              fri: { start: '09:00', end: '18:00' },
-              sat: { start: '', end: '' },
-              sun: { start: '', end: '' }
-            }
-          },
-          {
-            id: 2,
-            name: '김철수',
-            nationalId: '950315-1******',
-            accountNumber: '987-654-321',
-            bank: '신한',
-            phone: '01056785432',
-            position: 'STAFF',
-            section: 'KITCHEN',
-            pay: 15000,
-            payUnit: 'HOURLY',
-            qrCode: '2',
-            schedule: {
-              mon: { start: '10:00', end: '19:00' },
-              tue: { start: '10:00', end: '19:00' },
-              wed: { start: '10:00', end: '19:00' },
-              thu: { start: '10:00', end: '19:00' },
-              fri: { start: '10:00', end: '19:00' },
-              sat: { start: '10:00', end: '16:00' },
-              sun: { start: '', end: '' }
-            }
-          }
-        ]
-      }
     } finally {
       loading.value = false
     }
@@ -109,7 +55,6 @@ export const useEmployeesStore = defineStore('employees', () => {
         throw new Error('매장 정보를 찾을 수 없습니다')
       }
 
-      // payUnit 자동 설정
       const processedData = {
         ...employeeData,
         payUnit: employeeData.payUnit || 
@@ -119,14 +64,11 @@ export const useEmployeesStore = defineStore('employees', () => {
       const response = await api.post(`/admin/shops/${shopId}/employees`, processedData)
       const newEmployee = response.data
       
-      // 새로 추가된 직원을 목록에 추가
       if (newEmployee) {
         employees.value.push(newEmployee)
       } else {
-        // 서버에서 직원 데이터를 바로 반환하지 않는 경우 다시 목록 조회
         await fetchEmployees()
       }
-      
       console.log('직원 추가 완료:', newEmployee)
       return newEmployee
     } catch (error) {
@@ -146,7 +88,6 @@ export const useEmployeesStore = defineStore('employees', () => {
       const api = getApiInstance()
       const shopId = getShopId()
       
-      // payUnit 자동 설정
       const processedData = {
         ...employeeData,
         payUnit: employeeData.payUnit || 
