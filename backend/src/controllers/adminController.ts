@@ -223,7 +223,10 @@ const updateEmployeeSchema = z.object({
   section: z.enum(['HALL','KITCHEN']).optional(),
   pay: z.number().positive().optional(),
   payUnit: z.enum(['MONTHLY','HOURLY']).optional(),
-    personalColor: colorOptNullable
+    personalColor: colorOptNullable,
+    nationalId: z.string()
+    .regex(/^\d{6}-?\d{7}$/, '올바른 주민번호 형식이 아닙니다')
+    .optional()
 });
 
 export const updateEmployee = async (req: Request, res: Response) => {
@@ -238,11 +241,12 @@ export const updateEmployee = async (req: Request, res: Response) => {
     section,
     pay,
     payUnit,
-    personalColor=null
+    personalColor=null,
+    nationalId
   } = (updateEmployeeSchema.parse(req.body) as Partial<{
     name: string; accountNumber: string; bank: string; phone: string;
     schedule: Json; position: Position; section: Section;
-    pay: number; payUnit: PayUnit; personalColor: string;
+    pay: number; payUnit: PayUnit; personalColor: string; nationalId:string;
   }>);
 
   const emp = await prisma.employee.findUnique({ where: { id: empId } });
@@ -266,7 +270,30 @@ export const updateEmployee = async (req: Request, res: Response) => {
     res.status(400).json({ error: '잘못된 입력 데이터' });
     return;
   }
-
+  // 🔐 주민번호 변경 처리: 암호화/해시/마스킹 재생성, 중복(동일 매장 내) 방지
+  let nationalIdEncUpdate: string | undefined;
+  let nationalIdHashUpdate: string | undefined;
+  let nationalIdMaskedUpdate: string | undefined;
+  if (nationalId !== undefined) {
+    // 비우기 금지(정책상 필요 시 여기서 허용 로직으로 바꿔도 됨)
+    if (nationalId.trim() === '') {
+      res.status(400).json({ error: 'nationalId는 빈 값으로 변경할 수 없습니다.' });
+      return;
+    }
+    const newHash = hashNationalId(nationalId /*, emp.shopId */);
+    // 같은 매장 내 중복 방지(유니크 인덱스가 없다면 애플리케이션 레벨로 체크)
+    const dup = await prisma.employee.findFirst({
+      where: { shopId: emp.shopId, nationalIdHash: newHash, NOT: { id: empId } },
+      select: { id: true }
+    });
+    if (dup) {
+      res.status(409).json({ error: '이미 등록된 주민번호입니다.', conflictEmployeeId: dup.id });
+      return;
+    }
+    nationalIdEncUpdate    = encryptNationalId(nationalId);
+    nationalIdHashUpdate   = newHash;
+    nationalIdMaskedUpdate = maskNationalId(nationalId);
+  }
   const updated = await prisma.employee.update({
     where: { id: empId },
     data: {
@@ -279,7 +306,20 @@ export const updateEmployee = async (req: Request, res: Response) => {
       section,
       pay,
       payUnit,
-      personalColor: (personalColor === undefined) ? undefined : (personalColor ?? null)
+      personalColor: (personalColor === undefined) ? undefined : (personalColor ?? null),
+      // 주민번호 관련 컬럼은 undefined이면 그대로 유지
+      nationalIdEnc:    nationalIdEncUpdate,
+      nationalIdHash:   nationalIdHashUpdate,
+      nationalIdMasked: nationalIdMaskedUpdate
+    },
+    // 🔒 민감정보 응답 차단: 필요한 필드만 선택
+    select: {
+      id: true, shopId: true, name: true,
+      bank: true, accountNumber: true, phone: true,
+      schedule: true, position: true, section: true,
+      pay: true, payUnit: true, personalColor: true,
+      nationalIdMasked: true,
+      createdAt: true, updatedAt: true
     }
   });
   res.json(updated);
