@@ -499,6 +499,12 @@ EmployeeUpdateRequest: {
         { type: 'object', additionalProperties: true }
       ]
     },
+       nationalId: {
+         type: 'string',
+         pattern: '^\\d{6}-?\\d{7}$',
+         description: '주민등록번호(서버에서 암호화/마스킹 저장)',
+         example: '900101-1234567'
+       },
     position:      { $ref: '#/components/schemas/Position' },
     section:       { $ref: '#/components/schemas/Section' },
     pay:           { type: 'number', minimum: 0 },
@@ -1276,6 +1282,7 @@ examples: {
             name: '홍길동(수정)',
             accountNumber: '3333-12-9999999',
             bank: '카카오뱅크',
+            nationalId: "900101-1234567",
             phone: '010-1111-2222',
             schedule: {
               mon: { start: '10:00', end: '19:00' },
