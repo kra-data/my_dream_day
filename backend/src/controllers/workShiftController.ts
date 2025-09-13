@@ -134,8 +134,19 @@ export const myListShifts = async (req: AuthRequiredRequest, res: Response): Pro
   const where: any = { employeeId, shopId };
   if (status) where.status = status;
   if (from || to) {
-    if (from) where.endAt   = { ...(where.endAt ?? {}),   gte: new Date(from) };
-    if (to)   where.startAt = { ...(where.startAt ?? {}), lte: new Date(to)   };
+    const AND: any[] = [];
+    if (from) {
+      AND.push({
+        OR: [
+          { endAt: null },                     // 진행 중(open-ended)도 포함
+          { endAt: { gte: new Date(from) } }   // 종료가 범위 이후
+        ]
+      });
+    }
+    if (to) {
+      AND.push({ startAt: { lte: new Date(to) } }); // 시작이 범위 이전(=교집합)
+    }
+    if (AND.length) where.AND = AND;
   }
 
   const rows = await prisma.workShift.findMany({ where, orderBy: { startAt: 'asc' } });
@@ -155,11 +166,21 @@ export const adminListShifts = async (req: AuthRequiredRequest, res: Response): 
   if (employeeId) where.employeeId = employeeId;
   if (status)     where.status = status;
   if (from || to) {
-    if (from) where.endAt   = { ...(where.endAt ?? {}),   gte: new Date(from) };
-    if (to)   where.startAt = { ...(where.startAt ?? {}), lte: new Date(to)   };
+    const AND: any[] = [];
+    if (from) {
+      AND.push({
+        OR: [
+          { endAt: null },                     // 진행 중(open-ended)도 포함
+          { endAt: { gte: new Date(from) } }   // 종료가 범위(from) 이후
+        ]
+      });
+    }
+    if (to) {
+      AND.push({ startAt: { lte: new Date(to) } }); // 시작이 범위(to) 이전 → 교집합 존재
+    }
+    if (AND.length) where.AND = AND;
   }
-
-  const rows = await prisma.workShift.findMany({
+ const rows = await prisma.workShift.findMany({
     where,
     orderBy: [{ startAt: 'asc' }, { employeeId: 'asc' }],
     // ✅ 필요한 컬럼만 반환 (select 사용)
@@ -199,7 +220,10 @@ export const getMyTodayWorkshifts = async (req: AuthRequiredRequest, res: Respon
   const where: any = {
     employeeId,
     startAt: { lt: end },
-    endAt:   { gt: start },
+    OR: [
+      { endAt: null },         // 진행 중 시프트 포함
+      { endAt: { gt: start } } // 오늘과 교집합이 있는 종료
+    ],
   };
   if (activeOnly) where.status = { notIn: ['COMPLETED', 'CANCELED'] };
 
