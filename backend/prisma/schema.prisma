@@ -52,7 +52,7 @@ model WorkShift {
   shopId           Int
   employeeId       Int
   startAt          DateTime
-  endAt            DateTime
+  endAt            DateTime?
   actualInAt       DateTime?
   actualOutAt      DateTime?
   late             Boolean?           @default(false)

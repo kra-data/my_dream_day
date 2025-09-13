@@ -10,6 +10,7 @@ import {
   getAttendanceRecords,
   getMyAttendance,
   getMyCurrentStatus,
+  previewAttendanceTime,
 } from '../controllers/attendanceController';
 import {
   requireUser,
@@ -40,6 +41,14 @@ router.post(
   requireUser,                  // req.user 보장
   requireRoles('employee'),     // 직원만
   withUser((req: AuthRequiredRequest, res) => recordAttendance(req, res))
+);
+/** QR 스캔 시간 기반 제안(미리보기): IN은 shiftId 선택, OUT은 필수 */
+router.post(
+  '/preview',
+  authenticateJWT,
+  requireUser,
+  requireRoles('employee'),
+  withUser((req: AuthRequiredRequest, res) => previewAttendanceTime(req, res))
 );
 
 /** 현재 출근 상태 조회 */

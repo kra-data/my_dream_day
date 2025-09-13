@@ -17,7 +17,7 @@ import {
   getMyTodayWorkshifts,
   myUpdateShift
 } from '../controllers/workShiftController';
-
+import { getMyProfileOverview } from '../controllers/meController';
 const router = Router();
 
 /** 공통 역할 가드: 허용된 역할만 통과 (attendanceRoutes.ts와 동일 패턴) */
@@ -61,5 +61,12 @@ router.get(
   requireRoles('employee'),
   withUser((req: AuthRequiredRequest, res) => getMyTodayWorkshifts(req, res))
 );
-
+// (직원) 내 정보/급여 개요
+router.get(
+  '/my/overview',
+  authenticateJWT,
+  requireUser,
+  requireRoles('employee'),
+  withUser((req: AuthRequiredRequest, res) => getMyProfileOverview(req, res))
+);
 export default router;
