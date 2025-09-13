@@ -80,28 +80,67 @@ export const todaySummary = async (req: AuthRequest, res: Response) => {
   });
 };
 
+
 /* ───────────────────────────────────────────
- *  2) 실시간 근무자 목록
+ *  2) 직원 상태 목록 (출근중/퇴근/리뷰상태)
  *     GET /api/admin/shops/:shopId/dashboard/active
  * ───────────────────────────────────────────*/
+type StatusCode = 'ON_DUTY' | 'REVIEW' | 'OFF';
+
 export const activeEmployees = async (req: AuthRequest, res: Response) => {
   const shopId = Number(req.params.shopId);
 
-  const onDuty = await prisma.workShift.findMany({
-    where: { shopId, actualInAt: { not: null }, actualOutAt: null },
-    include: { employee: { select: { name: true, position: true, section: true } } },
-    orderBy: { actualInAt: 'asc' }
+  // 1) 직원 기본 정보
+  const employees = await prisma.employee.findMany({
+    where: { shopId },
+    select: { id: true, name: true, position: true, section: true }
   });
 
-  res.json(onDuty.map(s => ({
-    employeeId: s.employeeId,
-    name:       s.employee.name,
-    position:   s.employee.position,
-    section:    s.employee.section,
-    clockInAt:  s.actualInAt
-  })));
-};
+  // 2) 출근중(실시간 IN, 미-OUT)
+  const onDuty = await prisma.workShift.findMany({
+    where: { shopId, actualInAt: { not: null }, actualOutAt: null,status: 'IN_PROGRESS'  },
+    select: { employeeId: true },
+  });
 
+  // 3) 리뷰 상태(미해결 REVIEW)
+  const reviews = await prisma.workShift.findMany({
+    where: { shopId, status: 'REVIEW', reviewResolvedAt: null },
+    select: { employeeId: true },
+  });
+
+  const onDutySet  = new Set(onDuty.map(w => w.employeeId));
+  const reviewSet  = new Set(reviews.map(w => w.employeeId));
+
+  const items = employees.map(emp => {
+    let status: StatusCode = 'OFF';
+    if (onDutySet.has(emp.id)) status = 'ON_DUTY';
+    else if (reviewSet.has(emp.id)) status = 'REVIEW';
+
+    const statusLabel =
+      status === 'ON_DUTY' ? '출근중' :
+      status === 'REVIEW'  ? '리뷰상태' :
+                             '퇴근';
+
+    return {
+      employeeId: emp.id,
+      name:       emp.name,
+      position:   emp.position,
+      section:    emp.section,
+      status,         // 'ON_DUTY' | 'REVIEW' | 'OFF'
+      statusLabel,    // '출근중' | '리뷰상태' | '퇴근'
+    };
+  });
+
+  // 출근중 → 리뷰상태 → 퇴근, 이후 이름순
+  const order: Record<StatusCode, number> = { ON_DUTY: 0, REVIEW: 1, OFF: 2 };
+  items.sort((a, b) => {
+    const d = order[a.status as StatusCode] - order[b.status as StatusCode];
+    if (d !== 0) return d;
+    return a.name.localeCompare(b.name, 'ko');
+  });
+
+  res.json(items);
+};
 /* ───────────────────────────────────────────
  *  3) 최근 출‧퇴근 활동
  *     GET /api/admin/shops/:shopId/dashboard/recent?limit=30
