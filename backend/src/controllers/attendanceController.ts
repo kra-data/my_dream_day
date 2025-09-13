@@ -1,5 +1,5 @@
 // src/controllers/attendanceController.ts
-import { Response } from 'express';
+import { Request, Response } from 'express';
 import { prisma } from '../db/prisma';
 import { Prisma } from '@prisma/client';
 import { z } from 'zod';
@@ -12,10 +12,31 @@ const fromKstParts = (y: number, m1: number, d: number, hh = 0, mm = 0, ss = 0, 
 const kstDow = (d: Date) => toKst(d).getUTCDay(); // 0~6 (일~토)
 const startOfKstDay = (d: Date) => fromKstParts(toKst(d).getUTCFullYear(), toKst(d).getUTCMonth(), toKst(d).getUTCDate(), 0, 0, 0, 0);
 const endOfKstDay = (d: Date) => fromKstParts(toKst(d).getUTCFullYear(), toKst(d).getUTCMonth(), toKst(d).getUTCDate(), 23, 59, 59, 999);
+const maxDate = (a: Date, b: Date) => (a > b ? a : b);
+// 시간 반올림 유틸 (KST 기준)
+const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
+const toKST = (d: Date) => new Date(d.getTime() + KST_OFFSET_MS);
+const fromKST = (d: Date) => new Date(d.getTime() - KST_OFFSET_MS);
+const roundNearestHourKST = (utc: Date) => {
+  const k = toKST(utc);
+  const h = k.getHours();
+  const m = k.getMinutes();
+  const r = new Date(k);
+  r.setMinutes(0, 0, 0);
+  r.setHours(m >= 30 ? h + 1 : h);
+  return fromKST(r);
+};
+const floorHourKST = (utc: Date) => {
+  const k = toKST(utc);
+  const r = new Date(k);
+  r.setMinutes(0, 0, 0);
+  return fromKST(r);
+};
 
 /* ───────── 정책 상수 ───────── */
 const REVIEW_TOLERANCE_MIN = Number(process.env.REVIEW_TOLERANCE_MIN ?? '10'); // ±10 정책
 const LATE_GRACE_MIN_FOR_PAYABLE = Number(process.env.LATE_GRACE_MIN_FOR_PAYABLE ?? '10'); // ≤10 지각 인정(정산 삭감 없음)
+const AttendancePreviewRounding = z.enum(['NEAREST_HOUR', 'FLOOR_HOUR']);
 /* ───────── 'HH:MM' -> 분 ───────── */
 const toMin = (hhmm: string) => {
   const m = /^(\d{1,2}):(\d{2})$/.exec(hhmm);
@@ -57,8 +78,27 @@ const parseSchedule = (schedule: any) => {
     map[dow] = { startMin: s, endMin: e };
   }
   return map;
-};
+}
 
+
+
+export const previewAttendanceRequestSchema = z.discriminatedUnion('type', [
+  z.object({
+    type: z.literal('IN'),
+    shopId:  z.coerce.number().int().positive(),
+    // IN은 시프트가 없어도 동작 → 선택
+    shiftId: z.coerce.number().int().positive().optional(),
+    // 클라이언트가 보낸 스캔 시각(ISO). 없으면 서버 now 사용.
+    scannedAt: z.string().datetime().optional()
+  }),
+  z.object({
+    type: z.literal('OUT'),
+    shopId:  z.coerce.number().int().positive(),
+    // OUT은 반드시 기존 시프트 종료
+    shiftId: z.coerce.number().int().positive(),
+    scannedAt: z.string().datetime().optional()
+  })
+]);
 /** 특정 날짜(KST)의 계획 근무 구간 생성 */
 const getPlannedShiftFor = (anchor: Date, schedule: any): { startAt: Date; endAt: Date } | null => {
   const specByDow = parseSchedule(schedule);
@@ -102,13 +142,22 @@ const adminListQuerySchema = z.object({
 });
 
 /** 직원: 출퇴근 기록(shift 1:1 매칭, 단순 IN/OUT) */
-const recordAttendanceSchema = z.object({
-  shopId: z.coerce.number().int().positive(),
-  shiftId: z.coerce.number().int().positive(),
-  type: z.enum(['IN', 'OUT']),
-  memo: z.string().max(500).optional(),
-});
-
+const recordAttendanceSchema = z.discriminatedUnion('type', [
+  z.object({
+    type: z.literal('IN'),
+    shopId: z.coerce.number().int().positive(),
+    shiftId: z.coerce.number().int().positive().optional(),
+    memo: z.string().max(500).optional(),
+    at: z.coerce.date().optional(),
+  }),
+  z.object({
+    type: z.literal('OUT'),
+    shopId: z.coerce.number().int().positive(),
+    shiftId: z.coerce.number().int().positive(),
+    memo: z.string().max(500).optional(),
+    at: z.coerce.date().optional(),
+  })
+]);
 
 // ───── [추가] OVERDUE 목록용 공통 쿼리 ─────
 const overdueListQuery = z.object({
@@ -118,28 +167,58 @@ const overdueListQuery = z.object({
   cursor: z.coerce.number().int().positive().optional(),
   limit:  z.coerce.number().int().min(1).max(50).optional().default(20),
 });
-
+type ShiftWithEmployee = Prisma.WorkShiftGetPayload<{
+  include: { employee: { select: { pay: true; payUnit: true } } };
+}>;
 
 /** 직원: QR/버튼으로 출퇴근 (shift 1:1) */
 export const recordAttendance = async (req: AuthRequiredRequest, res: Response) => {
   const parsed = recordAttendanceSchema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: 'Invalid payload' }); return; }
-  const { shopId, shiftId, type, memo } = parsed.data;
+  const { shopId, shiftId, type, memo, at } = parsed.data;
 
   if (req.user.shopId !== shopId) { res.status(403).json({ error: '다른 가게 QR입니다.' }); return; }
   const employeeId = req.user.userId;
   const now = new Date();
-
-  // 요청한 shift가 본인/해당 매장 소속인지 검증
-const shift = await prisma.workShift.findFirst({
-  where: { id: shiftId, shopId, employeeId },
-  include: { employee: { select: { pay: true, payUnit: true } } }   // ← 단가/단위 필요
-});
-if (!shift) { res.status(404).json({ error: '근무일정을 찾을 수 없습니다.' }); return; }
-
+  const effectiveAt = at ?? new Date();
+  // 요청한 shift가 본인/해당 매장 소속인지 검증(shiftId가 있는 경우만)
+  let shift: ShiftWithEmployee | null = null;
+  if (shiftId) {
+    shift = await prisma.workShift.findFirst({
+      where: { id: shiftId, shopId, employeeId },
+      include: { employee: { select: { pay: true, payUnit: true } } } // ← 단가/단위 필요
+    });
+    if (!shift && type === 'OUT') {
+      res.status(404).json({ error: '근무일정을 찾을 수 없습니다.' });
+      return;
+    }
+  }
 
   if (type === 'IN') {
-    const nowMs = now.getTime();
+    // 시프트 없으면 → 자동 생성(endAt=null)
+    if (!shift) {
+      const created = await prisma.workShift.create({
+        data: {
+          shopId,
+          employeeId,
+          startAt: effectiveAt,
+          endAt: null,               // 종료시각 미정
+          status: 'IN_PROGRESS',
+          actualInAt: effectiveAt,
+          late: false,
+          memo: memo ?? undefined,
+        }
+      });
+      return res.json({
+        ok: true,
+        message: '출근 완료',
+        clockInAt: effectiveAt,
+        memo,
+        shiftId: created.id
+      });
+    }
+
+    const nowMs = effectiveAt.getTime();
     const startMs = shift.startAt.getTime();
     const deltaMin = Math.round((nowMs - startMs) / 60000); // +: 늦음, -: 이름
 
@@ -151,14 +230,14 @@ if (!shift) { res.status(404).json({ error: '근무일정을 찾을 수 없습�
           status: 'REVIEW',
           reviewReason: 'LATE_IN' as any,
           memo: memo ?? undefined,
-          actualInAt: now,
+          actualInAt: effectiveAt,
           late: true
         },
       });
       res.json({
         ok: true,
         message: '출근(관리자 확인 필요)',
-        clockInAt: now,
+        clockInAt: effectiveAt,
         review: { reason: 'LATE_IN', deltaMin },
         memo : memo,
         shiftId: updated.id
@@ -169,13 +248,13 @@ if (!shift) { res.status(404).json({ error: '근무일정을 찾을 수 없습�
     // 이른 출근 또는 10분 이내 지각: 정상 진행(IN_PROGRESS)
     const late = nowMs > startMs; // 표시용(지각 배지)
     await prisma.workShift.update({
-      where: { id: shiftId },
-      data: { status: 'IN_PROGRESS', actualInAt: now, late,memo: memo ?? undefined, },
+      where: { id: shift!.id },
+      data: { status: 'IN_PROGRESS', actualInAt: effectiveAt, late, memo: memo ?? undefined },
     });
     res.json({
       ok: true,
       message: late ? '출근(지각)' : '출근 완료',
-      clockInAt: now,
+clockInAt: effectiveAt,
       memo,
       shiftId
     });
@@ -183,25 +262,28 @@ if (!shift) { res.status(404).json({ error: '근무일정을 찾을 수 없습�
   }
 
   if (type === 'OUT') {
+    const s = shift!;
     // IN이 없거나 이미 OUT 처리된 경우 방지
-    if (!shift.actualInAt) { res.status(400).json({ error: '해당 시프트에 출근 기록이 없습니다.' }); return; }
-    if (shift.actualOutAt) { res.status(400).json({ error: '이미 퇴근 처리된 시프트입니다.' }); return; }
-    if (!(now > shift.actualInAt)) { res.status(400).json({ error: '퇴근 시각은 출근 이후이어야 합니다.' }); return; }
+    if (!s.actualInAt) { res.status(400).json({ error: '해당 시프트에 출근 기록이 없습니다.' }); return; }
+    if (s.actualOutAt) { res.status(400).json({ error: '이미 퇴근 처리된 시프트입니다.' }); return; }
+    if (!(effectiveAt > s.actualInAt)) { res.status(400).json({ error: '퇴근 시각은 출근 이후이어야 합니다.' }); return; }
 
-    const nowMs = now.getTime();
-    const endMs = shift.endAt.getTime();
-    const inMs = shift.actualInAt.getTime();
-    const leftEarly = nowMs < endMs;
+    const nowMs = effectiveAt.getTime();
+    const endMs = s.endAt ? s.endAt.getTime() : Number.POSITIVE_INFINITY;
+    const inMs = s.actualInAt.getTime();
+    const leftEarly = !!s.endAt && nowMs < endMs;
 
     // ✅ 정산: 10분 이내 지각은 삭감 없음 → payable 계산 시 inAt을 startAt으로 보정
-    const lateInMs = Math.max(0, inMs - shift.startAt.getTime());
+    const lateInMs = Math.max(0, inMs - s.startAt.getTime());
     const inForPayable =
       lateInMs <= LATE_GRACE_MIN_FOR_PAYABLE * 60_000
-        ? shift.startAt  // 10분 내 지각은 계획 시작부터 인정
-        : shift.actualInAt;
+        ? s.startAt  // 10분 내 지각은 계획 시작부터 인정
+        : s.actualInAt;
 
-    const actual = diffMinutes(shift.actualInAt, now);
-    const payable = intersectMinutes(inForPayable, now, shift.startAt, shift.endAt);
+    const actual = diffMinutes(s.actualInAt, effectiveAt);
+    const payable = s.endAt
+      ? intersectMinutes(inForPayable, effectiveAt, s.startAt, s.endAt)
+      : diffMinutes(inForPayable, effectiveAt);
 
     // ✅ 종료 10분 이내 조퇴 → REVIEW 전환
     if (leftEarly && (endMs - nowMs) >= REVIEW_TOLERANCE_MIN * 60_000) {
@@ -210,7 +292,7 @@ if (!shift) { res.status(404).json({ error: '근무일정을 찾을 수 없습�
         data: {
           status: 'REVIEW',
           reviewReason: 'EARLY_OUT' as any,
-          actualOutAt: now,
+          actualOutAt: effectiveAt,
           leftEarly: true,
           memo: memo ?? undefined,
           actualMinutes: actual,
@@ -220,24 +302,24 @@ if (!shift) { res.status(404).json({ error: '근무일정을 찾을 수 없습�
       res.json({
         ok: true,
         message: '퇴근(조퇴, 관리자 확인 필요)',
-        clockOutAt: now,
+        clockOutAt: effectiveAt,
         workedMinutes: payable,
         actualMinutes: actual,
-        planned: { startAt: shift.startAt, endAt: shift.endAt },
+        planned: { startAt: s.startAt, endAt: s.endAt },
         review: { reason: 'EARLY_OUT' },
         shiftId: updated.id,
       });
       return;
     }
 const hourlyAmount =
-  shift.employee.payUnit === 'HOURLY'
-    ? Math.round((payable / 60) * (shift.employee.pay ?? 0))
+  s.employee.payUnit === 'HOURLY'
+    ? Math.round((payable / 60) * (s.employee.pay ?? 0))
     : null;
 await prisma.workShift.update({
   where: { id: shiftId },
   data: {
     status: 'COMPLETED',
-    actualOutAt: now,
+    actualOutAt: effectiveAt,
     leftEarly,
     memo: memo ?? undefined,
     actualMinutes: actual,
@@ -248,11 +330,11 @@ await prisma.workShift.update({
 res.json({
   ok: true,
   message: leftEarly ? '퇴근(예정보다 이른 퇴근)' : '퇴근 완료',
-  clockOutAt: now,
+  clockOutAt: effectiveAt,
   workedMinutes: payable,
   actualMinutes: actual,
   finalPayAmount: hourlyAmount,
-  planned: { startAt: shift.startAt, endAt: shift.endAt },
+  planned: { startAt: s.startAt, endAt: s.endAt },
   shiftId,
 });
     return;
@@ -260,7 +342,47 @@ res.json({
 
   res.status(400).json({ error: 'Unknown type' });
 };
+export const previewAttendanceTime = async (req: Request, res: Response) => {
 
+  const parsed = previewAttendanceRequestSchema.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: 'Invalid payload' }); return; }
+  const { shopId, shiftId, type, scannedAt } = parsed.data;
+
+  // 스캔 시각(클라이언트가 보낸 값) 또는 서버 now
+  const base = scannedAt ? new Date(scannedAt) : new Date();
+  if (Number.isNaN(base.getTime())) {
+    return res.status(400).json({ error: 'Invalid scannedAt datetime' });
+  }
+  const suggestedAt =
+    type === 'IN' ? roundNearestHourKST(base) : floorHourKST(base);
+
+  // 선택적: 서버 측에서 현재 사용자가 해당 shift에 대해 IN/OUT 가능한지 가벼운 검증
+  // (비즈니스 정책에 맞춰 필요 시 추가)
+  // await ensureShiftIsScannable({ shopId, shiftId, type, userId: req.user.id });
+
+  // UX에 쓰기 좋은 간단 문구 생성 (KST 기준 HH:mm)
+  const k = toKST(suggestedAt);
+  const hh = String(k.getHours()).padStart(2, '0');
+  const mm = String(k.getMinutes()).padStart(2, '0');
+  const label = type === 'IN'
+    ? `${hh}:${mm} 출근으로 제안`
+    : `${hh}:${mm} 퇴근으로 제안`;
+  const message = type === 'IN'
+    ? `${hh}시 ${mm}분 출근 맞습니까?`
+    : `${hh}시 ${mm}분 퇴근 맞습니까?`;
+
+  return res.json({
+    ok: true,
+    type,
+    shopId,
+    shiftId,
+    scannedAt: base.toISOString(),
+    suggestedAt: suggestedAt.toISOString(),
+    rounding: type === 'IN' ? 'NEAREST_HOUR' : 'FLOOR_HOUR',
+    label,
+    message
+  });
+};
 
 /** (직원) 내 실시간 상태 */
 export const getMyCurrentStatus = async (req: AuthRequiredRequest, res: Response) => {
@@ -277,7 +399,9 @@ export const getMyCurrentStatus = async (req: AuthRequiredRequest, res: Response
 
   const { actual, payable } = (() => {
     const a = diffMinutes(cur.actualInAt!, now);
-    const p = intersectMinutes(cur.actualInAt!, now, cur.startAt, cur.endAt);
+    const p = cur.endAt
+      ? intersectMinutes(cur.actualInAt!, now, cur.startAt, cur.endAt)
+      : diffMinutes(cur.actualInAt!, now);
     return { actual: a, payable: p };
   })();
 
@@ -306,9 +430,9 @@ export const getMyAttendance = async (req: AuthRequiredRequest, res: Response) =
     const outAt = s.actualOutAt ?? null;
     const actual = (inAt && outAt) ? diffMinutes(inAt, outAt)
                  : (inAt ? diffMinutes(inAt, now) : 0);
-    const payable = (inAt && outAt)
-      ? intersectMinutes(inAt, outAt, s.startAt, s.endAt)
-      : (inAt ? intersectMinutes(inAt, now, s.startAt, s.endAt) : 0);
+const payable = (inAt && outAt)
+      ? (s.endAt ? intersectMinutes(inAt, outAt, s.startAt, s.endAt) : diffMinutes(inAt, outAt))
+      : (inAt ? (s.endAt ? intersectMinutes(inAt, now, s.startAt, s.endAt) : diffMinutes(inAt, now)) : 0);
 
     return {
       // AttendanceRecord 호환 필드
@@ -359,7 +483,9 @@ export const getAttendanceRecords = async (req: AuthRequiredRequest, res: Respon
 
     // 저장값 우선, 없을 때만 보조 계산(레거시 대비)
     const fallbackWorked =
-      (inAt && outAt) ? intersectMinutes(inAt, outAt, s.startAt, s.endAt) : null;
+      (inAt && outAt)
+        ? (s.endAt ? intersectMinutes(inAt, outAt, s.startAt, s.endAt) : diffMinutes(inAt, outAt))
+        : null;
     const fallbackActual =
       (inAt && outAt) ? diffMinutes(inAt, outAt) : null;
 

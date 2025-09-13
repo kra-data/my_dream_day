@@ -18,6 +18,10 @@ const intersectMinutes = (a0: Date, a1: Date, b0: Date, b1: Date) => {
   if (en <= st) return 0;
   return diffMinutes(st, en);
 };
+
+const OPEN_END = new Date('9999-12-31T23:59:59.999Z');
+
+const endOrMax = (d: Date | null) => d ?? OPEN_END;
 const endOfKstDay = (base: Date) => {
   const k = toKst(base);
   return fromKstParts(k.getUTCFullYear(), k.getUTCMonth(), k.getUTCDate(), 23, 59, 59, 999);
@@ -421,10 +425,13 @@ if (unresolved) where.reviewResolvedAt = null;
 
   const nextStart = startAt ? new Date(startAt) : shift.startAt;
   const nextEnd   = endAt   ? new Date(endAt)   : shift.endAt;
-  if (!(nextStart < nextEnd)) { res.status(400).json({ error: 'endAt must be after startAt' }); return; }
+  if (nextEnd && !(nextStart < nextEnd)) {
+    res.status(400).json({ error: 'endAt must be after startAt' });
+    return;
+  }
 
   const overlap = await prisma.workShift.findFirst({
-    where: overlapWhere(shift.employeeId, shopId, nextStart, nextEnd, shiftId)
+     where: overlapWhere(shift.employeeId, shopId, nextStart, endOrMax(nextEnd), shiftId)
   });
   if (overlap) { res.status(409).json({ error: '이미 겹치는 근무일정이 있습니다.' }); return; }
 
@@ -434,7 +441,7 @@ if (unresolved) where.reviewResolvedAt = null;
   // ✅ 실제 기록이 있는 경우에만 payable(교집합) 재산출
   let nextWorkedMinutes: number | null = shift.workedMinutes ?? null;
   if (startAt || endAt) {
-   nextWorkedMinutes = diffMin(nextStart, nextEnd);
+nextWorkedMinutes = nextEnd ? diffMin(nextStart, nextEnd) : null;
   }
 
   // ✅ finalPayAmount: COMPLETED이고 HOURLY이며 workedMinutes가 있을 때만 산출
@@ -513,7 +520,9 @@ export const adminGetShiftDetail = async (req: AuthRequiredRequest, res: Respons
 
   // 참고용 요약(분 계산)
   const plannedMinutes =
-    Math.max(0, Math.floor((shift.endAt.getTime() - shift.startAt.getTime()) / 60000));
+shift.endAt
+      ? Math.max(0, Math.floor((shift.endAt.getTime() - shift.startAt.getTime()) / 60000))
+      : null;
 
   res.json({
     ok: true,
@@ -563,14 +572,14 @@ export const myUpdateShift = async (req: AuthRequiredRequest, res: Response): Pr
 
   const nextStart = startAt ? new Date(startAt) : shift.startAt;
   const nextEnd   = endAt   ? new Date(endAt)   : shift.endAt;
-  if (!(nextStart < nextEnd)) {
+  if (nextEnd && !(nextStart < nextEnd)) {
     res.status(400).json({ error: 'endAt은 startAt 이후여야 합니다.' });
     return;
   }
 
   // 동일 직원/매장 내 겹침 방지
   const overlap = await prisma.workShift.findFirst({
-    where: overlapWhere(employeeId, shopId, nextStart, nextEnd, shiftId),
+   where: overlapWhere(employeeId, shopId, nextStart, endOrMax(nextEnd), shiftId),
     select: { id: true }
   });
   if (overlap) {
@@ -588,7 +597,7 @@ export const myUpdateShift = async (req: AuthRequiredRequest, res: Response): Pr
       memo: memo ?? shift.memo,
       reviewResolvedAt: null,
       updatedBy: employeeId,
-       ...(startAt || endAt ? { workedMinutes: diffMin(nextStart, nextEnd) } : {}),
+      ...(startAt || endAt ? { workedMinutes: nextEnd ? diffMin(nextStart, nextEnd) : null } : {}),
     },
     select: {
       id: true, shopId: true, employeeId: true,

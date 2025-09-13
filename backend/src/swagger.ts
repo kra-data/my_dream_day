@@ -82,7 +82,7 @@ export const swaggerDocument: any = {
               shopId: { type: 'integer' },
               employeeId: { type: 'integer' },
               startAt: { type: 'string', format: 'date-time' },
-              endAt:   { type: 'string', format: 'date-time' },
+             endAt:   { type: 'string', format: 'date-time', nullable: true },
               status:  { $ref: '#/components/schemas/WorkShiftStatus' },
               reviewReason: { $ref: '#/components/schemas/ShiftReviewReason', nullable: true },
               memo:   { type: 'string', nullable: true },
@@ -96,11 +96,11 @@ export const swaggerDocument: any = {
       // ───────────────────────────────
       WorkShiftStatus: {
         type: 'string',
-        enum: ['SCHEDULED','IN_PROGRESS','COMPLETED','CANCELED','MISSED','OVERDUE','REVIEW']
+        enum: ['SCHEDULED','IN_PROGRESS','COMPLETED','CANCELED','REVIEW']
       },
       ShiftReviewReason: {
         type: 'string',
-        enum: ['LATE_IN','EARLY_OUT','LATE_OUT','EXTENDED']
+        enum: ['LATE_IN','EARLY_OUT','LATE_OUT','EXTENDED','NO_ATTENDANCE']
       },
 WorkShift: {
   type: 'object',
@@ -109,7 +109,7 @@ WorkShift: {
     shopId:      { type: 'integer', example: 1 },
     employeeId:  { type: 'integer', example: 42 },
     startAt:     { type: 'string', format: 'date-time', example: '2025-09-01T02:00:00.000Z' },
-    endAt:       { type: 'string', format: 'date-time', example: '2025-09-01T10:00:00.000Z' },
+    endAt:       { type: 'string', format: 'date-time', nullable: true, example: '2025-09-01T10:00:00.000Z' },
     status:      { $ref: '#/components/schemas/WorkShiftStatus' },
           reviewReason:  { $ref: '#/components/schemas/ShiftReviewReason', nullable: true },
           memo:    { type: 'string', nullable: true },
@@ -307,7 +307,7 @@ PayrollEmployeeShiftLog: {
     plannedEnd:    { type: 'string', format: 'date-time', example: '2025-09-03T08:00:00.000Z' },
     actualInAt:    { type: ['string','null'], format: 'date-time', example: '2025-09-03T00:03:00.000Z' },
     actualOutAt:   { type: ['string','null'], format: 'date-time', example: '2025-09-03T08:05:00.000Z' },
-    status:        { type: 'string', enum: ['SCHEDULED','IN_PROGRESS','COMPLETED','CANCELED','OVERDUE','REVIEW'], example: 'COMPLETED' },
+status:        { $ref: '#/components/schemas/WorkShiftStatus' },
     workedMinutes: { type: ['integer','null'], example: 480, description: '지급 인정 분' },
     actualMinutes: { type: ['integer','null'], example: 485, description: '실제 근무 분' },
     finalPayAmount:{ type: ['integer','null'], example: 96000, description: '시급제: 확정 금액, 월급제: null' },
@@ -385,7 +385,8 @@ WorkShiftUpdateSummary: {
     workedMinutes: { type: 'integer', nullable: true, example: 480 },
     late:          { type: 'boolean', nullable: true, example: false },
     leftEarly:     { type: 'boolean', nullable: true, example: false },
-    finalPayAmount:{ type: 'integer', nullable: true, example: 96000 }
+    finalPayAmount:{ type: 'integer', nullable: true, example: 96000 },
+    status:        { $ref: '#/components/schemas/WorkShiftStatus', nullable: true }
   }
 },
 WorkShiftUpdateResponse: {
@@ -610,7 +611,7 @@ DayShift: {
 
 Position: {
   type: 'string',
-  enum: ['STAFF', 'MANAGER', 'OWNER'],
+enum: ['OWNER','MANAGER','STAFF','PART_TIME'],
   description: '직급(기본값: STAFF)'
 },
 
@@ -859,15 +860,33 @@ PayrollOverviewResponse: {
     meta:  { $ref: '#/components/schemas/PayrollOverviewMeta' }
   }
 },
-AttendanceCreateRequest: {
+      AttendanceCreateInRequest: {
         type: 'object',
-        required: ['shopId', 'shiftId', 'type'],
+        required: ['shopId','type'],
+        properties: {
+          shopId:  { type: 'integer', example: 123 },
+          type:    { type: 'string', enum: ['IN'] },
+          shiftId: { type: 'integer', example: 456, nullable: true, description: '선택(없으면 IN 시 자동 시프트 생성)' },
+          memo:    { type: 'string', maxLength: 500, nullable: true },
+          at:      { type: 'string', format: 'date-time', nullable: true }
+        }
+      },
+      AttendanceCreateOutRequest: {
+        type: 'object',
+        required: ['shopId','shiftId','type'],
         properties: {
           shopId:  { type: 'integer', example: 123 },
           shiftId: { type: 'integer', example: 456 },
-          type:    { type: 'string', enum: ['IN', 'OUT'] },
-          memo:   { type: 'string', maxLength: 500, nullable: true, description: '리뷰 사유 메모(지각>10분/조퇴 시)' }
+          type:    { type: 'string', enum: ['OUT'] },
+          memo:    { type: 'string', maxLength: 500, nullable: true },
+          at:      { type: 'string', format: 'date-time', nullable: true }
         }
+      },
+      AttendanceCreateRequest: {
+        oneOf: [
+          { $ref: '#/components/schemas/AttendanceCreateInRequest' },
+          { $ref: '#/components/schemas/AttendanceCreateOutRequest' }
+        ]
       },
       AttendanceConfirmInResponse: {
         type: 'object',
@@ -877,6 +896,46 @@ AttendanceCreateRequest: {
           clockInAt: { type: 'string', format: 'date-time' },
           shiftId: { type: 'integer', example: 456 },
           memo: { type: 'string', nullable: true, example: '버스 지연' }
+        }
+      },
+      AttendancePreviewRequestIn: {
+        type: 'object',
+        required: ['shopId','type'],
+        properties: {
+          shopId:   { type: 'integer', example: 1 },
+          type:     { type: 'string', enum: ['IN'] },
+          shiftId:  { type: 'integer', example: 456, nullable: true, description: '선택(자동 생성 IN도 지원)' },
+          scannedAt:{ type: 'string', format: 'date-time', nullable: true }
+        }
+      },
+      AttendancePreviewRequestOut: {
+        type: 'object',
+        required: ['shopId','shiftId','type'],
+        properties: {
+          shopId:   { type: 'integer', example: 1 },
+          shiftId:  { type: 'integer', example: 456 },
+          type:     { type: 'string', enum: ['OUT'] },
+          scannedAt:{ type: 'string', format: 'date-time', nullable: true }
+        }
+      },
+      AttendancePreviewRequest: {
+        oneOf: [
+          { $ref: '#/components/schemas/AttendancePreviewRequestIn' },
+          { $ref: '#/components/schemas/AttendancePreviewRequestOut' }
+        ]
+      },
+      AttendancePreviewResponse: {
+        type: 'object',
+        properties: {
+          ok:         { type: 'boolean', example: true },
+          type:       { type: 'string', enum: ['IN','OUT'] },
+          shopId:     { type: 'integer' },
+          shiftId:    { type: 'integer' },
+          scannedAt:  { type: 'string', format: 'date-time' },
+          suggestedAt:{ type: 'string', format: 'date-time' },
+          rounding:   { type: 'string', enum: ['NEAREST_HOUR','FLOOR_HOUR'] },
+          label:      { type: 'string', example: '12:00 출근으로 제안' },
+          message:    { type: 'string', example: '12시 00분 출근 맞습니까?' }
         }
       },
       AttendanceConfirmOutResponse: {
@@ -893,7 +952,7 @@ AttendanceCreateRequest: {
           planned: {
             type: 'object',
             nullable: true,
-            properties: { startAt: { type:'string',format:'date-time' }, endAt: { type:'string',format:'date-time' } }
+            properties: { startAt: { type:'string',format:'date-time' }, endAt: { type:'string',format:'date-time', nullable: true } }
           }
         }
       },
@@ -1972,10 +2031,44 @@ examples: {
         }
       }
     },
+    '/api/attendance/preview': {
+      post: {
+        tags: ['Attendance'],
+        summary: 'QR 스캔 시 출/퇴근 시간 제안(미리보기)',
+        description:
+          'QR 스캔 이후 모달에 표시할 제안 시간을 계산합니다. \n' +
+          '- 출근(IN): **가까운 정시로 반올림**(KST 기준, 분≥30 올림)\n' +
+          '- 퇴근(OUT): **정시로 내림**(KST 기준)',
+        security: [{ bearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: { $ref: '#/components/schemas/AttendancePreviewRequest' },
+              examples: {
+                clockInExample: { value: { shopId: 1, shiftId: 456, type: 'IN',  scannedAt: '2025-09-05T02:55:12.000Z' } },
+                clockOutExample:{ value: { shopId: 1, shiftId: 456, type: 'OUT', scannedAt: '2025-09-05T01:03:45.000Z' } }
+              }
+            }
+          }
+        },
+        responses: {
+          '200': {
+            description: 'OK',
+            content: {
+              'application/json': { schema: { $ref: '#/components/schemas/AttendancePreviewResponse' } }
+            }
+          },
+          '400': { description: 'Invalid payload' },
+          '401': { description: 'Unauthorized' },
+          '403': { description: 'Forbidden' }
+        }
+      }
+    },
     '/api/attendance': {
       post: {
         tags: ['Attendance'],
-        summary: '출퇴근 기록 생성/마감 (Shift 1:1 매칭)',
+        summary: '출퇴근 기록 생성/마감 (모달에서 선택한 시간 저장)',
         security: [{ bearerAuth: [] }],
         requestBody: {
           required: true,
@@ -1983,9 +2076,9 @@ examples: {
             'application/json': {
                             schema: { $ref: '#/components/schemas/AttendanceCreateRequest' },
               examples: {
-                clockInLateWithin10: { value: { shopId: 1, shiftId: 123, type: 'IN' } },
-                clockInLateOver10:   { value: { shopId: 1, shiftId: 123, type: 'IN', memo: '버스 지연으로 15분 지각' } },
-                earlyOutWithin10:    { value: { shopId: 1, shiftId: 123, type: 'OUT', memo: '컨디션 저하로 조퇴' } }
+                inWithChosenTime:  { value: { shopId: 1, shiftId: 123, type: 'IN',  at: '2025-09-05T03:00:00.000Z' } },
+                outWithChosenTime: { value: { shopId: 1, shiftId: 123, type: 'OUT', at: '2025-09-05T10:00:00.000Z' } },
+                noteIncluded:      { value: { shopId: 1, shiftId: 123, type: 'IN',  at: '2025-09-05T03:00:00.000Z', memo: '버스 지연' } }
               }
             }
           }
@@ -2044,7 +2137,7 @@ examples: {
                       shopId: { type: 'integer' },
                       employeeId: { type: 'integer' },
                       startAt: { type: 'string', format: 'date-time' },
-                      endAt: { type: 'string', format: 'date-time' },
+                      endAt: { type: 'string', format: 'date-time', nullable: true  },
                       status: { $ref: '#/components/schemas/WorkShiftStatus' },
                       reviewReason: { $ref: '#/components/schemas/ShiftReviewReason' },
                       memo: { type: 'string', nullable: true },

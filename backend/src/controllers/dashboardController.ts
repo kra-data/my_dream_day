@@ -16,7 +16,7 @@ const endOfKstDay = (anchor: Date) => {
   const k = toKst(anchor);
   return fromKstParts(k.getUTCFullYear(), k.getUTCMonth(), k.getUTCDate(), 23, 59, 59, 999);
 };
-
+const maxDate = (a: Date, b: Date) => (a > b ? a : b);
 /* ───────── 분 계산 유틸 ───────── */
 const diffMinutes = (a: Date, b: Date) => Math.max(0, Math.floor((b.getTime() - a.getTime()) / 60000));
 const intersectMinutes = (a0: Date, a1: Date, b0: Date, b1: Date) => {
@@ -64,12 +64,12 @@ export const todaySummary = async (req: AuthRequest, res: Response) => {
 
   // 지각: 아직 출근 안 했고, 현재가 시프트 창 안인 경우
   const late = shifts.filter(s =>
-    !s.actualInAt && now >= s.startAt && now <= s.endAt
+    !s.actualInAt && now >= s.startAt && (s.endAt ? now <= s.endAt : true)
   ).length;
 
   // 결근: 아직 출근 안 했고, 시프트 종료가 이미 지난 경우
   const absent = shifts.filter(s =>
-    !s.actualInAt && now > s.endAt
+    !s.actualInAt && (s.endAt ? now > s.endAt : false)
   ).length;
 
   res.json({
@@ -171,7 +171,15 @@ export const recentActivities = async (req: AuthRequest, res: Response) => {
   const items = logs.map(l => {
     const type: 'IN' | 'OUT' = l.actualOutAt ? 'OUT' : 'IN';
     const workedMinutes =
-      l.actualInAt && l.actualOutAt ? intersectMinutes(l.actualInAt, l.actualOutAt, l.startAt, l.endAt) : null;
+l.actualInAt && l.actualOutAt
+        ? (
+            // endAt 이 있는 경우: 기존 교집합 계산
+            l.endAt
+              ? intersectMinutes(l.actualInAt, l.actualOutAt, l.startAt, l.endAt)
+              // endAt 이 없는 경우: [in~out] ∩ [start~∞] = max(in,start) ~ out
+              : diffMinutes(maxDate(l.actualInAt, l.startAt), l.actualOutAt)
+          )
+        : null;
 
     return {
       id:            l.id,               // shift id를 activity id로 사용
