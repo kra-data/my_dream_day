@@ -2317,7 +2317,24 @@ examples: {
           '404': { description: 'Not Found' },
           '409': { description: 'Conflict (overlap / completed shift)' }
         }
-      }
+      },
+            delete: {
+       tags: ['Shifts'],
+       summary: '내 근무일정 삭제',
+       description: '직원이 자신의 시프트를 삭제합니다. 이미 시작되었거나 완료/취소되었거나 정산 연결된 시프트는 삭제할 수 없습니다.',
+       security: [{ bearerAuth: [] }],
+       parameters: [
+         { name: 'shiftId', in: 'path', required: true, schema: { type: 'integer' } }
+       ],
+       responses: {
+         '204': { description: 'No Content(삭제 완료)' },
+         '400': { description: 'Bad Request(shiftId 잘못됨)' },
+         '401': { description: 'Unauthorized' },
+         '403': { description: 'Forbidden' },
+         '404': { description: 'Not Found(내 시프트 아님/존재 안 함)' },
+         '409': { description: 'Conflict(이미 시작/완료/취소/정산 연결)' }
+       }
+     }
     },
     '/api/admin/shops/{shopId}/workshifts/{shiftId}': {
       put: {
