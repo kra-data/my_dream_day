@@ -66,7 +66,7 @@ export const getMyProfileOverview = async (req: AuthRequiredRequest, res: Respon
       employeeId: me.id,
       status: 'COMPLETED',
       // 이번달 내에서 마감된 건만 집계(중복 방지)
-      actualOutAt: { gte: thisMonthStart, lte: thisMonthEnd }
+      endAt: { gte: thisMonthStart, lte: thisMonthEnd }
     },
     select: { workedMinutes: true, finalPayAmount: true }
   });
