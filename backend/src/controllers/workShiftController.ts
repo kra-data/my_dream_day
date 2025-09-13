@@ -565,8 +565,8 @@ export const myUpdateShift = async (req: AuthRequiredRequest, res: Response): Pr
   if (!shift) { res.status(404).json({ error: '내 근무일정이 아니거나 존재하지 않습니다.' }); return; }
 
   // 완료/취소된 일정은 직원이 수정 불가 (정책에 맞게 조정 가능)
-  if (shift.status === 'COMPLETED' || shift.status === 'CANCELED') {
-    res.status(409).json({ error: '완료되었거나 취소된 일정은 수정할 수 없습니다.' });
+  if (shift.status === 'COMPLETED' || shift.status === 'CANCELED' || shift.status === 'REVIEW' ) {
+    res.status(409).json({ error: '완료되었거나 취소, 관리자 검토가 필요한 일정은 수정할 수 없습니다.' });
     return;
   }
 
@@ -608,4 +608,46 @@ export const myUpdateShift = async (req: AuthRequiredRequest, res: Response): Pr
   });
 
   res.json({ ok: true, shift: updated });
+};
+
+export const myDeleteShift = async (req: AuthRequiredRequest, res: Response): Promise<void> => {
+  const shiftId = Number(req.params.shiftId);
+  if (!Number.isFinite(shiftId)) {
+    res.status(400).json({ error: 'shiftId must be a number' });
+    return;
+  }
+
+  const employeeId = req.user.userId;
+  const shopId     = req.user.shopId;
+
+  const shift = await prisma.workShift.findFirst({
+    where: { id: shiftId, shopId, employeeId },
+    select: {
+      id: true, status: true,
+      actualInAt: true, actualOutAt: true,
+      settlementId: true
+    }
+  });
+  if (!shift) {
+    res.status(404).json({ error: '내 근무일정이 아니거나 존재하지 않습니다.' });
+    return;
+  }
+
+  // 이미 시작/완료/취소된 일정은 삭제 불가
+  if (shift.actualInAt || shift.actualOutAt ||
+      shift.status === 'IN_PROGRESS' ||
+      shift.status === 'COMPLETED' ||
+      shift.status === 'CANCELED') {
+    res.status(409).json({ error: '이미 시작되었거나 완료/취소된 일정은 삭제할 수 없습니다.' });
+    return;
+  }
+
+  // 정산 연결된 일정은 삭제 불가
+  if (shift.settlementId) {
+    res.status(409).json({ error: '정산에 연결된 일정은 삭제할 수 없습니다.' });
+    return;
+  }
+
+  await prisma.workShift.delete({ where: { id: shiftId } });
+  res.status(204).send();
 };

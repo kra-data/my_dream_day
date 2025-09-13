@@ -15,7 +15,8 @@ import {
   myCreateShift,
   myListShifts,
   getMyTodayWorkshifts,
-  myUpdateShift
+  myUpdateShift,
+  myDeleteShift
 } from '../controllers/workShiftController';
 import { getMyProfileOverview } from '../controllers/meController';
 const router = Router();
@@ -68,5 +69,13 @@ router.get(
   requireUser,
   requireRoles('employee'),
   withUser((req: AuthRequiredRequest, res) => getMyProfileOverview(req, res))
+);
+
+router.delete(
+  '/my/workshifts/:shiftId',
+  authenticateJWT,
+  requireUser,
+  requireRoles('employee'),
+  withUser((req: AuthRequiredRequest, res) => myDeleteShift(req, res))
 );
 export default router;
