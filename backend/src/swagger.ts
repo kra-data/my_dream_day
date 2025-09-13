@@ -437,16 +437,39 @@ CursorWorkShiftWithEmployeePage: {
         type: 'string',
         enum: ['IN','OUT']
       },
-      ActiveEmployee: {
-        type: 'object',
-        properties: {
-          employeeId: { type: 'integer', example: 42 },
-          name:       { type: 'string', example: '김직원' },
-          position:   { type: 'string', nullable: true, example: '파트타이머' },
-          section:    { type: 'string', nullable: true, example: '홀' },
-          clockInAt:  { type: 'string', format: 'date-time', example: '2025-08-27T09:03:12.000Z' }
-        }
-      },
+// 기존 ActiveEmployee 스키마를 아래로 교체
+ActiveEmployee: {
+  type: 'object',
+  properties: {
+    employeeId: { type: 'integer', example: 42 },
+    name:       { type: 'string',  example: '김직원' },
+    position:   { type: 'string',  nullable: true, example: '파트타이머' },
+    section:    { type: 'string',  nullable: true, example: '홀' },
+
+    // ✅ 새 필드
+    status: {
+      type: 'string',
+      enum: ['ON_DUTY','REVIEW','OFF'],
+      example: 'ON_DUTY',
+      description: '현재 상태 코드'
+    },
+    statusLabel: {
+      type: 'string',
+      example: '출근중',
+      description: 'UI용 라벨(출근중/리뷰상태/퇴근)'
+    },
+
+    // (선택) 출근중일 때만 존재
+    clockInAt: {
+      type: 'string',
+      format: 'date-time',
+      nullable: true,
+      example: '2025-08-27T09:03:12.000Z',
+      description: 'status=ON_DUTY일 때만 존재'
+    }
+  }
+},
+
 /** ✅ 생성 전용 요청 스키마 (nationalId 포함) */
 EmployeeCreateRequest: {
   type: 'object',
@@ -1616,29 +1639,67 @@ examples: {
     }
   }
 },
-
-    '/api/admin/shops/{shopId}/dashboard/active': {
-      get: {
-        tags: ['Dashboard'],
-        summary: '실시간 근무자 목록(OUT 미기록)',
-        parameters: [
-          { name: 'shopId', in: 'path', required: true, schema: { type: 'integer' } }
-        ],
-        responses: {
-          '200': {
-            description: 'OK',
-            content: {
-              'application/json': {
-                schema: {
-                  type: 'array',
-                  items: { $ref: '#/components/schemas/ActiveEmployee' }
-                }
+'/api/admin/shops/{shopId}/dashboard/active': {
+  get: {
+    tags: ['Dashboard'],
+    summary: '직원 상태 목록(출근중/리뷰/퇴근)',
+    description:
+      '매장 모든 직원에 대해 현재 상태를 계산하여 반환합니다.\n' +
+      '- 규칙: actualInAt && !actualOutAt → 출근중(ON_DUTY) / REVIEW 미해결 존재 → 리뷰상태(REVIEW) / 그 외 → 퇴근(OFF)\n' +
+      '- 정렬: ON_DUTY → REVIEW → OFF, 같은 그룹 내에서는 이름 오름차순',
+    parameters: [
+      { name: 'shopId', in: 'path', required: true, schema: { type: 'integer' } }
+    ],
+    responses: {
+      '200': {
+        description: 'OK',
+        content: {
+          'application/json': {
+            schema: {
+              type: 'array',
+              items: { $ref: '#/components/schemas/ActiveEmployee' }
+            },
+            examples: {
+              sample: {
+                value: [
+                  {
+                    employeeId: 1,
+                    name: '김철수',
+                    position: '매니저',
+                    section: '홀',
+                    status: 'ON_DUTY',
+                    statusLabel: '출근중',
+                    clockInAt: '2025-09-05T08:30:00.000Z'
+                  },
+                  {
+                    employeeId: 2,
+                    name: '이리뷰',
+                    position: '스태프',
+                    section: '주방',
+                    status: 'REVIEW',
+                    statusLabel: '리뷰상태',
+                    clockInAt: null
+                  },
+                  {
+                    employeeId: 3,
+                    name: '박퇴근',
+                    position: '스태프',
+                    section: '홀',
+                    status: 'OFF',
+                    statusLabel: '퇴근',
+                    clockInAt: null
+                  }
+                ]
               }
             }
           }
         }
-      }
-    },
+      },
+      '401': { description: 'Unauthorized' },
+      '403': { description: 'Forbidden' }
+    }
+  }
+},
     '/api/admin/shops/{shopId}/dashboard/recent': {
       get: {
         tags: ['Dashboard'],
