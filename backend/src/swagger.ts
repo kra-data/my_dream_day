@@ -999,7 +999,31 @@ PayrollOverviewResponse: {
        }
      },
 
-
+      MyProfileOverview: {
+        type: 'object',
+        properties: {
+          id: { type: 'integer' },
+          name: { type: 'string' },
+          section: { type: 'string' },
+          position: { type: 'string' },
+          pay: { type: ['integer','null'] },
+          payUnit: { type: ['string','null'], enum: ['HOURLY','MONTHLY', null] },
+          phone: { type: 'string' },
+          accountNumber: { type: 'string' },
+          bank: { type: 'string' },
+          lastMonthSettlementAmount: { type: ['integer','null'], description: '저번달 정산 실지급액(netPay)' },
+          thisMonth: {
+            type: 'object',
+            properties: {
+              workedMinutes: { type: 'integer' },
+              workedHours: { type: 'number' }
+            }
+          },
+          expectedTotalPay: { type: 'integer' },
+          deductionAmount: { type: 'integer' },
+          expectedNetPay: { type: 'integer' }
+        }
+      },
     }
   },
   security: [{ bearerAuth: [] }],
@@ -1698,6 +1722,26 @@ examples: {
     }
   }
 },
+    '/api/my/overview': {
+      get: {
+        tags: ['Me'],
+        summary: '내 정보 개요(직원)',
+        description:
+          '직원이 자신의 기본 정보와 급여 개요를 조회합니다.\n' +
+          '- 저번달 정산 금액: 저번달(달력 기준) 사이클 snapshot의 netPay\n' +
+          '- 이번달 총 근무시간: 이번달 달력 기준, COMPLETED & actualOutAt 기준 집계\n' +
+          '- 예상 급여/공제/실지급: 시급제는 확정금액 합(없으면 workedMinutes×시급 보정), 월급제는 월급 그대로. 공제율은 서버 env `PAYROLL_WITHHOLDING_RATE`(기본 0.033)를 사용',
+        security: [{ bearerAuth: [] }],
+        responses: {
+          '200': {
+            description: 'OK',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/MyProfileOverview' } } }
+          },
+          '401': { description: 'Unauthorized' },
+          '403': { description: 'Forbidden' }
+        }
+      }
+    },
 '/api/admin/shops/{shopId}/dashboard/active': {
   get: {
     tags: ['Dashboard'],
