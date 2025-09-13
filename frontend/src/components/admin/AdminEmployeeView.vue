@@ -126,10 +126,7 @@
                   placeholder="홍길동"
                   required
                   class="form-input"
-                  :readonly="showEditEmployeeModal"
-                  :class="{ 'readonly-field': showEditEmployeeModal }"
                 >
-                <small v-if="showEditEmployeeModal" class="field-note">이름은 수정할 수 없습니다</small>
               </div>
               
               <div class="form-group">
@@ -149,15 +146,13 @@
               <label>주민(외국인)등록번호 *</label>
               <input 
                 type="text" 
-                v-model="employeeForm.nationalId"
-                placeholder="000000-0000000"
+                v-model="employeeForm.nationalIdMasked"
+                :placeholder="showEditEmployeeModal ? (originalEmployeeData?.nationalIdMasked || '000000-0******') : '000000-0******'"
                 required
                 class="form-input"
-                :readonly="showEditEmployeeModal"
-                :class="{ 'readonly-field': showEditEmployeeModal }"
                 @input="formatNationalId"
               >
-              <small v-if="showEditEmployeeModal" class="field-note">보안상 주민등록번호는 수정할 수 없습니다</small>
+              <small class="field-note">주민등록번호를 정확히 입력해주세요</small>
             </div>
 
             <div class="form-group">
@@ -395,7 +390,7 @@ export default {
     AppIcon
   },
   emits: ['retry-fetch'],
-  setup(props, { emit }) {
+  setup(_, { emit }) {
     const employeesStore = useEmployeesStore()
     const attendanceStore = useAttendanceStore()
     
@@ -405,6 +400,7 @@ export default {
     const showEditEmployeeModal = ref(false)
     const qrEmployee = ref(null)
     const editingEmployeeId = ref(null)
+    const originalEmployeeData = ref(null)
     
     // 폼 데이터
     const days = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']
@@ -438,7 +434,7 @@ export default {
     
     const employeeForm = ref({
       name: '',
-      nationalId: '',
+      nationalIdMasked: '',
       accountNumber: '',
       bank: '',
       phone: '',
@@ -466,6 +462,7 @@ export default {
       showEditEmployeeModal,
       qrEmployee,
       editingEmployeeId,
+      originalEmployeeData,
       days,
       dayLabels,
       employeeForm,
@@ -541,11 +538,16 @@ export default {
     
     editEmployee(employee) {
       this.editingEmployeeId = employee.id
+      
+      // 원본 데이터 저장 (변경사항 비교용)
+      this.originalEmployeeData = { ...employee }
+      
       this.employeeForm = {
         ...employee,
         // 수정 시 포맷된 형태로 표시
         phone: employee.phone ? employee.phone.replace(/(\d{3})(\d{4})(\d{4})/, '$1-$2-$3') : '',
-        nationalId: employee.nationalId ? employee.nationalId.replace(/(\d{6})(\d{7})/, '$1-$2') : '',
+        // 주민등록번호를 수정 가능하도록 변경
+        nationalIdMasked: employee.nationalId ? employee.nationalId.replace(/(\d{6})(\d{7})/, '$1-$2') : '',
         schedule: {
           mon: employee.schedule?.mon || { start: '', end: '' },
           tue: employee.schedule?.tue || { start: '', end: '' },
@@ -556,6 +558,7 @@ export default {
           sun: employee.schedule?.sun || { start: '', end: '' }
         }
       }
+      
       this.showEditEmployeeModal = true
     },
     
@@ -576,9 +579,10 @@ export default {
       this.showAddEmployeeModal = false
       this.showEditEmployeeModal = false
       this.editingEmployeeId = null
+      this.originalEmployeeData = null
       this.employeeForm = {
         name: '',
-        nationalId: '',
+        nationalIdMasked: '',
         accountNumber: '',
         bank: '',
         phone: '',
@@ -609,10 +613,11 @@ export default {
     },
 
     formatNationalId() {
-      let value = this.employeeForm.nationalId.replace(/\D/g, '')
+      // 주민등록번호 포맷팅 (편집 모드에서도 동작)
+      let value = this.employeeForm.nationalIdMasked.replace(/\D/g, '')
       if (value.length <= 13) {
         value = value.replace(/(\d{6})(\d{7})/, '$1-$2')
-        this.employeeForm.nationalId = value
+        this.employeeForm.nationalIdMasked = value
       }
     },
 
@@ -673,60 +678,82 @@ export default {
     },
 
     async saveEmployee() {
-      // 필수 필드 검증
-      if (!this.employeeForm.name ||
-          !this.employeeForm.nationalId ||
-          !this.employeeForm.accountNumber ||
-          !this.employeeForm.bank ||
-          !this.employeeForm.phone ||
-          !this.employeeForm.position ||
-          !this.employeeForm.section ||
-          !this.employeeForm.pay ||
-          !this.employeeForm.payUnit) {
-        alert('모든 필수 항목을 입력해주세요')
-        return
-      }
-
-      // 휴대폰 번호 검증
-      const phoneRegex = /^\d{3}-\d{4}-\d{4}$/
-      if (!phoneRegex.test(this.employeeForm.phone)) {
-        alert('올바른 휴대폰 번호 형식을 입력해주세요 (010-1234-5678)')
-        return
-      }
-
-      // 주민등록번호 검증
-      const nationalIdRegex = /^\d{6}-\d{7}$/
-      if (!nationalIdRegex.test(this.employeeForm.nationalId)) {
-        alert('올바른 주민등록번호 형식을 입력해주세요 (000000-0000000)')
-        return
-      }
-      
-      try {
-        const employeeData = {
-          ...this.employeeForm,
-          // 포맷팅된 값들을 원본 형태로 변환
-          phone: this.employeeForm.phone.replace(/-/g, ''),
-          nationalId: this.employeeForm.nationalId.replace(/-/g, ''),
-          accountNumber: this.employeeForm.accountNumber.replace(/-/g, ''),
-          schedule: Object.fromEntries(
-            Object.entries(this.employeeForm.schedule).filter(([, times]) => 
-              times.start && times.end
-            )
-          )
+      if (this.showEditEmployeeModal) {
+        // 수정 모드: 변경된 필드만 전송
+        const changedFields = this.getChangedFields()
+        
+        if (Object.keys(changedFields).length === 0) {
+          alert('변경된 내용이 없습니다.')
+          return
         }
         
-        if (this.showEditEmployeeModal) {
-          await this.employeesStore.updateEmployee(this.editingEmployeeId, employeeData)
+        // 변경된 필드의 유효성 검사
+        if (!this.validateChangedFields(changedFields)) {
+          return
+        }
+        
+        try {
+          await this.employeesStore.updateEmployee(this.editingEmployeeId, changedFields)
           alert('직원 정보가 성공적으로 수정되었습니다')
-        } else {
+          this.closeEmployeeModal()
+          this.emit('retry-fetch')
+        } catch (error) {
+          alert('수정에 실패했습니다: ' + error.message)
+        }
+      } else {
+        // 추가 모드: 모든 필수 필드 검증
+        const missingFields = []
+        
+        if (!this.employeeForm.name) missingFields.push('이름')
+        if (!this.employeeForm.nationalIdMasked) missingFields.push('주민등록번호')
+        if (!this.employeeForm.accountNumber) missingFields.push('계좌번호')
+        if (!this.employeeForm.bank) missingFields.push('은행명')
+        if (!this.employeeForm.phone) missingFields.push('휴대폰 번호')
+        if (!this.employeeForm.position) missingFields.push('직위')
+        if (!this.employeeForm.section) missingFields.push('근무 구역')
+        if (!this.employeeForm.pay) missingFields.push('급여 금액')
+        if (!this.employeeForm.payUnit) missingFields.push('급여 단위')
+        
+        if (missingFields.length > 0) {
+          alert(`다음 필수 항목을 입력해주세요:\n• ${missingFields.join('\n• ')}`)
+          return
+        }
+
+        // 휴대폰 번호 검증
+        const phoneRegex = /^\d{3}-\d{4}-\d{4}$/
+        if (!phoneRegex.test(this.employeeForm.phone)) {
+          alert('올바른 휴대폰 번호 형식을 입력해주세요 (010-1234-5678)')
+          return
+        }
+
+        // 주민등록번호 검증 (새 직원 추가시에만)
+        const nationalIdRegex = /^\d{6}-\d{7}$/
+        if (!nationalIdRegex.test(this.employeeForm.nationalIdMasked)) {
+          alert('올바른 주민등록번호 형식을 입력해주세요 (000000-0000000)')
+          return
+        }
+        
+        try {
+          const employeeData = {
+            ...this.employeeForm,
+            // 포맷팅된 값들을 원본 형태로 변환
+            phone: this.employeeForm.phone.replace(/-/g, ''),
+            nationalId: this.employeeForm.nationalIdMasked.replace(/-/g, ''),
+            accountNumber: this.employeeForm.accountNumber.replace(/-/g, ''),
+            schedule: Object.fromEntries(
+              Object.entries(this.employeeForm.schedule).filter(([, times]) => 
+                times.start && times.end
+              )
+            )
+          }
+          
           await this.employeesStore.addEmployee(employeeData)
           alert('새 직원이 성공적으로 추가되었습니다')
+          this.closeEmployeeModal()
+          this.emit('retry-fetch')
+        } catch (error) {
+          alert('추가에 실패했습니다: ' + error.message)
         }
-        
-        this.closeEmployeeModal()
-        this.emit('retry-fetch')
-      } catch (error) {
-        alert('저장에 실패했습니다: ' + error.message)
       }
     },
 
@@ -770,6 +797,101 @@ export default {
         'PART_TIME': '#f59e0b'
       }
       return positionColors[position] || '#3b82f6'
+    },
+
+    // 변경된 필드만 추출
+    getChangedFields() {
+      const changedFields = {}
+      const original = this.originalEmployeeData
+      const current = this.employeeForm
+      
+      // 기본 필드들 (payUnit 추가)
+      const basicFields = ['name', 'phone', 'nationalIdMasked', 'accountNumber', 'bank', 'position', 'section', 'personalColor', 'payUnit']
+      
+      // 기본 필드 처리
+      basicFields.forEach(field => {
+        let originalValue = original[field]
+        let currentValue = current[field]
+        
+        // 특수 필드 포맷팅 처리
+        if (field === 'phone') {
+          originalValue = original[field] ? original[field].replace(/(\d{3})(\d{4})(\d{4})/, '$1-$2-$3') : ''
+          if (currentValue !== originalValue) {
+            changedFields[field] = currentValue.replace(/-/g, '')
+          }
+        } else if (field === 'nationalIdMasked') {
+          originalValue = original.nationalId ? original.nationalId.replace(/(\d{6})(\d{7})/, '$1-$2') : ''
+          if (currentValue !== originalValue) {
+            changedFields.nationalId = currentValue.replace(/-/g, '')
+          }
+        } else if (originalValue !== currentValue) {
+          changedFields[field] = currentValue
+        }
+      })
+      
+      // 급여 관련 필드 별도 처리
+      if (original.pay !== current.pay) {
+        changedFields.pay = current.pay
+      }
+      
+      // 스케줄 변경 확인
+      const originalSchedule = original.schedule || {}
+      const currentSchedule = current.schedule
+      const scheduleChanged = !this.isScheduleEqual(originalSchedule, currentSchedule)
+      
+      if (scheduleChanged) {
+        changedFields.schedule = Object.fromEntries(
+          Object.entries(currentSchedule).filter(([, times]) => 
+            times.start && times.end
+          )
+        )
+      }
+      
+      return changedFields
+    },
+
+    // 스케줄 비교 도우미 함수
+    isScheduleEqual(schedule1, schedule2) {
+      const days = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']
+      return days.every(day => {
+        const s1 = schedule1[day] || { start: '', end: '' }
+        const s2 = schedule2[day] || { start: '', end: '' }
+        return s1.start === s2.start && s1.end === s2.end
+      })
+    },
+
+    // 변경된 필드 유효성 검사
+    validateChangedFields(changedFields) {
+      if (changedFields.name && !changedFields.name.trim()) {
+        alert('이름을 입력해주세요')
+        return false
+      }
+      
+      // nationalId 검증 추가
+      if ('nationalId' in changedFields) {
+        const nationalId = changedFields.nationalId
+        const masked = nationalId.replace(/(\d{6})(\d{7})/, '$1-$2')
+        const nationalIdRegex = /^\d{6}-\d{7}$/
+        if (!nationalIdRegex.test(masked)) {
+          alert('올바른 주민등록번호 형식을 입력해주세요 (000000-0000000)')
+          return false
+        }
+      }
+      
+      if (changedFields.phone) {
+        const phoneRegex = /^\d{10,11}$/
+        if (!phoneRegex.test(changedFields.phone)) {
+          alert('올바른 휴대폰 번호 형식을 입력해주세요 (010-1234-5678)')
+          return false
+        }
+      }
+      
+      if (changedFields.pay && changedFields.pay <= 0) {
+        alert('급여 금액은 0보다 커야 합니다')
+        return false
+      }
+      
+      return true
     }
   }
 }

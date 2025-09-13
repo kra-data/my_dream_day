@@ -1,11 +1,8 @@
 .tab-content {
-  animation: fadeIn 0.3s ease-in;
+  /* Animation removed for cleaner initial load */
 }
 
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
-}
+/* FadeIn animation removed for simpler experience */
 
 .section-header {
   display: flex;
@@ -21,9 +18,10 @@
 
 .employees-table {
   background: white;
-  border-radius: 12px;
+  border-radius: 16px;
   overflow: hidden;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  border: 1px solid rgba(0, 0, 0, 0.05);
 }
 
 table {
@@ -66,18 +64,23 @@ th {
 
 .action-buttons {
   display: flex;
-  gap: 8px;
+  gap: 6px;
+  flex-wrap: wrap;
 }
 
 .btn {
-  padding: 8px 16px;
+  padding: 10px 18px;
   border: none;
-  border-radius: 6px;
+  border-radius: 8px;
   cursor: pointer;
   font-weight: 600;
   text-decoration: none;
-  display: inline-block;
-  transition: all 0.2s;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: all 0.2s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
 .btn:disabled {
@@ -90,9 +93,19 @@ th {
   color: white;
 }
 
+.btn-primary:hover {
+  background: #2563eb;
+  transform: translateY(-1px);
+}
+
 .btn-secondary {
   background: #6b7280;
   color: white;
+}
+
+.btn-secondary:hover {
+  background: #4b5563;
+  transform: translateY(-1px);
 }
 
 .btn-danger {
@@ -100,9 +113,19 @@ th {
   color: white;
 }
 
+.btn-danger:hover {
+  background: #dc2626;
+  transform: translateY(-1px);
+}
+
 .btn-success {
   background: #10b981;
   color: white;
+}
+
+.btn-success:hover {
+  background: #059669;
+  transform: translateY(-1px);
 }
 
 .btn-warning {
@@ -110,9 +133,16 @@ th {
   color: white;
 }
 
+.btn-warning:hover {
+  background: #d97706;
+  transform: translateY(-1px);
+}
+
 .btn-sm {
-  padding: 6px 12px;
-  font-size: 0.9rem;
+  padding: 8px 14px;
+  font-size: 0.85rem;
+  border-radius: 8px;
+  min-width: 60px;
 }
 
 .no-data {
@@ -137,12 +167,14 @@ th {
 
 .modal-content {
   background: white;
-  border-radius: 12px;
-  padding: 24px;
-  max-width: 500px;
+  border-radius: 16px;
+  padding: 32px;
+  max-width: 600px;
   width: 90%;
-  max-height: 80vh;
+  max-height: 85vh;
   overflow-y: auto;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+  border: 1px solid #e2e8f0;
 }
 
 .modal-header {
@@ -211,14 +243,15 @@ th {
 .employee-form {
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 28px;
 }
 
 .form-section {
   background: #f8fafc;
   border-radius: 12px;
-  padding: 20px;
+  padding: 24px;
   border: 1px solid #e2e8f0;
+  margin-bottom: 8px;
 }
 
 .section-title {
@@ -256,12 +289,14 @@ th {
 }
 
 .form-input, .form-select {
-  padding: 12px 16px;
+  padding: 14px 18px;
   border: 2px solid #e2e8f0;
-  border-radius: 8px;
+  border-radius: 12px;
   font-size: 16px;
-  transition: all 0.2s;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   background: white;
+  position: relative;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
 .form-input:focus, .form-select:focus {
@@ -368,15 +403,17 @@ th {
 }
 
 .schedule-day {
-  border: 2px solid #e2e8f0;
+  border: 1px solid #e2e8f0;
   border-radius: 12px;
-  padding: 16px;
+  padding: 20px;
   background: white;
-  transition: all 0.2s;
+  transition: all 0.2s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
 .schedule-day:hover {
   border-color: #cbd5e1;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.07);
 }
 
 .day-header {
@@ -413,8 +450,11 @@ th {
 .schedule-times {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 16px;
   justify-content: center;
+  padding: 12px;
+  background: #f8fafc;
+  border-radius: 8px;
 }
 
 .time-input-group {
@@ -431,12 +471,15 @@ th {
 }
 
 .time-input {
-  padding: 8px 12px;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
-  font-size: 0.9rem;
-  width: 90px;
+  padding: 10px 14px;
+  border: 2px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  width: 100px;
   text-align: center;
+  transition: all 0.3s ease;
+  background: white;
+  font-weight: 500;
 }
 
 .time-input:focus {
@@ -473,6 +516,28 @@ th {
   color: #64748b;
   margin-top: 4px;
   font-style: italic;
+}
+
+/* Error state styling */
+.form-input.error, .form-select.error {
+  border-color: #ef4444 !important;
+  background: rgba(239, 68, 68, 0.05) !important;
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1) !important;
+}
+
+.error-message {
+  color: #ef4444;
+  font-size: 0.8rem;
+  margin-top: 4px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.error-message::before {
+  content: '⚠️';
+  font-size: 0.9rem;
 }
 
 /* Color Palette Styles */
@@ -563,7 +628,17 @@ th {
   
   .form-row {
     grid-template-columns: 1fr;
-    gap: 12px;
+    gap: 16px;
+  }
+  
+  .action-buttons {
+    justify-content: center;
+    gap: 8px;
+  }
+  
+  .btn-sm {
+    flex: 1;
+    min-width: 70px;
   }
   
   .radio-group.horizontal {
@@ -583,27 +658,45 @@ th {
   
   .schedule-times {
     flex-direction: column;
-    gap: 8px;
+    gap: 12px;
+    padding: 16px;
   }
   
   .time-separator {
     transform: rotate(90deg);
-    margin: 4px 0;
+    margin: 8px 0;
+    font-size: 1.5rem;
   }
 }
 
 /* Readonly field styles */
 .readonly-field {
-  background: #f8fafc !important;
+  background: #f1f5f9 !important;
   color: #64748b !important;
   cursor: not-allowed;
-  border-color: #e2e8f0 !important;
+  border: 1px solid #cbd5e1 !important;
+}
+
+/* Masked input styling for national ID */
+.masked-input {
+  font-family: 'Courier New', monospace;
+  letter-spacing: 0.5px;
+}
+
+.masked-input.readonly-field {
+  background: #f1f5f9 !important;
+  color: #64748b !important;
+  font-weight: 500;
 }
 
 .field-note {
   display: block;
-  margin-top: 4px;
-  font-size: 0.75rem;
+  margin-top: 6px;
+  padding: 6px 10px;
+  font-size: 0.8rem;
   color: #64748b;
   font-style: italic;
+  background: #f1f5f9;
+  border-radius: 4px;
+  border-left: 2px solid #94a3b8;
 }

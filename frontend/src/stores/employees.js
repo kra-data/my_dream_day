@@ -90,8 +90,6 @@ export const useEmployeesStore = defineStore('employees', () => {
       
       const processedData = {
         ...employeeData,
-        payUnit: employeeData.payUnit || 
-          (employeeData.position === 'PART_TIME' ? 'HOURLY' : 'MONTHLY')
       }
 
       const response = await api.put(`/admin/shops/${shopId}/employees/${empId}`, processedData)
@@ -138,6 +136,7 @@ export const useEmployeesStore = defineStore('employees', () => {
       loading.value = false
     }
   }
+
 
   // Getters
   const getEmployeeById = (id) => {
