@@ -7,27 +7,27 @@
    ========================================== */
 
 :root {
-  /* === Primary Brand Colors === */
-  --primary-50: #eff6ff;
-  --primary-100: #dbeafe;
-  --primary-200: #bfdbfe;
-  --primary-300: #93c5fd;
-  --primary-400: #60a5fa;
-  --primary-500: #3b82f6;  /* Main brand color */
-  --primary-600: #2563eb;
-  --primary-700: #1d4ed8;
-  --primary-800: #1e40af;
-  --primary-900: #1e3a8a;
+  /* === Primary Brand Colors - Simple & Clean === */
+  --primary-50: #fafafa;
+  --primary-100: #f5f5f5;
+  --primary-200: #e5e5e5;
+  --primary-300: #d4d4d4;
+  --primary-400: #a3a3a3;
+  --primary-500: #737373;  /* Main brand color - Simple Gray */
+  --primary-600: #525252;
+  --primary-700: #404040;
+  --primary-800: #262626;
+  --primary-900: #171717;
 
   /* === Secondary Colors === */
-  --success-50: #ecfdf5;
-  --success-100: #d1fae5;
-  --success-200: #a7f3d0;
-  --success-300: #6ee7b7;
-  --success-400: #34d399;
-  --success-500: #10b981;  /* Success/Check-in */
-  --success-600: #059669;
-  --success-700: #047857;
+  --success-50: #f0fdf4;
+  --success-100: #dcfce7;
+  --success-200: #bbf7d0;
+  --success-300: #86efac;
+  --success-400: #4ade80;
+  --success-500: #22c55e;  /* Success/Check-in */
+  --success-600: #16a34a;
+  --success-700: #15803d;
 
   --warning-50: #fffbeb;
   --warning-100: #fef3c7;
@@ -47,24 +47,24 @@
   --danger-600: #dc2626;
   --danger-700: #b91c1c;
 
-  /* === Neutral Colors === */
-  --gray-50: #f9fafb;
-  --gray-100: #f3f4f6;
-  --gray-200: #e5e7eb;
-  --gray-300: #d1d5db;
-  --gray-400: #9ca3af;
-  --gray-500: #6b7280;
-  --gray-600: #4b5563;
-  --gray-700: #374151;
-  --gray-800: #1f2937;
-  --gray-900: #111827;
+  /* === Neutral Colors - Premium Dark Tones === */
+  --gray-50: #fafafa;
+  --gray-100: #f5f5f5;
+  --gray-200: #e5e5e5;
+  --gray-300: #d4d4d4;
+  --gray-400: #a3a3a3;
+  --gray-500: #737373;
+  --gray-600: #525252;
+  --gray-700: #404040;
+  --gray-800: #262626;
+  --gray-900: #171717;
 
   /* === Semantic Color Mapping === */
   --color-text-primary: var(--gray-900);
   --color-text-secondary: var(--gray-600);
   --color-text-tertiary: var(--gray-500);
   --color-text-inverse: white;
-  --color-text-brand: var(--primary-600);
+  --color-text-brand: var(--gray-800);
 
   --color-bg-primary: white;
   --color-bg-secondary: var(--gray-50);
@@ -74,7 +74,6 @@
   --color-border-light: var(--gray-200);
   --color-border-medium: var(--gray-300);
   --color-border-strong: var(--gray-400);
-  --color-border-brand: var(--primary-300);
 
   --color-focus-ring: var(--primary-500);
   --color-shadow-light: rgba(0, 0, 0, 0.05);

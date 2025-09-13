@@ -3,7 +3,7 @@
     <div class="attendance-container">
       <!-- 페이지 헤더 -->
       <div class="page-header">
-        <h1>📱 출퇴근 체크</h1>
+        <h1><AppIcon name="mobile" :size="24" class="mr-2" />출퇴근 체크</h1>
         <p class="current-time">{{ currentTime }}</p>
         <p class="current-date">{{ currentDate }}</p>
       </div>
@@ -22,7 +22,7 @@
           <div v-if="scanResult" class="scan-result">
             <div :class="['result-alert', scanResult.type]">
               <div class="result-icon">
-                {{ scanResult.type === 'success' ? '✅' : '❌' }}
+                <AppIcon :name="scanResult.type === 'success' ? 'success' : 'error'" :size="20" />
               </div>
               <div class="result-content">
                 <h3>{{ scanResult.title }}</h3>
@@ -104,7 +104,7 @@
           <h2>오늘의 출근 현황</h2>
           <div class="stats-grid">
             <div class="stat-item">
-              <div class="stat-icon">👥</div>
+              <div class="stat-icon"><AppIcon name="users" :size="24" /></div>
               <div class="stat-info">
                 <span class="stat-number">{{ todayStats.total }}</span>
                 <span class="stat-label">전체 직원</span>
@@ -112,7 +112,7 @@
             </div>
             
             <div class="stat-item">
-              <div class="stat-icon">✅</div>
+              <div class="stat-icon"><AppIcon name="success" :size="24" /></div>
               <div class="stat-info">
                 <span class="stat-number">{{ todayStats.checkedIn }}</span>
                 <span class="stat-label">출근 완료</span>
@@ -120,7 +120,7 @@
             </div>
             
             <div class="stat-item">
-              <div class="stat-icon">🏃</div>
+              <div class="stat-icon"><AppIcon name="clock" :size="24" /></div>
               <div class="stat-info">
                 <span class="stat-number">{{ todayStats.working }}</span>
                 <span class="stat-label">근무 중</span>
@@ -128,7 +128,7 @@
             </div>
             
             <div class="stat-item">
-              <div class="stat-icon">📤</div>
+              <div class="stat-icon"><AppIcon name="arrow-right" :size="24" /></div>
               <div class="stat-info">
                 <span class="stat-number">{{ todayStats.checkedOut }}</span>
                 <span class="stat-label">퇴근 완료</span>
@@ -157,6 +157,7 @@
 <script>
 import QRScanner from '@/components/QRScanner.vue'
 import AttendanceCard from '@/components/AttendanceCard.vue'
+import AppIcon from '@/components/AppIcon.vue'
 import { useEmployeesStore } from '@/stores/employees'
 import { useAttendanceStore } from '@/stores/attendance'
 
@@ -164,7 +165,8 @@ export default {
   name: 'AttendanceView',
   components: {
     QRScanner,
-    AttendanceCard
+    AttendanceCard,
+    AppIcon
   },
   setup() {
     const employeesStore = useEmployeesStore()
@@ -233,7 +235,8 @@ export default {
       this.currentTime = now.toLocaleTimeString('ko-KR', {
         hour: '2-digit',
         minute: '2-digit',
-        second: '2-digit'
+        second: '2-digit',
+        hour12: false
       })
       this.currentDate = now.toLocaleDateString('ko-KR', {
         year: 'numeric',
@@ -257,7 +260,7 @@ export default {
           type: 'success',
           title: `${result.action === 'check-in' ? '출근' : '퇴근'} 완료`,
           message: `${employee.name}님이 ${result.action === 'check-in' ? '출근' : '퇴근'} 처리되었습니다.`,
-          time: new Date().toLocaleTimeString('ko-KR'),
+          time: new Date().toLocaleTimeString('ko-KR', { hour12: false }),
           employeeId: result.employeeId
         }
 
@@ -273,7 +276,7 @@ export default {
           type: 'error',
           title: '처리 실패',
           message: error.message || 'QR 코드 처리 중 오류가 발생했습니다.',
-          time: new Date().toLocaleTimeString('ko-KR')
+          time: new Date().toLocaleTimeString('ko-KR', { hour12: false })
         }
 
         // 3초 후 에러 메시지 제거
@@ -296,7 +299,8 @@ export default {
     formatTime(timestamp) {
       return new Date(timestamp).toLocaleTimeString('ko-KR', {
         hour: '2-digit',
-        minute: '2-digit'
+        minute: '2-digit',
+        hour12: false
       })
     }
   }

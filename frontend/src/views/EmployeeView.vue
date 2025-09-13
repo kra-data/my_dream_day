@@ -26,15 +26,18 @@
         @logout="logout"
       />
 
-      <!-- 출퇴근 상태 -->
-      <AttendanceStatus 
+      <!-- 오늘의 근무 일정 -->
+      <TodayWorkshifts 
         :attendance-store="attendanceStore"
         :attendance-loading="attendanceLoading"
-        @show-qr-modal="showQRModal"
+        @attendance-updated="handleAttendanceUpdate"
       />
 
       <!-- 이번 주 근무 현황 -->
-      <WeekSummary :week-summary="weekSummary" />
+      <WeekSummary />
+
+      <!-- 내 근무 일정 -->
+      <EmployeeWorkshiftView />
 
       <!-- 월간 캘린더 -->
       <MonthlyCalendar 
@@ -58,8 +61,6 @@
     <!-- 마이페이지 모달 -->
     <MyPageModal 
       :show="showMyPage"
-      :current-employee="currentEmployee"
-      :monthly-stats="monthlyStats"
       @close="showMyPage = false"
     />
   </div>
@@ -68,27 +69,31 @@
 <script>
 import { onMounted, computed, ref } from 'vue'
 import EmployeeHeader from '@/components/employee/EmployeeHeader.vue'
-import AttendanceStatus from '@/components/employee/AttendanceStatus.vue'
+import TodayWorkshifts from '@/components/employee/TodayWorkshifts.vue'
 import WeekSummary from '@/components/employee/WeekSummary.vue'
 import MonthlyCalendar from '@/components/employee/MonthlyCalendar.vue'
 import QRModal from '@/components/employee/QRModal.vue'
 import MyPageModal from '@/components/employee/MyPageModal.vue'
+import EmployeeWorkshiftView from '@/components/employee/EmployeeWorkshiftView.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useAttendanceStore } from '@/stores/attendance'
+import { useWorkshiftStore } from '@/stores/workshift'
 
 export default {
   name: 'EmployeeView',
   components: {
     EmployeeHeader,
-    AttendanceStatus,
+    TodayWorkshifts,
     WeekSummary,
     MonthlyCalendar,
     QRModal,
-    MyPageModal
+    MyPageModal,
+    EmployeeWorkshiftView
   },
   setup() {
     const authStore = useAuthStore()
     const attendanceStore = useAttendanceStore()
+    const workshiftStore = useWorkshiftStore()
     
     // 로딩 및 에러 상태 관리
     const isLoading = computed(() => attendanceStore.loading)
@@ -97,15 +102,23 @@ export default {
     const attendanceLoading = computed(() => attendanceStore.loading)
     
     // 캘린더 상태
-    const calendarYear = ref(new Date().getFullYear())
-    const calendarMonth = ref(new Date().getMonth() + 1)
+    const now = new Date()
+    const calendarYear = ref(now.getFullYear())
+    const calendarMonth = ref(now.getMonth() + 1)
     
     // 데이터 초기화 - 직원용 데이터만 로드
     const initializeData = async () => {
       try {
         if (authStore.isAuthenticated) {
-          // 직원용 데이터 초기화 (현재 상태 + 과거 기록)
-          await attendanceStore.initializeEmployeeData()
+          // 직원용 데이터 초기화
+          const today = new Date()
+          await Promise.all([
+            attendanceStore.initializeEmployeeData(),
+            workshiftStore.fetchMyWorkshifts(
+              today.getMonth() + 1, // month is 1-based
+              today.getFullYear()
+            )
+          ])
         }
       } catch (error) {
         console.error('데이터 초기화 실패:', error)
@@ -125,6 +138,7 @@ export default {
     return {
       authStore,
       attendanceStore,
+      workshiftStore,
       isLoading,
       hasError,
       errorMessage,
@@ -215,106 +229,6 @@ export default {
       }
       
       return week
-    },
-    monthlyStats() {
-      const now = new Date()
-      const currentMonth = now.getMonth()
-      const currentYear = now.getFullYear()
-      
-      const monthlyRecords = this.attendanceStore.employeeRecords.filter(record => {
-        const recordDate = new Date(record.date || record.clockInAt)
-        return recordDate.getMonth() === currentMonth &&
-               recordDate.getFullYear() === currentYear
-      })
-      
-      let totalHours = 0
-      let workDays = 0
-      let lateDays = 0
-      let absentDays = 0
-      let overtimeDays = 0
-      
-      if (this.attendanceStore.currentStatus.clockInAt) {
-        workDays++
-        totalHours += this.attendanceStore.currentStatus.workedMinutes / 60
-        const checkInHour = new Date(this.attendanceStore.currentStatus.clockInAt).getHours()
-        if (checkInHour > 9) {
-          lateDays++
-        }
-        if (this.attendanceStore.currentStatus.workedMinutes > 480) {
-          overtimeDays++
-        }
-      }
-      
-      monthlyRecords.forEach(record => {
-        if (record.clockInAt) {
-          const recordDate = new Date(record.date || record.clockInAt)
-          if (recordDate.toDateString() === now.toDateString()) {
-            return
-          }
-          
-          workDays++
-          const checkInHour = new Date(record.clockInAt).getHours()
-          if (checkInHour > 9) {
-            lateDays++
-          }
-          
-          // API에서 workedMinutes를 제공하면 우선 사용
-          if (record.workedMinutes > 0) {
-            const workHours = record.workedMinutes / 60
-            totalHours += workHours
-            if (workHours > 8) {
-              overtimeDays++
-            }
-          }
-          // 그렇지 않으면 clockInAt, clockOutAt으로 계산
-          else if (record.clockOutAt) {
-            const workMs = new Date(record.clockOutAt) - new Date(record.clockInAt)
-            const workHours = workMs / (1000 * 60 * 60)
-            totalHours += workHours
-            if (workHours > 8) {
-              overtimeDays++
-            }
-          }
-        }
-      })
-      
-      const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate()
-      let weekdays = 0
-      for (let day = 1; day <= daysInMonth; day++) {
-        const date = new Date(currentYear, currentMonth, day)
-        if (date.getDay() !== 0 && date.getDay() !== 6) {
-          weekdays++
-        }
-      }
-      absentDays = Math.max(0, weekdays - workDays)
-      
-      // 급여 계산을 위한 기본값 설정
-      const employeePay = this.currentEmployee.pay || 0
-      const payUnit = this.currentEmployee.payUnit || 'MONTHLY'
-      
-      let hourlyRate
-      if (payUnit === 'HOURLY') {
-        hourlyRate = employeePay
-      } else {
-        // 월급을 시급으로 환산 (월 160시간 기준)
-        hourlyRate = employeePay / 160
-      }
-      
-      const baseSalary = totalHours * hourlyRate
-      const overtimePay = overtimeDays * hourlyRate * 1.5
-      const totalSalary = Math.round(baseSalary + overtimePay)
-      
-      
-      return {
-        totalHours: Math.round(totalHours * 10) / 10,
-        workDays,
-        lateDays,
-        absentDays,
-        overtimeDays,
-        baseSalary: Math.round(baseSalary),
-        overtimePay: Math.round(overtimePay),
-        totalSalary
-      }
     },
     calendarDays() {
       const days = []
@@ -418,7 +332,8 @@ export default {
       this.currentTime = now.toLocaleTimeString('ko-KR', {
         hour: '2-digit',
         minute: '2-digit',
-        second: '2-digit'
+        second: '2-digit',
+        hour12: false
       })
       this.currentDate = now.toLocaleDateString('ko-KR', {
         year: 'numeric',
@@ -452,6 +367,20 @@ export default {
       }
 
       try {
+        // QR 코드를 통한 출퇴근은 오늘의 첫 번째 근무에 연결
+        const todayShifts = this.attendanceStore.todayWorkshifts || []
+        if (todayShifts.length === 0) {
+          this.scanResult = {
+            type: 'error',
+            message: '오늘 예정된 근무가 없습니다. 먼저 근무 일정을 생성해주세요.'
+          }
+          return
+        }
+
+        const activeShift = todayShifts.find(shift => 
+          shift.actualInAt && !shift.actualOutAt
+        ) || todayShifts[0]
+
         const user = JSON.parse(localStorage.getItem('user'))
         const shopId = user ? user.shopId : null
         if (!shopId) {
@@ -459,13 +388,13 @@ export default {
         }
 
         if (this.qrAction === 'check-in') {
-          await this.attendanceStore.checkIn(parseInt(shopId))
+          await this.attendanceStore.checkIn(parseInt(shopId), activeShift.id)
           this.scanResult = {
             type: 'success',
             message: '출근이 완료되었습니다!'
           }
         } else {
-          await this.attendanceStore.checkOut(parseInt(shopId))
+          await this.attendanceStore.checkOut(parseInt(shopId), activeShift.id)
           this.scanResult = {
             type: 'success',
             message: '퇴근이 완료되었습니다!'
@@ -474,6 +403,7 @@ export default {
 
         setTimeout(() => {
           this.closeQRModal()
+          this.handleAttendanceUpdate()
         }, 3000)
 
       } catch (error) {
@@ -514,15 +444,23 @@ export default {
     formatTime(timestamp) {
       return new Date(timestamp).toLocaleTimeString('ko-KR', {
         hour: '2-digit',
-        minute: '2-digit'
+        minute: '2-digit',
+        hour12: false
       })
     },
 
     formatCurrency(amount) {
-      return new Intl.NumberFormat('ko-KR', {
-        style: 'currency',
-        currency: 'KRW'
-      }).format(amount)
+      if (!amount) return '0원'
+      return `${amount.toLocaleString('ko-KR')}원`
+    },
+
+    async handleAttendanceUpdate() {
+      // 출퇴근 처리 후 오늘의 근무 일정 업데이트 (attendance는 이제 workshift 종속)
+      try {
+        await this.attendanceStore.fetchTodayWorkshifts()
+      } catch (error) {
+        console.error('근무 일정 업데이트 실패:', error)
+      }
     },
 
     async logout() {

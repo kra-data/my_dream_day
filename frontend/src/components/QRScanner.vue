@@ -70,7 +70,7 @@ export default {
         this.hasMultipleCameras = cameras.length > 1
         
         this.initScanner()
-      } catch (err) {
+      } catch {
         this.error = '카메라 접근 권한이 필요합니다'
       }
     },

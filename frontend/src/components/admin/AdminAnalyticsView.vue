@@ -1,7 +1,7 @@
 <template>
   <div class="tab-content">
     <div class="analytics-section">
-      <h2>📈 통계 분석</h2>
+      <h2><AppIcon name="chart" :size="20" class="mr-2" />통계 분석</h2>
       
       <!-- 주간 통계 -->
       <div class="chart-section">
@@ -49,28 +49,28 @@
 
       <!-- 월별 근무 시간 통계 -->
       <div class="monthly-stats">
-        <h3>📊 월별 근무 통계 ({{ currentMonth }}월)</h3>
+        <h3><AppIcon name="stats" :size="20" class="mr-2" />월별 근무 통계 ({{ currentMonth }}월)</h3>
         <div class="stats-grid">
           <div class="stat-box primary">
-            <div class="stat-icon">⏰</div>
+            <div class="stat-icon"><AppIcon name="clock" :size="32" /></div>
             <div class="stat-title">이번 달 총 근무 시간</div>
             <div class="stat-value">{{ totalMonthlyHours.display }}</div>
             <div class="stat-subtitle">{{ totalMonthlyHours.minutes }}분</div>
           </div>
           <div class="stat-box success">
-            <div class="stat-icon">📈</div>
+            <div class="stat-icon"><AppIcon name="chart" :size="32" /></div>
             <div class="stat-title">평균 일일 근무 시간</div>
             <div class="stat-value">{{ averageDailyHours.display }}</div>
             <div class="stat-subtitle">직원 1명당 평균</div>
           </div>
           <div class="stat-box warning">
-            <div class="stat-icon">⭐</div>
+            <div class="stat-icon"><AppIcon name="star" :size="32" /></div>
             <div class="stat-title">가장 활발한 요일</div>
             <div class="stat-value">{{ mostActiveDayOfWeek.day }}</div>
             <div class="stat-subtitle">{{ mostActiveDayOfWeek.count }}회 출근</div>
           </div>
           <div class="stat-box info">
-            <div class="stat-icon">📅</div>
+            <div class="stat-icon"><AppIcon name="calendar" :size="32" /></div>
             <div class="stat-title">총 출근 일수</div>
             <div class="stat-value">{{ totalWorkDays }}일</div>
             <div class="stat-subtitle">{{ workingDaysInMonth }}일 중</div>
@@ -79,7 +79,7 @@
 
         <!-- 추가 세부 통계 -->
         <div class="detailed-stats">
-          <h4>📋 세부 통계</h4>
+          <h4><AppIcon name="clipboard" :size="18" class="mr-2" />세부 통계</h4>
           <div class="detail-grid">
             <div class="detail-item">
               <span class="detail-label">출근률</span>
@@ -108,9 +108,13 @@
 import { computed } from 'vue'
 import { useEmployeesStore } from '@/stores/employees'
 import { useAttendanceStore } from '@/stores/attendance'
+import AppIcon from '@/components/AppIcon.vue'
 
 export default {
   name: 'AdminAnalyticsView',
+  components: {
+    AppIcon
+  },
   setup() {
     const employeesStore = useEmployeesStore()
     const attendanceStore = useAttendanceStore()
@@ -130,7 +134,7 @@ export default {
         )
         
         weekStats.push({
-          date: date.toISOString().split('T')[0],
+          date: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`,
           dayName: days[date.getDay()],
           attendance: dayRecords.filter(r => r.clockInAt).length
         })
@@ -207,7 +211,6 @@ export default {
       }, 0)
       
       const hours = Math.floor(totalMinutes / 60)
-      const remainingMinutes = totalMinutes % 60
       
       return {
         display: totalMinutes > 0 ? `${hours}시간` : '0시간',
@@ -378,256 +381,4 @@ export default {
 }
 </script>
 
-<style scoped>
-.tab-content {
-  animation: fadeIn 0.3s ease-in;
-}
-
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-.analytics-section h2 {
-  color: #1f2937;
-  margin-bottom: 30px;
-}
-
-.chart-section, .department-stats, .monthly-stats {
-  background: white;
-  border-radius: 12px;
-  padding: 24px;
-  margin-bottom: 24px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-}
-
-.chart-section h3, .department-stats h3, .monthly-stats h3 {
-  color: #1f2937;
-  margin-bottom: 20px;
-}
-
-.week-chart {
-  display: flex;
-  justify-content: space-between;
-  align-items: end;
-  height: 200px;
-  margin-top: 20px;
-}
-
-.day-bar {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  flex: 1;
-  max-width: 80px;
-}
-
-.bar {
-  width: 40px;
-  background: linear-gradient(to top, #3b82f6, #60a5fa);
-  border-radius: 4px 4px 0 0;
-  min-height: 10px;
-  margin-bottom: 8px;
-}
-
-.day-label {
-  font-weight: 600;
-  color: #374151;
-  margin-bottom: 4px;
-}
-
-.day-count {
-  font-size: 0.8rem;
-  color: #6b7280;
-}
-
-.dept-chart {
-  margin-top: 20px;
-}
-
-.dept-item {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  margin-bottom: 16px;
-}
-
-.dept-name {
-  width: 100px;
-  font-weight: 600;
-  color: #374151;
-}
-
-.dept-progress {
-  flex: 1;
-  height: 8px;
-  background: #e5e7eb;
-  border-radius: 4px;
-  overflow: hidden;
-}
-
-.dept-bar {
-  height: 100%;
-  background: linear-gradient(90deg, #10b981, #059669);
-  transition: width 0.3s ease;
-}
-
-.dept-rate {
-  width: 50px;
-  text-align: right;
-  font-weight: 600;
-  color: #374151;
-}
-
-.stats-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 16px;
-  margin-top: 20px;
-}
-
-.stat-box {
-  background: white;
-  border-radius: 12px;
-  padding: 24px;
-  text-align: center;
-  border: 2px solid #e2e8f0;
-  position: relative;
-  transition: all 0.3s ease;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-}
-
-.stat-box:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 4px 20px rgba(0,0,0,0.15);
-}
-
-.stat-box.primary {
-  border-color: #3b82f6;
-  background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
-}
-
-.stat-box.success {
-  border-color: #10b981;
-  background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
-}
-
-.stat-box.warning {
-  border-color: #f59e0b;
-  background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
-}
-
-.stat-box.info {
-  border-color: #6366f1;
-  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
-}
-
-.stat-icon {
-  font-size: 2rem;
-  margin-bottom: 8px;
-  display: block;
-}
-
-.stat-title {
-  font-size: 0.9rem;
-  color: #6b7280;
-  margin-bottom: 8px;
-  font-weight: 500;
-}
-
-.stat-value {
-  font-size: 2rem;
-  font-weight: 700;
-  color: #1f2937;
-  margin-bottom: 4px;
-}
-
-.stat-subtitle {
-  font-size: 0.8rem;
-  color: #9ca3af;
-  font-weight: 400;
-}
-
-/* 세부 통계 스타일 */
-.detailed-stats {
-  margin-top: 32px;
-  padding-top: 24px;
-  border-top: 2px solid #e2e8f0;
-}
-
-.detailed-stats h4 {
-  color: #1e293b;
-  margin-bottom: 16px;
-  font-size: 1.1rem;
-  font-weight: 600;
-}
-
-.detail-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 16px;
-}
-
-.detail-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 16px;
-  background: #f8fafc;
-  border-radius: 8px;
-  border: 1px solid #e2e8f0;
-}
-
-.detail-label {
-  font-weight: 500;
-  color: #64748b;
-  font-size: 0.9rem;
-}
-
-.detail-value {
-  font-weight: 600;
-  color: #1e293b;
-  font-size: 1rem;
-}
-
-.no-data {
-  text-align: center;
-  color: #6b7280;
-  padding: 20px;
-  font-style: italic;
-}
-
-@media (max-width: 1024px) {
-  .stats-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-  
-  .detail-grid {
-    grid-template-columns: 1fr;
-  }
-}
-
-@media (max-width: 768px) {
-  .week-chart {
-    height: 150px;
-  }
-  
-  .stats-grid {
-    grid-template-columns: 1fr;
-  }
-  
-  .stat-value {
-    font-size: 1.5rem;
-  }
-  
-  .stat-icon {
-    font-size: 1.5rem;
-  }
-  
-  .detail-item {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 4px;
-  }
-}
-</style>
+<style scoped src="@/assets/styles/admin/AdminAnalyticsView.css"></style>

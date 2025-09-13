@@ -2,7 +2,7 @@
   <div class="tab-content">
     <div class="employees-section">
       <div class="section-header">
-        <h2>👥 직원 관리</h2>
+        <h2><AppIcon name="users" :size="20" class="mr-2" />직원 관리</h2>
         <button @click="showAddEmployeeModal = true" class="btn btn-primary">
           + 직원 추가
         </button>
@@ -29,7 +29,10 @@
             <tr v-else v-for="employee in employeesStore.employees" :key="employee.id">
               <td>
                 <div class="employee-cell">
-                  <div class="employee-avatar">
+                  <div 
+                    class="employee-avatar" 
+                    :style="{ backgroundColor: employee.personalColor || getDefaultColor(employee.position) }"
+                  >
                     {{ employee.name.charAt(0) }}
                   </div>
                   {{ employee.name }}
@@ -45,6 +48,22 @@
               </td>
               <td>
                 <div class="action-buttons">
+                  <button 
+                    @click="clockInEmployee(employee.id)"
+                    class="btn btn-success btn-sm"
+                    :disabled="attendanceStore.loading || getEmployeeStatus(employee.id) === 'working'"
+                    title="출근 처리"
+                  >
+                    출근
+                  </button>
+                  <button 
+                    @click="clockOutEmployee(employee.id)"
+                    class="btn btn-warning btn-sm"
+                    :disabled="attendanceStore.loading || getEmployeeStatus(employee.id) !== 'working'"
+                    title="퇴근 처리"
+                  >
+                    퇴근
+                  </button>
                   <button 
                     @click="editEmployee(employee)"
                     class="btn btn-secondary btn-sm"
@@ -82,7 +101,7 @@
             </div>
           </div>
           <p>직원이 이 QR 코드를 스캔하여 출퇴근할 수 있습니다</p>
-          <button @click="printQR" class="btn btn-primary">🖨️ 인쇄</button>
+          <button @click="printQR" class="btn btn-primary"><AppIcon name="printer" :size="16" class="mr-1" />인쇄</button>
         </div>
       </div>
     </div>
@@ -97,7 +116,7 @@
         <div class="employee-form">
           <!-- 기본 정보 섹션 -->
           <div class="form-section">
-            <h4 class="section-title">👤 기본 정보</h4>
+            <h4 class="section-title"><AppIcon name="user" :size="18" class="mr-2" />기본 정보</h4>
             <div class="form-row">
               <div class="form-group">
                 <label>이름 *</label>
@@ -127,18 +146,42 @@
               <label>주민(외국인)등록번호 *</label>
               <input 
                 type="text" 
-                v-model="employeeForm.nationalId"
-                placeholder="000000-0000000"
+                v-model="employeeForm.nationalIdMasked"
+                :placeholder="showEditEmployeeModal ? (originalEmployeeData?.nationalIdMasked || '000000-0******') : '000000-0******'"
                 required
                 class="form-input"
                 @input="formatNationalId"
               >
+              <small class="field-note">주민등록번호를 정확히 입력해주세요</small>
+            </div>
+
+            <div class="form-group">
+              <label>개인 컬러</label>
+              <div class="color-palette">
+                <div 
+                  v-for="color in colorOptions" 
+                  :key="color.value"
+                  class="color-option"
+                  :class="{ active: employeeForm.personalColor === color.value }"
+                  :style="{ backgroundColor: color.value }"
+                  @click="employeeForm.personalColor = color.value"
+                  :title="color.name"
+                >
+                  <AppIcon v-if="employeeForm.personalColor === color.value" name="check" :size="14" />
+                </div>
+              </div>
+              <div class="color-preview" v-if="employeeForm.personalColor">
+                <div class="preview-avatar" :style="{ backgroundColor: employeeForm.personalColor }">
+                  {{ employeeForm.name.charAt(0) || 'A' }}
+                </div>
+                <span class="preview-text">미리보기</span>
+              </div>
             </div>
           </div>
 
           <!-- 급여 정보 섹션 -->
           <div class="form-section">
-            <h4 class="section-title">💰 급여 정보</h4>
+            <h4 class="section-title"><AppIcon name="money" :size="18" class="mr-2" />급여 정보</h4>
             <div class="form-row">
               <div class="form-group">
                 <label>급여 단위 *</label>
@@ -151,7 +194,7 @@
                       required
                       @change="updatePayPlaceholder"
                     >
-                    <span class="radio-text">💵 시급</span>
+                    <span class="radio-text"><AppIcon name="money" :size="16" class="mr-1" />시급</span>
                   </label>
                   <label class="radio-option">
                     <input 
@@ -161,7 +204,7 @@
                       required
                       @change="updatePayPlaceholder"
                     >
-                    <span class="radio-text">💼 월급</span>
+                    <span class="radio-text"><AppIcon name="briefcase" :size="16" class="mr-1" />월급</span>
                   </label>
                 </div>
               </div>
@@ -188,13 +231,19 @@
                 <label>은행명 *</label>
                 <select v-model="employeeForm.bank" required class="form-select">
                   <option value="">은행을 선택하세요</option>
-                  <option value="국민">🏦 국민은행</option>
-                  <option value="토스">🎯 토스뱅크</option>
-                  <option value="신한">🔵 신한은행</option>
-                  <option value="우리">🟢 우리은행</option>
-                  <option value="하나">🟡 하나은행</option>
-                  <option value="농협">🌾 농협은행</option>
-                  <option value="기업">🏢 기업은행</option>
+                  <option value="국민">국민은행</option>
+                  <option value="신한">신한은행</option>
+                  <option value="우리">우리은행</option>
+                  <option value="하나">하나은행</option>
+                  <option value="농협">농협은행</option>
+                  <option value="기업">기업은행</option>
+                  <option value="SC">SC은행</option>
+                  <option value="새마을금고">새마을금고</option>
+                  <option value="수협">수협</option>
+                  <option value="신협">신협</option>
+                  <option value="케이">케이뱅크</option>
+                  <option value="토스">토스뱅크</option>
+                  <option value="카카오">카카오뱅크</option>
                 </select>
               </div>
               
@@ -203,27 +252,28 @@
                 <input 
                   type="text" 
                   v-model="employeeForm.accountNumber"
-                  placeholder="123-456-789012"
+                  placeholder="123456789012"
                   required
                   class="form-input"
                   @input="formatAccountNumber"
                 >
+                <span class="field-help-text">숫자만 입력해주세요</span>
               </div>
             </div>
           </div>
 
           <!-- 근무 정보 섹션 -->
           <div class="form-section">
-            <h4 class="section-title">🏢 근무 정보</h4>
+            <h4 class="section-title"><AppIcon name="hall" :size="18" class="mr-2" />근무 정보</h4>
             <div class="form-row">
               <div class="form-group">
                 <label>직위 *</label>
                 <select v-model="employeeForm.position" required class="form-select">
                   <option value="">직위를 선택하세요</option>
-                  <option value="OWNER">👑 오너</option>
-                  <option value="MANAGER">👨‍💼 매니저</option>
-                  <option value="STAFF">👩‍💻 스태프</option>
-                  <option value="PART_TIME">⏰ 아르바이트</option>
+                  <option value="OWNER"><AppIcon name="crown" :size="16" class="mr-1" />오너</option>
+                  <option value="MANAGER"><AppIcon name="user-tie" :size="16" class="mr-1" />매니저</option>
+                  <option value="STAFF"><AppIcon name="user-laptop" :size="16" class="mr-1" />스태프</option>
+                  <option value="PART_TIME"><AppIcon name="clock" :size="16" class="mr-1" />아르바이트</option>
                 </select>
               </div>
               
@@ -237,7 +287,7 @@
                       value="HALL" 
                       required
                     >
-                    <span class="radio-text">🍽️ 홀</span>
+                    <span class="radio-text"><AppIcon name="utensils" :size="16" class="mr-1" />홀</span>
                   </label>
                   <label class="radio-option">
                     <input 
@@ -246,7 +296,7 @@
                       value="KITCHEN" 
                       required
                     >
-                    <span class="radio-text">👨‍🍳 주방</span>
+                    <span class="radio-text"><AppIcon name="chef-hat" :size="16" class="mr-1" />주방</span>
                   </label>
                 </div>
               </div>
@@ -255,16 +305,16 @@
 
           <!-- 근무 시간표 섹션 -->
           <div class="form-section">
-            <h4 class="section-title">⏰ 근무 시간표</h4>
+            <h4 class="section-title"><AppIcon name="clock" :size="18" class="mr-2" />근무 시간표</h4>
             <p class="section-description">근무하지 않는 날은 비워두세요</p>
             
             <div class="schedule-container">
               <div class="schedule-quick-actions">
                 <button type="button" @click="applyWeekdaySchedule" class="btn-quick">
-                  📅 평일 일괄 적용 (09:00-18:00)
+                  <AppIcon name="calendar" :size="16" class="mr-1" />평일 일괄 적용 (09:00-18:00)
                 </button>
                 <button type="button" @click="clearSchedule" class="btn-quick">
-                  🗑️ 전체 초기화
+                  <AppIcon name="trash" :size="16" class="mr-1" />전체 초기화
                 </button>
               </div>
 
@@ -316,8 +366,8 @@
               취소
             </button>
             <button @click="saveEmployee" class="btn btn-primary" :disabled="employeesStore.loading">
-              <span v-if="employeesStore.loading">💾 저장 중...</span>
-              <span v-else>{{ showEditEmployeeModal ? '✏️ 수정 완료' : '➕ 직원 추가' }}</span>
+              <span v-if="employeesStore.loading"><AppIcon name="save" :size="16" class="mr-1" />저장 중...</span>
+              <span v-else><AppIcon :name="showEditEmployeeModal ? 'edit' : 'plus'" :size="16" class="mr-1" />{{ showEditEmployeeModal ? '수정 완료' : '직원 추가' }}</span>
             </button>
           </div>
         </div>
@@ -329,16 +379,18 @@
 <script>
 import { ref } from 'vue'
 import StatusBadge from '@/components/StatusBadge.vue'
+import AppIcon from '@/components/AppIcon.vue'
 import { useEmployeesStore } from '@/stores/employees'
 import { useAttendanceStore } from '@/stores/attendance'
 
 export default {
   name: 'AdminEmployeeView',
   components: {
-    StatusBadge
+    StatusBadge,
+    AppIcon
   },
   emits: ['retry-fetch'],
-  setup(props, { emit }) {
+  setup(_, { emit }) {
     const employeesStore = useEmployeesStore()
     const attendanceStore = useAttendanceStore()
     
@@ -348,6 +400,7 @@ export default {
     const showEditEmployeeModal = ref(false)
     const qrEmployee = ref(null)
     const editingEmployeeId = ref(null)
+    const originalEmployeeData = ref(null)
     
     // 폼 데이터
     const days = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']
@@ -363,9 +416,25 @@ export default {
     
     const payPlaceholder = ref('급여 단위를 먼저 선택하세요')
     
+    // 색상 옵션
+    const colorOptions = [
+      { name: '블루', value: '#3b82f6' },
+      { name: '그린', value: '#10b981' },
+      { name: '퍼플', value: '#8b5cf6' },
+      { name: '핑크', value: '#ec4899' },
+      { name: '옐로우', value: '#f59e0b' },
+      { name: '레드', value: '#ef4444' },
+      { name: '인디고', value: '#6366f1' },
+      { name: '시안', value: '#06b6d4' },
+      { name: '에메랄드', value: '#059669' },
+      { name: '로즈', value: '#f43f5e' },
+      { name: '바이올렛', value: '#7c3aed' },
+      { name: '앰버', value: '#d97706' }
+    ]
+    
     const employeeForm = ref({
       name: '',
-      nationalId: '',
+      nationalIdMasked: '',
       accountNumber: '',
       bank: '',
       phone: '',
@@ -373,6 +442,7 @@ export default {
       section: '',
       pay: 0,
       payUnit: '',
+      personalColor: '#3b82f6', // 기본값으로 블루 설정
       schedule: {
         mon: { start: '', end: '' },
         tue: { start: '', end: '' },
@@ -392,10 +462,12 @@ export default {
       showEditEmployeeModal,
       qrEmployee,
       editingEmployeeId,
+      originalEmployeeData,
       days,
       dayLabels,
       employeeForm,
       payPlaceholder,
+      colorOptions,
       emit
     }
   },
@@ -445,7 +517,8 @@ export default {
     formatTime(timestamp) {
       return new Date(timestamp).toLocaleTimeString('ko-KR', {
         hour: '2-digit',
-        minute: '2-digit'
+        minute: '2-digit',
+        hour12: false
       })
     },
     
@@ -465,8 +538,16 @@ export default {
     
     editEmployee(employee) {
       this.editingEmployeeId = employee.id
+      
+      // 원본 데이터 저장 (변경사항 비교용)
+      this.originalEmployeeData = { ...employee }
+      
       this.employeeForm = {
         ...employee,
+        // 수정 시 포맷된 형태로 표시
+        phone: employee.phone ? employee.phone.replace(/(\d{3})(\d{4})(\d{4})/, '$1-$2-$3') : '',
+        // 주민등록번호를 수정 가능하도록 변경
+        nationalIdMasked: employee.nationalId ? employee.nationalId.replace(/(\d{6})(\d{7})/, '$1-$2') : '',
         schedule: {
           mon: employee.schedule?.mon || { start: '', end: '' },
           tue: employee.schedule?.tue || { start: '', end: '' },
@@ -477,6 +558,7 @@ export default {
           sun: employee.schedule?.sun || { start: '', end: '' }
         }
       }
+      
       this.showEditEmployeeModal = true
     },
     
@@ -497,9 +579,10 @@ export default {
       this.showAddEmployeeModal = false
       this.showEditEmployeeModal = false
       this.editingEmployeeId = null
+      this.originalEmployeeData = null
       this.employeeForm = {
         name: '',
-        nationalId: '',
+        nationalIdMasked: '',
         accountNumber: '',
         bank: '',
         phone: '',
@@ -507,6 +590,7 @@ export default {
         section: '',
         pay: 0,
         payUnit: '',
+        personalColor: '#3b82f6',
         schedule: {
           mon: { start: '', end: '' },
           tue: { start: '', end: '' },
@@ -529,20 +613,18 @@ export default {
     },
 
     formatNationalId() {
-      let value = this.employeeForm.nationalId.replace(/\D/g, '')
+      // 주민등록번호 포맷팅 (편집 모드에서도 동작)
+      let value = this.employeeForm.nationalIdMasked.replace(/\D/g, '')
       if (value.length <= 13) {
         value = value.replace(/(\d{6})(\d{7})/, '$1-$2')
-        this.employeeForm.nationalId = value
+        this.employeeForm.nationalIdMasked = value
       }
     },
 
     formatAccountNumber() {
-      // 계좌번호는 은행별로 다르지만 일반적인 형식으로 포맷팅
+      // 계좌번호는 숫자만 허용 (하이픈 제거)
       let value = this.employeeForm.accountNumber.replace(/\D/g, '')
-      if (value.length <= 14) {
-        value = value.replace(/(\d{3})(\d{6})(\d{5})/, '$1-$2-$3')
-        this.employeeForm.accountNumber = value
-      }
+      this.employeeForm.accountNumber = value
     },
 
     formatPayAmount() {
@@ -596,573 +678,223 @@ export default {
     },
 
     async saveEmployee() {
-      // 필수 필드 검증
-      if (!this.employeeForm.name ||
-          !this.employeeForm.nationalId ||
-          !this.employeeForm.accountNumber ||
-          !this.employeeForm.bank ||
-          !this.employeeForm.phone ||
-          !this.employeeForm.position ||
-          !this.employeeForm.section ||
-          !this.employeeForm.pay ||
-          !this.employeeForm.payUnit) {
-        alert('모든 필수 항목을 입력해주세요')
-        return
-      }
+      if (this.showEditEmployeeModal) {
+        // 수정 모드: 변경된 필드만 전송
+        const changedFields = this.getChangedFields()
+        
+        if (Object.keys(changedFields).length === 0) {
+          alert('변경된 내용이 없습니다.')
+          return
+        }
+        
+        // 변경된 필드의 유효성 검사
+        if (!this.validateChangedFields(changedFields)) {
+          return
+        }
+        
+        try {
+          await this.employeesStore.updateEmployee(this.editingEmployeeId, changedFields)
+          alert('직원 정보가 성공적으로 수정되었습니다')
+          this.closeEmployeeModal()
+          this.emit('retry-fetch')
+        } catch (error) {
+          alert('수정에 실패했습니다: ' + error.message)
+        }
+      } else {
+        // 추가 모드: 모든 필수 필드 검증
+        const missingFields = []
+        
+        if (!this.employeeForm.name) missingFields.push('이름')
+        if (!this.employeeForm.nationalIdMasked) missingFields.push('주민등록번호')
+        if (!this.employeeForm.accountNumber) missingFields.push('계좌번호')
+        if (!this.employeeForm.bank) missingFields.push('은행명')
+        if (!this.employeeForm.phone) missingFields.push('휴대폰 번호')
+        if (!this.employeeForm.position) missingFields.push('직위')
+        if (!this.employeeForm.section) missingFields.push('근무 구역')
+        if (!this.employeeForm.pay) missingFields.push('급여 금액')
+        if (!this.employeeForm.payUnit) missingFields.push('급여 단위')
+        
+        if (missingFields.length > 0) {
+          alert(`다음 필수 항목을 입력해주세요:\n• ${missingFields.join('\n• ')}`)
+          return
+        }
 
-      // 휴대폰 번호 검증
-      const phoneRegex = /^\d{3}-\d{4}-\d{4}$/
-      if (!phoneRegex.test(this.employeeForm.phone)) {
-        alert('올바른 휴대폰 번호 형식을 입력해주세요 (010-1234-5678)')
-        return
-      }
+        // 휴대폰 번호 검증
+        const phoneRegex = /^\d{3}-\d{4}-\d{4}$/
+        if (!phoneRegex.test(this.employeeForm.phone)) {
+          alert('올바른 휴대폰 번호 형식을 입력해주세요 (010-1234-5678)')
+          return
+        }
 
-      // 주민등록번호 검증
-      const nationalIdRegex = /^\d{6}-\d{7}$/
-      if (!nationalIdRegex.test(this.employeeForm.nationalId)) {
-        alert('올바른 주민등록번호 형식을 입력해주세요 (000000-0000000)')
-        return
-      }
-      
-      try {
-        const employeeData = {
-          ...this.employeeForm,
-          // 포맷팅된 값들을 원본 형태로 변환
-          phone: this.employeeForm.phone.replace(/-/g, ''),
-          nationalId: this.employeeForm.nationalId.replace(/-/g, ''),
-          accountNumber: this.employeeForm.accountNumber.replace(/-/g, ''),
-          schedule: Object.fromEntries(
-            Object.entries(this.employeeForm.schedule).filter(([day, times]) => 
-              times.start && times.end
+        // 주민등록번호 검증 (새 직원 추가시에만)
+        const nationalIdRegex = /^\d{6}-\d{7}$/
+        if (!nationalIdRegex.test(this.employeeForm.nationalIdMasked)) {
+          alert('올바른 주민등록번호 형식을 입력해주세요 (000000-0000000)')
+          return
+        }
+        
+        try {
+          const employeeData = {
+            ...this.employeeForm,
+            // 포맷팅된 값들을 원본 형태로 변환
+            phone: this.employeeForm.phone.replace(/-/g, ''),
+            nationalId: this.employeeForm.nationalIdMasked.replace(/-/g, ''),
+            accountNumber: this.employeeForm.accountNumber.replace(/-/g, ''),
+            schedule: Object.fromEntries(
+              Object.entries(this.employeeForm.schedule).filter(([, times]) => 
+                times.start && times.end
+              )
             )
-          )
-        }
-        
-        if (this.showEditEmployeeModal) {
-          await this.employeesStore.updateEmployee(this.editingEmployeeId, employeeData)
-          alert('✅ 직원 정보가 성공적으로 수정되었습니다')
-        } else {
+          }
+          
           await this.employeesStore.addEmployee(employeeData)
-          alert('✅ 새 직원이 성공적으로 추가되었습니다')
+          alert('새 직원이 성공적으로 추가되었습니다')
+          this.closeEmployeeModal()
+          this.emit('retry-fetch')
+        } catch (error) {
+          alert('추가에 실패했습니다: ' + error.message)
         }
-        
-        this.closeEmployeeModal()
+      }
+    },
+
+    // 관리자용 수동 출근 처리
+    async clockInEmployee(employeeId) {
+      try {
+        await this.attendanceStore.manualAttendance(employeeId, 'IN')
+        alert('출근 처리가 완료되었습니다')
         this.emit('retry-fetch')
       } catch (error) {
-        alert('❌ 저장에 실패했습니다: ' + error.message)
+        alert('출근 처리에 실패했습니다: ' + error.message)
       }
+    },
+
+    // 관리자용 수동 퇴근 처리  
+    async clockOutEmployee(employeeId) {
+      try {
+        await this.attendanceStore.manualAttendance(employeeId, 'OUT')
+        alert('퇴근 처리가 완료되었습니다')
+        this.emit('retry-fetch')
+      } catch (error) {
+        alert('퇴근 처리에 실패했습니다: ' + error.message)
+      }
+    },
+
+    getEmployeeAvatarClass(position) {
+      const positionClasses = {
+        'OWNER': 'avatar-owner',
+        'MANAGER': 'avatar-manager', 
+        'STAFF': 'avatar-staff',
+        'PART_TIME': 'avatar-part-time'
+      }
+      return positionClasses[position] || 'avatar-staff'
+    },
+
+    getDefaultColor(position) {
+      const positionColors = {
+        'OWNER': '#8b5cf6',
+        'MANAGER': '#06b6d4',
+        'STAFF': '#10b981',
+        'PART_TIME': '#f59e0b'
+      }
+      return positionColors[position] || '#3b82f6'
+    },
+
+    // 변경된 필드만 추출
+    getChangedFields() {
+      const changedFields = {}
+      const original = this.originalEmployeeData
+      const current = this.employeeForm
+      
+      // 기본 필드들 (payUnit 추가)
+      const basicFields = ['name', 'phone', 'nationalIdMasked', 'accountNumber', 'bank', 'position', 'section', 'personalColor', 'payUnit']
+      
+      // 기본 필드 처리
+      basicFields.forEach(field => {
+        let originalValue = original[field]
+        let currentValue = current[field]
+        
+        // 특수 필드 포맷팅 처리
+        if (field === 'phone') {
+          originalValue = original[field] ? original[field].replace(/(\d{3})(\d{4})(\d{4})/, '$1-$2-$3') : ''
+          if (currentValue !== originalValue) {
+            changedFields[field] = currentValue.replace(/-/g, '')
+          }
+        } else if (field === 'nationalIdMasked') {
+          originalValue = original.nationalId ? original.nationalId.replace(/(\d{6})(\d{7})/, '$1-$2') : ''
+          if (currentValue !== originalValue) {
+            changedFields.nationalId = currentValue.replace(/-/g, '')
+          }
+        } else if (originalValue !== currentValue) {
+          changedFields[field] = currentValue
+        }
+      })
+      
+      // 급여 관련 필드 별도 처리
+      if (original.pay !== current.pay) {
+        changedFields.pay = current.pay
+      }
+      
+      // 스케줄 변경 확인
+      const originalSchedule = original.schedule || {}
+      const currentSchedule = current.schedule
+      const scheduleChanged = !this.isScheduleEqual(originalSchedule, currentSchedule)
+      
+      if (scheduleChanged) {
+        changedFields.schedule = Object.fromEntries(
+          Object.entries(currentSchedule).filter(([, times]) => 
+            times.start && times.end
+          )
+        )
+      }
+      
+      return changedFields
+    },
+
+    // 스케줄 비교 도우미 함수
+    isScheduleEqual(schedule1, schedule2) {
+      const days = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']
+      return days.every(day => {
+        const s1 = schedule1[day] || { start: '', end: '' }
+        const s2 = schedule2[day] || { start: '', end: '' }
+        return s1.start === s2.start && s1.end === s2.end
+      })
+    },
+
+    // 변경된 필드 유효성 검사
+    validateChangedFields(changedFields) {
+      if (changedFields.name && !changedFields.name.trim()) {
+        alert('이름을 입력해주세요')
+        return false
+      }
+      
+      // nationalId 검증 추가
+      if ('nationalId' in changedFields) {
+        const nationalId = changedFields.nationalId
+        const masked = nationalId.replace(/(\d{6})(\d{7})/, '$1-$2')
+        const nationalIdRegex = /^\d{6}-\d{7}$/
+        if (!nationalIdRegex.test(masked)) {
+          alert('올바른 주민등록번호 형식을 입력해주세요 (000000-0000000)')
+          return false
+        }
+      }
+      
+      if (changedFields.phone) {
+        const phoneRegex = /^\d{10,11}$/
+        if (!phoneRegex.test(changedFields.phone)) {
+          alert('올바른 휴대폰 번호 형식을 입력해주세요 (010-1234-5678)')
+          return false
+        }
+      }
+      
+      if (changedFields.pay && changedFields.pay <= 0) {
+        alert('급여 금액은 0보다 커야 합니다')
+        return false
+      }
+      
+      return true
     }
   }
 }
 </script>
 
-<style scoped>
-.tab-content {
-  animation: fadeIn 0.3s ease-in;
-}
-
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-.section-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
-}
-
-.section-header h2 {
-  color: #1f2937;
-  margin: 0;
-}
-
-.employees-table {
-  background: white;
-  border-radius: 12px;
-  overflow: hidden;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-}
-
-table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-th, td {
-  padding: 12px;
-  text-align: left;
-  border-bottom: 1px solid #f3f4f6;
-}
-
-th {
-  background: #f8fafc;
-  font-weight: 600;
-  color: #374151;
-}
-
-.employee-cell {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.employee-avatar {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  background: #3b82f6;
-  color: white;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 600;
-  font-size: 14px;
-}
-
-.action-buttons {
-  display: flex;
-  gap: 8px;
-}
-
-.btn {
-  padding: 8px 16px;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  font-weight: 600;
-  text-decoration: none;
-  display: inline-block;
-  transition: all 0.2s;
-}
-
-.btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.btn-primary {
-  background: #3b82f6;
-  color: white;
-}
-
-.btn-secondary {
-  background: #6b7280;
-  color: white;
-}
-
-.btn-danger {
-  background: #ef4444;
-  color: white;
-}
-
-.btn-sm {
-  padding: 6px 12px;
-  font-size: 0.9rem;
-}
-
-.no-data {
-  text-align: center;
-  color: #6b7280;
-  padding: 20px;
-  font-style: italic;
-}
-
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: var(--color-bg-overlay);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 9999;
-}
-
-.modal-content {
-  background: white;
-  border-radius: 12px;
-  padding: 24px;
-  max-width: 500px;
-  width: 90%;
-  max-height: 80vh;
-  overflow-y: auto;
-}
-
-.modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
-}
-
-.modal-close {
-  background: none;
-  border: none;
-  font-size: 24px;
-  cursor: pointer;
-  color: #6b7280;
-}
-
-.qr-display {
-  text-align: center;
-}
-
-.qr-code {
-  margin: 20px 0;
-}
-
-.qr-placeholder {
-  width: 200px;
-  height: 200px;
-  border: 2px dashed #d1d5db;
-  margin: 0 auto;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  background: #f9fafb;
-}
-
-.qr-pattern {
-  width: 150px;
-  height: 150px;
-  background: 
-    repeating-linear-gradient(
-      0deg,
-      #000 0px,
-      #000 10px,
-      #fff 10px,
-      #fff 20px
-    ),
-    repeating-linear-gradient(
-      90deg,
-      #000 0px,
-      #000 10px,
-      #fff 10px,
-      #fff 20px
-    );
-  background-size: 20px 20px;
-  margin-bottom: 10px;
-}
-
-.qr-data {
-  font-weight: 600;
-  color: #374151;
-}
-
-/* 개선된 직원 폼 스타일 */
-.employee-form {
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
-}
-
-.form-section {
-  background: #f8fafc;
-  border-radius: 12px;
-  padding: 20px;
-  border: 1px solid #e2e8f0;
-}
-
-.section-title {
-  font-size: 1.1rem;
-  font-weight: 600;
-  color: #1e293b;
-  margin: 0 0 12px 0;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.section-description {
-  color: #64748b;
-  font-size: 0.9rem;
-  margin-bottom: 16px;
-}
-
-.form-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
-}
-
-.form-group {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.form-group label {
-  font-weight: 600;
-  color: #374151;
-  font-size: 0.9rem;
-}
-
-.form-input, .form-select {
-  padding: 12px 16px;
-  border: 2px solid #e2e8f0;
-  border-radius: 8px;
-  font-size: 16px;
-  transition: all 0.2s;
-  background: white;
-}
-
-.form-input:focus, .form-select:focus {
-  outline: none;
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-  transform: translateY(-1px);
-}
-
-.input-with-suffix {
-  position: relative;
-  display: flex;
-  align-items: center;
-}
-
-.input-suffix {
-  position: absolute;
-  right: 16px;
-  color: #6b7280;
-  font-weight: 500;
-  pointer-events: none;
-}
-
-/* 라디오 버튼 개선 */
-.radio-group {
-  display: flex;
-  gap: 8px;
-}
-
-.radio-group.horizontal {
-  flex-direction: row;
-  flex-wrap: wrap;
-}
-
-.radio-option {
-  display: flex;
-  align-items: center;
-  padding: 12px 16px;
-  border: 2px solid #e2e8f0;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: all 0.2s;
-  background: white;
-  flex: 1;
-  justify-content: center;
-}
-
-.radio-option:hover {
-  border-color: #cbd5e1;
-  background: #f8fafc;
-}
-
-.radio-option input[type="radio"] {
-  display: none;
-}
-
-.radio-option input[type="radio"]:checked + .radio-text {
-  color: #3b82f6;
-  font-weight: 600;
-}
-
-.radio-option:has(input[type="radio"]:checked) {
-  border-color: #3b82f6;
-  background: #eff6ff;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-}
-
-.radio-text {
-  font-size: 0.9rem;
-  color: #374151;
-  transition: all 0.2s;
-}
-
-/* 근무 시간표 스타일 */
-.schedule-container {
-  margin-top: 16px;
-}
-
-.schedule-quick-actions {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 16px;
-}
-
-.btn-quick {
-  padding: 8px 16px;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
-  background: white;
-  color: #374151;
-  font-size: 0.85rem;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.btn-quick:hover {
-  background: #f3f4f6;
-  border-color: #9ca3af;
-}
-
-.schedule-grid {
-  display: grid;
-  gap: 16px;
-}
-
-.schedule-day {
-  border: 2px solid #e2e8f0;
-  border-radius: 12px;
-  padding: 16px;
-  background: white;
-  transition: all 0.2s;
-}
-
-.schedule-day:hover {
-  border-color: #cbd5e1;
-}
-
-.day-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 12px;
-}
-
-.day-name {
-  font-weight: 600;
-  color: #1e293b;
-  font-size: 0.95rem;
-}
-
-.checkbox-wrapper {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  cursor: pointer;
-}
-
-.day-checkbox {
-  width: 16px;
-  height: 16px;
-  accent-color: #3b82f6;
-}
-
-.checkmark {
-  font-size: 0.8rem;
-  color: #64748b;
-}
-
-.schedule-times {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  justify-content: center;
-}
-
-.time-input-group {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-}
-
-.time-input-group label {
-  font-size: 0.8rem;
-  color: #64748b;
-  margin: 0;
-}
-
-.time-input {
-  padding: 8px 12px;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
-  font-size: 0.9rem;
-  width: 90px;
-  text-align: center;
-}
-
-.time-input:focus {
-  outline: none;
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
-}
-
-.time-separator {
-  font-weight: 600;
-  color: #9ca3af;
-  font-size: 1.2rem;
-  margin: 0 8px;
-}
-
-.no-work-day {
-  text-align: center;
-  color: #9ca3af;
-  font-style: italic;
-  padding: 20px 0;
-  background: #f8fafc;
-  border-radius: 6px;
-}
-
-.form-actions {
-  display: flex;
-  gap: 12px;
-  justify-content: flex-end;
-  margin-top: 20px;
-}
-
-@media (max-width: 768px) {
-  .employees-table {
-    overflow-x: auto;
-  }
-  
-  .section-header {
-    flex-direction: column;
-    gap: 16px;
-    align-items: stretch;
-  }
-  
-  .action-buttons {
-    flex-direction: column;
-  }
-  
-  .modal-content {
-    max-width: 95%;
-    margin: 10px;
-  }
-  
-  .form-row {
-    grid-template-columns: 1fr;
-    gap: 12px;
-  }
-  
-  .radio-group.horizontal {
-    flex-direction: column;
-    gap: 8px;
-  }
-  
-  .schedule-quick-actions {
-    flex-direction: column;
-    gap: 8px;
-  }
-  
-  .btn-quick {
-    font-size: 0.8rem;
-    padding: 6px 12px;
-  }
-  
-  .schedule-times {
-    flex-direction: column;
-    gap: 8px;
-  }
-  
-  .time-separator {
-    transform: rotate(90deg);
-    margin: 4px 0;
-  }
-}
-</style>
+<style scoped src="@/assets/styles/admin/AdminEmployeeView.css"></style>

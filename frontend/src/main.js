@@ -4,10 +4,16 @@ import { createPinia } from 'pinia'
 import App from './App.vue'
 import router from './router'
 
+// 전역 컴포넌트
+import AppIcon from './components/AppIcon.vue'
+
 // 전역 스타일 적용
 import './assets/main.css'
 
 const app = createApp(App)
+
+// 전역 컴포넌트 등록
+app.component('AppIcon', AppIcon)
 
 // Pinia 상태관리 사용
 const pinia = createPinia()
@@ -30,5 +36,5 @@ app.mount('#app')
 
 // 개발 환경에서만 Vue DevTools 활성화
 if (import.meta.env.DEV) {
-  console.log('🔧 개발 모드로 실행 중')
+  console.log('개발 모드로 실행 중')
 }

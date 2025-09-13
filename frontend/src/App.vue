@@ -5,7 +5,16 @@
       <div class="nav-container">
         <div class="nav-brand">
           <router-link :to="homeRoute" class="brand-link">
-            📱 출퇴근 시스템
+            <img 
+              src="/src/assets/logo.png" 
+              alt="마이드림데이 로고" 
+              class="nav-logo logo-base logo-hover" 
+              loading="eager"
+              decoding="async"
+              width="100" 
+              height="100"
+            />
+            <span>마이드림데이</span>
           </router-link>
         </div>
         
@@ -17,14 +26,7 @@
               class="nav-link"
               @click="closeMobileMenu"
             >
-              📊 대시보드
-            </router-link>
-            <router-link 
-              to="/attendance" 
-              class="nav-link"
-              @click="closeMobileMenu"
-            >
-              📱 출퇴근
+             대시보드
             </router-link>
           </template>
           
@@ -35,7 +37,7 @@
               class="nav-link"
               @click="closeMobileMenu"
             >
-              🏠 홈
+             홈
             </router-link>
           </template>
         </div>
@@ -43,7 +45,7 @@
         <div class="nav-user">
           <span class="user-name">{{ user?.name }}님</span>
           <button @click="logout" class="logout-btn">
-            🚪 로그아웃
+           로그아웃
           </button>
         </div>
 
@@ -84,7 +86,7 @@
     <div v-if="notification" class="notification" :class="notification.type">
       <div class="notification-content">
         <span class="notification-icon">
-          {{ notification.type === 'success' ? '✅' : '❌' }}
+          {{ notification.type === 'success' ? '●' : '●' }}
         </span>
         <span class="notification-message">{{ notification.message }}</span>
         <button @click="closeNotification" class="notification-close">×</button>
@@ -171,7 +173,7 @@ export default {
   },
   
   watch: {
-    $route(to, from) {
+    $route(to) {
       this.closeMobileMenu()
       
       const titles = {

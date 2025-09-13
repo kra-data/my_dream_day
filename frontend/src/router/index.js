@@ -18,14 +18,12 @@ const router = createRouter({
         authStore.checkAuth()
         
         if (authStore.isAuthenticated && !authStore.isTokenExpired()) {
-          // 인증된 사용자는 역할에 따라 리다이렉트
           if (authStore.user?.role === 'admin') {
             next('/admin')
           } else {
             next('/employee')
           }
         } else {
-          // 인증되지 않았거나 토큰이 만료된 경우 로그인으로
           next('/login')
         }
       }
@@ -48,6 +46,33 @@ const router = createRouter({
       name: 'attendance',
       component: () => import('@/views/AttendanceView.vue'),
       meta: { requiresAuth: true }
+    },
+    // 404 fallback - 모든 정의되지 않은 경로 처리
+    {
+      path: '/:pathMatch(.*)*',
+      name: 'not-found',
+      beforeEnter: (to, from, next) => {
+        const authStore = useAuthStore()
+        authStore.checkAuth()
+        
+        console.log('404 라우트 접근:', to.path)
+        
+        // 인증된 사용자인지 확인
+        if (authStore.isAuthenticated && !authStore.isTokenExpired()) {
+          // 인증된 사용자는 역할에 따라 리다이렉트
+          if (authStore.user?.role === 'admin') {
+            console.log('인증된 관리자 - /admin으로 리다이렉트')
+            next('/admin')
+          } else {
+            console.log('인증된 직원 - /employee로 리다이렉트')
+            next('/employee')
+          }
+        } else {
+          // 인증되지 않은 사용자는 로그인으로
+          console.log('인증되지 않은 사용자 - /login으로 리다이렉트')
+          next('/login')
+        }
+      }
     }
   ]
 })

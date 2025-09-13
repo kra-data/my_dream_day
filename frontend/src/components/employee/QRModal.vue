@@ -4,7 +4,8 @@
     <div class="modal-content qr-modal" @click.stop>
       <div class="modal-header">
         <h3>
-          {{ action === 'check-in' ? '📱 출근 QR 스캔' : '📱 퇴근 QR 스캔' }}
+          <AppIcon name="qr" :size="18" class="inline-block mr-2" />
+          {{ action === 'check-in' ? '출근 QR 스캔' : '퇴근 QR 스캔' }}
         </h3>
         <button @click="$emit('close')" class="modal-close">&times;</button>
       </div>
@@ -15,13 +16,15 @@
             @click="activeTab = 'camera'"
             :class="['tab-btn', { 'active': activeTab === 'camera' }]"
           >
-            📹 카메라 스캔
+            <AppIcon name="eye" :size="16" class="mr-1" />
+            카메라 스캔
           </button>
           <button 
             @click="activeTab = 'manual'"
             :class="['tab-btn', { 'active': activeTab === 'manual' }]"
           >
-            ⌨️ 수동 입력
+            <AppIcon name="keyboard" :size="16" class="mr-1" />
+            수동 입력
           </button>
         </div>
 
@@ -45,14 +48,14 @@
               class="btn btn-primary btn-base"
               :disabled="loading"
             >
-              📹 카메라 시작
+              <AppIcon name="camera" :size="16" class="mr-1" />카메라 시작
             </button>
             <button 
               v-else
               @click="stopCamera" 
               class="btn btn-secondary btn-base"
             >
-              🛑 카메라 정지
+              <AppIcon name="stop" :size="16" class="mr-1" />카메라 정지
             </button>
           </div>
 
@@ -93,7 +96,7 @@
         <div v-if="scanResult" class="scan-result">
           <div :class="['alert', `alert-${scanResult.type}`, 'alert-icon']">
             <div class="alert-icon-content">
-              {{ scanResult.type === 'success' ? '✅' : '❌' }}
+              <AppIcon :name="scanResult.type === 'success' ? 'check-circle' : 'x-circle'" :size="18" />
             </div>
             <div>{{ scanResult.message }}</div>
           </div>
@@ -104,8 +107,11 @@
 </template>
 
 <script>
+import AppIcon from '@/components/AppIcon.vue'
+
 export default {
   name: 'QRModal',
+  components: { AppIcon },
   props: {
     show: {
       type: Boolean,
@@ -263,304 +269,4 @@ export default {
 }
 </script>
 
-<style scoped>
-.modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: var(--color-bg-overlay);
-  backdrop-filter: blur(8px);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 9999;
-}
-
-.modal-content {
-  background: var(--color-bg-primary);
-  border: 1px solid var(--color-border-light);
-  border-radius: 12px;
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
-  max-width: 450px;
-  width: 90%;
-  max-height: 85vh;
-  overflow-y: auto;
-}
-
-.qr-modal {
-  padding: 24px;
-}
-
-.modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
-  padding-bottom: 16px;
-  border-bottom: 1px solid #e5e7eb;
-}
-
-.modal-header h3 {
-  color: #1f2937;
-  font-size: 18px;
-  font-weight: 600;
-  margin: 0;
-}
-
-.modal-close {
-  background: none;
-  border: none;
-  font-size: 24px;
-  cursor: pointer;
-  color: #9ca3af;
-  padding: 0;
-  width: 32px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 6px;
-  transition: all 0.2s;
-}
-
-.modal-close:hover {
-  color: #6b7280;
-  background: #f3f4f6;
-}
-
-.qr-scan-content {
-  text-align: center;
-}
-
-.scan-tabs {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 20px;
-  background: #f3f4f6;
-  padding: 4px;
-  border-radius: 8px;
-}
-
-.tab-btn {
-  flex: 1;
-  padding: 10px 16px;
-  border: none;
-  border-radius: 6px;
-  background: transparent;
-  color: #6b7280;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.tab-btn.active {
-  background: white;
-  color: #3b82f6;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-}
-
-.tab-btn:hover:not(.active) {
-  color: #374151;
-}
-
-.qr-instruction {
-  color: #6b7280;
-  font-size: 14px;
-  margin-bottom: 24px;
-}
-
-.camera-container {
-  position: relative;
-  margin-bottom: 16px;
-  border-radius: 12px;
-  overflow: hidden;
-  background: #000;
-}
-
-.camera-preview {
-  width: 100%;
-  height: 280px;
-  object-fit: cover;
-  display: block;
-}
-
-.camera-overlay {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  pointer-events: none;
-}
-
-.scan-frame {
-  width: 200px;
-  height: 200px;
-  border: 3px solid #3b82f6;
-  border-radius: 12px;
-  position: relative;
-  animation: scan-pulse 2s infinite;
-}
-
-.scan-frame::before,
-.scan-frame::after {
-  content: '';
-  position: absolute;
-  width: 20px;
-  height: 20px;
-  border: 3px solid #ffffff;
-}
-
-.scan-frame::before {
-  top: -3px;
-  left: -3px;
-  border-right: none;
-  border-bottom: none;
-}
-
-.scan-frame::after {
-  bottom: -3px;
-  right: -3px;
-  border-left: none;
-  border-top: none;
-}
-
-@keyframes scan-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.6; }
-}
-
-.camera-controls {
-  margin-bottom: 16px;
-}
-
-.camera-error {
-  margin-top: 16px;
-}
-
-.manual-qr-input {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  margin-bottom: 20px;
-}
-
-.form-control {
-  padding: 12px;
-  border: 1px solid #d1d5db;
-  border-radius: 8px;
-  font-size: 16px;
-  transition: border-color 0.2s;
-}
-
-.form-control:focus {
-  outline: none;
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-}
-
-.btn {
-  padding: 12px 20px;
-  border: none;
-  border-radius: 8px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-}
-
-.btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.btn-primary {
-  background: #3b82f6;
-  color: white;
-}
-
-.btn-primary:hover:not(:disabled) {
-  background: #2563eb;
-}
-
-.btn-secondary {
-  background: #6b7280;
-  color: white;
-}
-
-.btn-secondary:hover:not(:disabled) {
-  background: #4b5563;
-}
-
-.btn-base {
-  font-size: 14px;
-}
-
-.btn-loading {
-  position: relative;
-}
-
-.scan-result {
-  margin-top: 20px;
-}
-
-.alert {
-  padding: 12px 16px;
-  border-radius: 8px;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  font-size: 14px;
-}
-
-.alert-success {
-  background: #f0fdf4;
-  color: #166534;
-  border: 1px solid #bbf7d0;
-}
-
-.alert-error {
-  background: #fef2f2;
-  color: #dc2626;
-  border: 1px solid #fecaca;
-}
-
-.alert-icon-content {
-  font-size: 18px;
-}
-
-/* 다크 모드 지원 */
-
-/* 반응형 디자인 */
-@media (max-width: 480px) {
-  .modal-content {
-    width: 95%;
-    margin: 20px;
-  }
-  
-  .qr-modal {
-    padding: 16px;
-  }
-  
-  .camera-preview {
-    height: 240px;
-  }
-  
-  .scan-frame {
-    width: 160px;
-    height: 160px;
-  }
-  
-  .tab-btn {
-    padding: 8px 12px;
-    font-size: 13px;
-  }
-  
-  /* 모바일 다크 모드 지원 */
-}
-</style>
+<style scoped src="@/assets/styles/employee/QRModal.css"></style>

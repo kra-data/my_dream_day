@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { useAuthStore } from './auth'
+import { useEmployeesStore } from './employees'
 
 export const useAttendanceStore = defineStore('attendance', () => {
   // State
@@ -27,6 +28,9 @@ export const useAttendanceStore = defineStore('attendance', () => {
 
   // 직원의 과거 기록 (통계용)
   const employeeRecords = ref([])
+  
+  // 오늘의 근무 일정
+  const todayWorkshifts = ref([])
 
   // API 인스턴스 가져오기
   const getApiInstance = () => {
@@ -44,82 +48,54 @@ export const useAttendanceStore = defineStore('attendance', () => {
 
   // ============= 현재 사용자 상태 관련 (직원용) =============
   
-  // 현재 사용자의 출퇴근 상태 조회
-  const fetchMyStatus = async () => {
+
+  // 오늘의 내 근무 일정 조회
+  const fetchTodayWorkshifts = async () => {
     loading.value = true
     error.value = null
     
     try {
       const api = getApiInstance()
-      const response = await api.get('/attendance/me/status')
+      const response = await api.get('/my/workshifts/today')
       
-      currentStatus.value = {
-        onDuty: response.data.onDuty || false,
-        clockInAt: response.data.clockInAt || null,
-        workedMinutes: response.data.workedMinutes || 0,
-        extraMinutes: response.data.extraMinutes || 0
-      }
+      todayWorkshifts.value = response.data || []
       
-      console.log('내 출퇴근 상태 조회 완료:', currentStatus.value)
-      return currentStatus.value
+      console.log('오늘의 근무 일정 조회 완료:', todayWorkshifts.value)
+      return todayWorkshifts.value
     } catch (error) {
-      console.error('내 출퇴근 상태 조회 실패:', error)
-      error.value = error.response?.data?.message || error.message || '출퇴근 상태를 불러오는데 실패했습니다'
-      
-      // 에러 발생 시 기본값으로 설정
-      currentStatus.value = {
-        onDuty: false,
-        clockInAt: null,
-        workedMinutes: 0,
-        extraMinutes: 0
-      }
+      console.error('오늘의 근무 일정 조회 실패:', error)
+      error.value = error.response?.data?.message || error.message || '오늘의 근무 일정을 불러오는데 실패했습니다'
+      todayWorkshifts.value = []
       throw error
     } finally {
       loading.value = false
     }
   }
 
-  // 직원의 과거 출퇴근 기록 조회 (통계용)
-  const fetchEmployeeRecords = async (startDate = null, endDate = null) => {
+  // 직원 마이페이지 정산 정보 조회
+  const fetchMySettlement = async (anchor = null, cycleStartDay = null) => {
     loading.value = true
     error.value = null
     
     try {
       const api = getApiInstance()
       const params = {}
-      if (startDate) params.startDate = startDate
-      if (endDate) params.endDate = endDate
+      if (anchor) params.anchor = anchor
+      if (cycleStartDay) params.cycleStartDay = cycleStartDay
       
-      const response = await api.get('/attendance/me', { params })
+      const response = await api.get('/my/settlement', { params })
       
-      // API 응답 구조에 맞게 records 배열 처리
-      const apiData = response.data || {}
-      const records = apiData.records || []
-      
-      // records 배열의 각 항목에 필요한 데이터 추가/변환
-      employeeRecords.value = records.map(record => ({
-        id: record.id,
-        date: record.date,
-        clockInAt: record.clockInAt,
-        clockOutAt: record.clockOutAt,
-        workedMinutes: record.workedMinutes || 0,
-        extraMinutes: record.extraMinutes || 0,
-        // 추가 정보 저장
-        employeeId: apiData.employeeId
-      }))
-      
-      console.log('내 출퇴근 기록 조회 완료:', employeeRecords.value.length, '건')
-      console.log('API 응답 구조:', { totalWorkedMinutes: apiData.totalWorkedMinutes, totalExtraMinutes: apiData.totalExtraMinutes, nextCursor: apiData.nextCursor })
-      return employeeRecords.value
+      console.log('마이페이지 정산 정보 조회 완료:', response.data)
+      return response.data
     } catch (error) {
-      console.error('내 출퇴근 기록 조회 실패:', error)
-      error.value = error.response?.data?.message || error.message || '출퇴근 기록을 불러오는데 실패했습니다'
-      employeeRecords.value = []
+      console.error('마이페이지 정산 정보 조회 실패:', error)
+      error.value = error.response?.data?.message || error.message || '정산 정보를 불러오는데 실패했습니다'
       throw error
     } finally {
       loading.value = false
     }
   }
+
 
   // 현재 사용자 관련 computed
   const isOnDuty = computed(() => currentStatus.value.onDuty)
@@ -174,31 +150,73 @@ export const useAttendanceStore = defineStore('attendance', () => {
         throw new Error('매장 정보를 찾을 수 없습니다.')
       }
       
-      const response = await api.get(`attendance/admin/shops/${shopId}/attendance`, { params })
+      // Fetch attendance records
+      const attendanceResponse = await api.get(`/admin/shops/${shopId}/attendance/records`, { params })
       
       // Handle new API response structure
-      const apiData = response.data || {}
-      const newRecords = apiData.records || []
+      const apiData = attendanceResponse.data || {}
+      const newRecords = apiData.items || []  // API returns "items", not "records"
       
-      // Process records with enhanced data mapping
-      const processedRecords = newRecords.map(record => ({
-        id: record.id,
-        shopId: record.shopId,
-        employeeId: record.employeeId,
-        type: record.type,
-        clockInAt: record.clockInAt,
-        clockOutAt: record.clockOutAt,
-        workedMinutes: record.workedMinutes || 0,
-        extraMinutes: record.extraMinutes || 0,
-        paired: record.paired || false,
-        // Enhanced employee data
-        employeeName: record.employee?.name || '알 수 없음',
-        employeePosition: record.employee?.position || 'STAFF',
-        employeeSection: record.employee?.section || 'UNKNOWN',
-        // Additional computed fields
-        date: record.clockInAt ? new Date(record.clockInAt).toDateString() : null,
-        status: record.paired ? 'completed' : 'incomplete'
-      }))
+      // Get employees from employees store 
+      const employeesStore = useEmployeesStore()
+      const employees = employeesStore.employees
+      
+      // Create employee lookup map for efficient joining
+      const employeeMap = new Map()
+      employees.forEach(emp => {
+        employeeMap.set(emp.id, emp)
+      })
+      
+      // Process records with enhanced data mapping including new API fields
+      const processedRecords = newRecords.map(record => {
+        const employee = employeeMap.get(record.employeeId) || {}
+        
+        return {
+          // Core record fields
+          id: record.id,
+          shopId: record.shopId,
+          employeeId: record.employeeId,
+          type: record.type,
+          clockInAt: record.clockInAt,
+          clockOutAt: record.clockOutAt,
+          
+          // Time tracking fields
+          workedMinutes: record.workedMinutes || 0,
+          actualMinutes: record.actualMinutes || record.workedMinutes || 0, // New field
+          extraMinutes: record.extraMinutes || 0,
+          
+          // Payment and status fields (new)
+          finalPayAmount: record.finalPayAmount || 0, // New field for calculated pay
+          status: record.status || (record.paired ? 'COMPLETED' : 'IN_PROGRESS'), // Enhanced status
+          paired: record.paired || false,
+          
+          // Workshift integration (new)
+          shiftId: record.shiftId || null, // New field linking to workshift
+          
+          // Additional metadata (new)
+          memo: record.memo || null, // New field for notes
+          
+          // Enhanced employee data from joined employee info
+          employeeName: employee.name || `직원 #${record.employeeId}`,
+          employeePosition: employee.position || 'STAFF',
+          employeeSection: employee.section || 'UNKNOWN',
+          employeePersonalColor: employee.personalColor || null, // For UI styling
+          
+          // Additional computed fields
+          date: record.clockInAt ? new Date(record.clockInAt).toDateString() : null,
+          dateLocal: record.clockInAt ? new Date(record.clockInAt).toLocaleDateString('ko-KR') : null,
+          
+          // Computed status for legacy compatibility
+          isCompleted: record.status === 'COMPLETED' || record.paired,
+          isInProgress: record.status === 'IN_PROGRESS' || (!record.paired && record.clockInAt && !record.clockOutAt),
+          
+          // Time calculations
+          totalMinutes: (record.actualMinutes || record.workedMinutes || 0) + (record.extraMinutes || 0),
+          payRate: record.finalPayAmount && record.actualMinutes 
+            ? Math.round(record.finalPayAmount / ((record.actualMinutes || record.workedMinutes) / 60))
+            : null
+        }
+      })
       
       // Handle pagination
       if (reset || !cursor) {
@@ -369,11 +387,8 @@ export const useAttendanceStore = defineStore('attendance', () => {
   // 직원용 데이터 초기화
   const initializeEmployeeData = async () => {
     try {
-      // 현재 상태와 과거 기록을 병렬로 조회
-      await Promise.all([
-        fetchMyStatus(),
-        fetchEmployeeRecords() // 통계 계산용
-      ])
+      // 오늘의 근무 일정 조회
+      await fetchTodayWorkshifts()
     } catch (error) {
       console.error('직원 데이터 초기화 실패:', error)
       throw error
@@ -436,22 +451,28 @@ export const useAttendanceStore = defineStore('attendance', () => {
     }
   })
 
-  const checkIn = async (shopId) => {
+  const checkIn = async (shopId, shiftId, memo = null) => {
     loading.value = true
     error.value = null
     
     try {
       const api = getApiInstance()
-      const response = await api.post('/attendance', {
+      const requestData = {
         shopId,
+        shiftId,
         type: 'IN'
-      })
+      }
+      
+      // Add memo if provided
+      if (memo) {
+        requestData.memo = memo
+      }
+      
+      const response = await api.post('/attendance', requestData)
       
       const record = response.data
       console.log('출근 처리 완료:', record)
       
-      // 출근 후 내 상태 다시 조회
-      await fetchMyStatus()
       
       return record
     } catch (error) {
@@ -464,22 +485,28 @@ export const useAttendanceStore = defineStore('attendance', () => {
     }
   }
 
-  const checkOut = async (shopId) => {
+  const checkOut = async (shopId, shiftId, memo = null) => {
     loading.value = true
     error.value = null
     
     try {
       const api = getApiInstance()
-      const response = await api.post('/attendance', {
+      const requestData = {
         shopId,
+        shiftId,
         type: 'OUT'
-      })
+      }
+      
+      // Add memo if provided
+      if (memo) {
+        requestData.memo = memo
+      }
+      
+      const response = await api.post('/attendance', requestData)
       
       const record = response.data
       console.log('퇴근 처리 완료:', record)
       
-      // 퇴근 후 내 상태 다시 조회
-      await fetchMyStatus()
       
       return record
     } catch (error) {
@@ -492,7 +519,7 @@ export const useAttendanceStore = defineStore('attendance', () => {
     }
   }
 
-  const processQRScan = async () => {
+  const processQRScan = async (shiftId = null) => {
     try {
       // 매장 ID 가져오기
       const shopId = getShopId()
@@ -500,21 +527,122 @@ export const useAttendanceStore = defineStore('attendance', () => {
         throw new Error('매장 정보를 찾을 수 없습니다. 다시 로그인해주세요.')
       }
       
-      // 현재 상태 조회
-      await fetchMyStatus()
       
       if (!currentStatus.value.onDuty) {
-        // 출근 처리
-        const record = await checkIn(parseInt(shopId))
-        return { action: 'check-in', shopId, record }
+        // 출근 처리 - shiftId가 필요함
+        if (!shiftId) {
+          throw new Error('출근할 근무를 선택해주세요.')
+        }
+        const record = await checkIn(parseInt(shopId), shiftId)
+        return { action: 'check-in', shopId, shiftId, record }
       } else {
-        // 퇴근 처리
-        const record = await checkOut(parseInt(shopId))
-        return { action: 'check-out', shopId, record }
+        // 퇴근 처리 - shiftId가 필요함
+        if (!shiftId) {
+          throw new Error('퇴근할 근무를 선택해주세요.')
+        }
+        const record = await checkOut(parseInt(shopId), shiftId)
+        return { action: 'check-out', shopId, shiftId, record }
       }
     } catch (error) {
       console.error('QR 처리 실패:', error)
       throw error
+    }
+  }
+
+  // 관리자용 수동 출퇴근 처리
+  const manualAttendance = async (employeeId, type) => {
+    validateAdminPermission()
+    loading.value = true
+    error.value = null
+    try {
+      const api = getApiInstance()
+      const shopId = getShopId()
+      
+      if (!shopId) {
+        throw new Error('매장 정보를 찾을 수 없습니다.')
+      }
+
+      if (!employeeId || !['IN', 'OUT'].includes(type)) {
+        throw new Error('잘못된 매개변수입니다.')
+      }
+
+      // 현재 시간을 ISO 문자열로 생성
+      const currentTime = new Date().toISOString()
+      
+      // 새로운 API 페이로드 형식: timestamp format
+      const payload = type === 'IN' 
+        ? { clockInAt: currentTime }
+        : { clockOutAt: currentTime }
+
+      // 새로운 관리자용 수동 출퇴근 API 호출
+      try {
+        await api.post(`/attendance/admin/shops/${shopId}/attendance/employees/${employeeId}`, payload)
+      } catch (apiError) {
+        if (apiError.response?.status === 404) {
+          console.warn('수동 출퇴근 API 요청 실패')
+        } else {
+          throw apiError
+        }
+      }
+
+      // 대시보드 데이터 새로고침
+      await fetchDashboardData()
+      
+      console.log(`관리자 수동 ${type === 'IN' ? '출근' : '퇴근'} 처리 완료 - 직원 ID: ${employeeId}`)
+      return true
+    } catch (error) {
+      console.error(`관리자 수동 ${type === 'IN' ? '출근' : '퇴근'} 처리 실패:`, error)
+      error.value = error.response?.data?.message || error.message || `${type === 'IN' ? '출근' : '퇴근'} 처리에 실패했습니다`
+      throw error
+    } finally {
+      loading.value = false
+    }
+  }
+
+  // 관리자용 출퇴근 기록 수정
+  const editAttendanceRecord = async (recordId, updateData) => {
+    validateAdminPermission()
+    loading.value = true
+    error.value = null
+    
+    try {
+      const api = getApiInstance()
+      const shopId = getShopId()
+      
+      if (!shopId) {
+        throw new Error('매장 정보를 찾을 수 없습니다.')
+      }
+
+      if (!recordId) {
+        throw new Error('출퇴근 기록 ID가 필요합니다.')
+      }
+
+      // API 호출
+      const response = await api.put(`/attendance/admin/shops/${shopId}/attendance/records/${recordId}`, updateData)
+      
+      // 로컬 상태 업데이트
+      const updatedRecord = response.data
+      const recordIndex = records.value.findIndex(record => record.id === recordId)
+      if (recordIndex !== -1) {
+        records.value[recordIndex] = {
+          ...records.value[recordIndex],
+          ...updatedRecord,
+          clockInAt: updatedRecord.clockInAt,
+          clockOutAt: updatedRecord.clockOutAt
+        }
+      }
+
+      // 대시보드 데이터 새로고침
+      await fetchDashboardData()
+      
+      console.log('출퇴근 기록 수정 완료 - 기록 ID:', recordId)
+      return updatedRecord
+    } catch (error) {
+      console.error('출퇴근 기록 수정 실패:', error)
+      error.value = error.response?.data?.message || error.message || '출퇴근 기록 수정에 실패했습니다'
+      throw error
+    } finally {
+      loading.value = false
     }
   }
 
@@ -554,7 +682,7 @@ export const useAttendanceStore = defineStore('attendance', () => {
     }
   }
 
-  // 관리자용 통계 계산 (기존 records 사용)
+  // 관리자용 통계 계산 (enhanced with new fields)
   const getStatistics = (startDate = null, endDate = null) => {
     let filteredRecords = records.value
     
@@ -572,38 +700,95 @@ export const useAttendanceStore = defineStore('attendance', () => {
     
     const totalRecords = filteredRecords.length
     const completedRecords = filteredRecords.filter(record => 
-      record.clockInAt && record.clockOutAt
+      record.isCompleted || (record.clockInAt && record.clockOutAt)
     ).length
-    const incompleteRecords = totalRecords - completedRecords
+    const inProgressRecords = filteredRecords.filter(record => 
+      record.isInProgress || (!record.clockOutAt && record.clockInAt)
+    ).length
+    
+    // Enhanced statistics with new fields
+    const totalWorkedMinutes = filteredRecords.reduce((sum, record) => 
+      sum + (record.actualMinutes || record.workedMinutes || 0), 0
+    )
+    const totalExtraMinutes = filteredRecords.reduce((sum, record) => 
+      sum + (record.extraMinutes || 0), 0
+    )
+    const totalPayAmount = filteredRecords.reduce((sum, record) => 
+      sum + (record.finalPayAmount || 0), 0
+    )
     
     return {
       total: totalRecords,
       completed: completedRecords,
-      incomplete: incompleteRecords,
-      completionRate: totalRecords > 0 ? Math.round((completedRecords / totalRecords) * 100) : 0
+      inProgress: inProgressRecords,
+      incomplete: totalRecords - completedRecords - inProgressRecords,
+      completionRate: totalRecords > 0 ? Math.round((completedRecords / totalRecords) * 100) : 0,
+      // Enhanced metrics
+      totalWorkedHours: Math.round(totalWorkedMinutes / 60 * 10) / 10,
+      totalExtraHours: Math.round(totalExtraMinutes / 60 * 10) / 10,
+      totalPayAmount,
+      averagePayRate: totalWorkedMinutes > 0 ? Math.round(totalPayAmount / (totalWorkedMinutes / 60)) : 0,
+      recordsWithMemo: filteredRecords.filter(record => record.memo).length
     }
   }
 
-  // 근무 시간 계산 헬퍼 함수
-  const calculateWorkedTime = (clockInAt, clockOutAt) => {
+  // 근무 시간 계산 헬퍼 함수 (enhanced)
+  const calculateWorkedTime = (clockInAt, clockOutAt, actualMinutes = null) => {
     if (!clockInAt || !clockOutAt) return null
     
     const start = new Date(clockInAt)
     const end = new Date(clockOutAt)
     const diffMs = end.getTime() - start.getTime()
-    const diffMinutes = Math.floor(diffMs / (1000 * 60))
+    const calculatedMinutes = Math.floor(diffMs / (1000 * 60))
+    
+    // Use actual minutes from API if available, otherwise calculate
+    const finalMinutes = actualMinutes || calculatedMinutes
     
     return {
-      minutes: diffMinutes,
-      hours: Math.floor(diffMinutes / 60),
-      displayTime: `${Math.floor(diffMinutes / 60)}시간 ${diffMinutes % 60}분`
+      minutes: finalMinutes,
+      calculatedMinutes, // Raw calculation for comparison
+      hours: Math.floor(finalMinutes / 60),
+      displayTime: `${Math.floor(finalMinutes / 60)}시간 ${finalMinutes % 60}분`,
+      // Additional formatting options
+      shortDisplay: `${Math.floor(finalMinutes / 60)}:${String(finalMinutes % 60).padStart(2, '0')}`,
+      decimalHours: Math.round(finalMinutes / 60 * 100) / 100
     }
+  }
+  
+  // Helper function for pay calculation
+  const calculatePayAmount = (minutes, hourlyRate, extraMinutes = 0, overtimeRate = 1.5) => {
+    if (!minutes || !hourlyRate) return 0
+    
+    const regularPay = (minutes / 60) * hourlyRate
+    const overtimePay = extraMinutes > 0 ? (extraMinutes / 60) * hourlyRate * overtimeRate : 0
+    
+    return Math.round(regularPay + overtimePay)
+  }
+  
+  // Helper function for status formatting
+  const formatAttendanceStatus = (status, paired = false, clockInAt = null, clockOutAt = null) => {
+    const statusMap = {
+      'COMPLETED': '완료',
+      'IN_PROGRESS': '근무중',
+      'CANCELLED': '취소',
+      'PENDING': '대기중'
+    }
+    
+    // Legacy compatibility
+    if (!status) {
+      if (paired || (clockInAt && clockOutAt)) return '완료'
+      if (clockInAt && !clockOutAt) return '근무중'
+      return '미처리'
+    }
+    
+    return statusMap[status] || status
   }
 
   return {
     // State
     records, // 관리자용
     employeeRecords, // 직원용
+    todayWorkshifts, // 오늘의 근무 일정
     todaySummary,
     activeEmployees,
     recentActivities,
@@ -630,8 +815,8 @@ export const useAttendanceStore = defineStore('attendance', () => {
     getRecordsByEmployee,
     
     // 직원용 Actions
-    fetchMyStatus,
-    fetchEmployeeRecords,
+    fetchTodayWorkshifts,
+    fetchMySettlement,
     initializeEmployeeData,
     getEmployeeStatistics,
     
@@ -648,11 +833,15 @@ export const useAttendanceStore = defineStore('attendance', () => {
     checkIn,
     checkOut,
     processQRScan,
+    manualAttendance,
+    editAttendanceRecord,
     deleteRecordsByEmployee,
     getStatistics,
     getApiInstance,
     
     // Helper functions
-    calculateWorkedTime
+    calculateWorkedTime,
+    calculatePayAmount,
+    formatAttendanceStatus
   }
 })
