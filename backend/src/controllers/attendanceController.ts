@@ -148,14 +148,14 @@ const recordAttendanceSchema = z.discriminatedUnion('type', [
     shopId: z.coerce.number().int().positive(),
     shiftId: z.coerce.number().int().positive().optional(),
     memo: z.string().max(500).optional(),
-    at: z.coerce.date().optional(),
+    at: z.coerce.date(),
   }),
   z.object({
     type: z.literal('OUT'),
     shopId: z.coerce.number().int().positive(),
     shiftId: z.coerce.number().int().positive(),
     memo: z.string().max(500).optional(),
-    at: z.coerce.date().optional(),
+    at: z.coerce.date(),
   })
 ]);
 
@@ -194,151 +194,140 @@ export const recordAttendance = async (req: AuthRequiredRequest, res: Response) 
     }
   }
 
-  if (type === 'IN') {
-    // 시프트 없으면 → 자동 생성(endAt=null)
-    if (!shift) {
-      const created = await prisma.workShift.create({
-        data: {
-          shopId,
-          employeeId,
-          startAt: effectiveAt,
-          endAt: null,               // 종료시각 미정
-          status: 'IN_PROGRESS',
-          actualInAt: effectiveAt,
-          late: false,
-          memo: memo ?? undefined,
-        }
-      });
-      return res.json({
-        ok: true,
-        message: '출근 완료',
-        clockInAt: effectiveAt,
-        memo,
-        shiftId: created.id
-      });
-    }
+if (type === 'IN') {
+  // at(=계획 시작시각) 필수 — startAt은 요청에서 받는다
+  if (!at) {
+    res.status(400).json({ error: '출근 시각(at)이 필요합니다.' });
+    return;
+  }
 
-    const nowMs = effectiveAt.getTime();
-    const startMs = shift.startAt.getTime();
-    const deltaMin = Math.round((nowMs - startMs) / 60000); // +: 늦음, -: 이름
-
-    if (deltaMin > REVIEW_TOLERANCE_MIN) {
-      // ✅ 10분 초과 지각 → REVIEW 전환 + 메모 저장
-      const updated = await prisma.workShift.update({
-        where: { id: shiftId },
-        data: {
-          status: 'REVIEW',
-          reviewReason: 'LATE_IN' as any,
-          memo: memo ?? undefined,
-          actualInAt: effectiveAt,
-          late: true
-        },
-      });
-      res.json({
-        ok: true,
-        message: '출근(관리자 확인 필요)',
-        clockInAt: effectiveAt,
-        review: { reason: 'LATE_IN', deltaMin },
-        memo : memo,
-        shiftId: updated.id
-      });
-      return;
-    }
-
-    // 이른 출근 또는 10분 이내 지각: 정상 진행(IN_PROGRESS)
-    const late = nowMs > startMs; // 표시용(지각 배지)
-    await prisma.workShift.update({
-      where: { id: shift!.id },
-      data: { status: 'IN_PROGRESS', actualInAt: effectiveAt, late, memo: memo ?? undefined },
+  // 시프트 없으면 → 생성(startAt=at, actualInAt=now)
+  if (!shift) {
+    const created = await prisma.workShift.create({
+      data: {
+        shopId,
+        employeeId,
+        startAt: at,          // 계획 시작
+        endAt: null,          // 종료 미정(OUT 때 채움)
+        status: 'IN_PROGRESS',
+        actualInAt: now,      // 실제 찍은 시각
+        late: null,           // 지각 로직 사용 안 함
+        memo: memo ?? undefined,
+      }
     });
     res.json({
       ok: true,
-      message: late ? '출근(지각)' : '출근 완료',
-clockInAt: effectiveAt,
+      message: '출근 완료',
+      clockInAt: at,          // 계획 시각 반환 (OUT과 대칭)
       memo,
-      shiftId
+      shiftId: created.id
     });
     return;
   }
 
-  if (type === 'OUT') {
-    const s = shift!;
-    // IN이 없거나 이미 OUT 처리된 경우 방지
-    if (!s.actualInAt) { res.status(400).json({ error: '해당 시프트에 출근 기록이 없습니다.' }); return; }
-    if (s.actualOutAt) { res.status(400).json({ error: '이미 퇴근 처리된 시프트입니다.' }); return; }
-    if (!(effectiveAt > s.actualInAt)) { res.status(400).json({ error: '퇴근 시각은 출근 이후이어야 합니다.' }); return; }
-
-    const nowMs = effectiveAt.getTime();
-    const endMs = s.endAt ? s.endAt.getTime() : Number.POSITIVE_INFINITY;
-    const inMs = s.actualInAt.getTime();
-    const leftEarly = !!s.endAt && nowMs < endMs;
-
-    // ✅ 정산: 10분 이내 지각은 삭감 없음 → payable 계산 시 inAt을 startAt으로 보정
-    const lateInMs = Math.max(0, inMs - s.startAt.getTime());
-    const inForPayable =
-      lateInMs <= LATE_GRACE_MIN_FOR_PAYABLE * 60_000
-        ? s.startAt  // 10분 내 지각은 계획 시작부터 인정
-        : s.actualInAt;
-
-    const actual = diffMinutes(s.actualInAt, effectiveAt);
-    const payable = s.endAt
-      ? intersectMinutes(inForPayable, effectiveAt, s.startAt, s.endAt)
-      : diffMinutes(inForPayable, effectiveAt);
-
-    // ✅ 종료 10분 이내 조퇴 → REVIEW 전환
-    if (leftEarly && (endMs - nowMs) >= REVIEW_TOLERANCE_MIN * 60_000) {
-      const updated = await prisma.workShift.update({
-        where: { id: shiftId },
-        data: {
-          status: 'REVIEW',
-          reviewReason: 'EARLY_OUT' as any,
-          actualOutAt: effectiveAt,
-          leftEarly: true,
-          memo: memo ?? undefined,
-          actualMinutes: actual,
-          workedMinutes: payable
-        },
-      });
-      res.json({
-        ok: true,
-        message: '퇴근(조퇴, 관리자 확인 필요)',
-        clockOutAt: effectiveAt,
-        workedMinutes: payable,
-        actualMinutes: actual,
-        planned: { startAt: s.startAt, endAt: s.endAt },
-        review: { reason: 'EARLY_OUT' },
-        shiftId: updated.id,
-      });
-      return;
-    }
-const hourlyAmount =
-  s.employee.payUnit === 'HOURLY'
-    ? Math.round((payable / 60) * (s.employee.pay ?? 0))
-    : null;
-await prisma.workShift.update({
-  where: { id: shiftId },
-  data: {
-    status: 'COMPLETED',
-    actualOutAt: effectiveAt,
-    leftEarly,
-    memo: memo ?? undefined,
-    actualMinutes: actual,
-    workedMinutes: payable,
-    finalPayAmount: hourlyAmount,
-  },
-});
-res.json({
-  ok: true,
-  message: leftEarly ? '퇴근(예정보다 이른 퇴근)' : '퇴근 완료',
-  clockOutAt: effectiveAt,
-  workedMinutes: payable,
-  actualMinutes: actual,
-  finalPayAmount: hourlyAmount,
-  planned: { startAt: s.startAt, endAt: s.endAt },
-  shiftId,
-});
+  // 기존 시프트가 있는데 이미 출근 처리됨 방지
+  if (shift.actualInAt) {
+    res.status(400).json({ error: '이미 출근 처리된 시프트입니다.' });
     return;
   }
+
+  // 기존 시프트 보정: startAt=at, actualInAt=now 로 세팅
+  await prisma.workShift.update({
+    where: { id: shift.id },
+    data: {
+      status: 'IN_PROGRESS',
+      startAt: at,         // 계획 시작 재설정
+      actualInAt: now,     // 실제 찍은 시각
+      late: null,
+      memo: memo ?? undefined
+    },
+  });
+
+  res.json({
+    ok: true,
+    message: '출근 완료',
+    clockInAt: at,         // 계획 시각 반환
+    memo,
+    shiftId
+  });
+  return;
+}
+if (type === 'OUT') {
+  const s = shift!;
+  // 1) 순서/중복 방지
+  if (!s.actualInAt) {
+    res.status(400).json({ error: '해당 시프트에 출근 기록이 없습니다.' });
+    return;
+  }
+  if (s.actualOutAt) {
+    res.status(400).json({ error: '이미 퇴근 처리된 시프트입니다.' });
+    return;
+  }
+  // at(=계획 종료시각) 필수 — endAt은 요청에서 받는다
+  if (!at) {
+    res.status(400).json({ error: '퇴근 시각(at)이 필요합니다.' });
+    return;
+  }
+
+  // 2) 유효성: now는 실제 퇴근이므로 출근 이후여야 하고,
+  //    급여계산용 endAt(at)은 startAt 이후여야 한다.
+  if (!(now > s.actualInAt)) {
+    res.status(400).json({ error: '실제 퇴근 시각은 출근 이후여야 합니다.' });
+    return;
+  }
+  if (!(at > s.startAt)) {
+    res.status(400).json({ error: '급여 계산을 위해 endAt(at)은 startAt 이후여야 합니다.' });
+    return;
+  }
+
+  // 3) 실근무(참고용) = actualInAt ~ now
+  const actual = Math.max(
+    0,
+    Math.floor((now.getTime() - s.actualInAt.getTime()) / 60000)
+  );
+
+  // 4) 급여분(payable) = 오직 계획시간(startAt ~ endAt[=at])
+  const payable = Math.max(
+    0,
+    Math.floor((at.getTime() - s.startAt.getTime()) / 60000)
+  );
+
+  // 5) 금액: 시급제만 계산
+  const hourlyAmount =
+    s.employee.payUnit === 'HOURLY'
+      ? Math.round((payable / 60) * (s.employee.pay ?? 0))
+      : null;
+
+  // 6) 업데이트
+  await prisma.workShift.update({
+    where: { id: shiftId },
+    data: {
+      status: 'COMPLETED',
+      // 계획 종료시간을 요청의 at으로 저장
+      endAt: at,
+      // 실제 퇴근은 now로 기록
+      actualOutAt: now,
+      leftEarly: false,                 // 조퇴 플래그 미사용
+      memo: memo ?? undefined,
+      actualMinutes: actual,            // 참고용
+      workedMinutes: payable,           // 급여 산정 분
+      finalPayAmount: hourlyAmount,
+    },
+  });
+
+  // 7) 응답: clockOutAt은 사용자가 선택한 at(계획 종료시각)을 돌려줌
+  res.json({
+    ok: true,
+    message: '퇴근 완료',
+    clockOutAt: at,
+    workedMinutes: payable,
+    actualMinutes: actual,
+    finalPayAmount: hourlyAmount,
+    planned: { startAt: s.startAt, endAt: at },
+    shiftId,
+  });
+  return;
+}
 
   res.status(400).json({ error: 'Unknown type' });
 };

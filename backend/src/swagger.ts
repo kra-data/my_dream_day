@@ -2090,7 +2090,7 @@ examples: {
             'application/json': {
               schema: { $ref: '#/components/schemas/AttendancePreviewRequest' },
               examples: {
-                clockInExample: { value: { shopId: 1, shiftId: 456, type: 'IN',  scannedAt: '2025-09-05T02:55:12.000Z' } },
+                clockInExample: { value: { shopId: 1, type: 'IN',  scannedAt: '2025-09-05T02:55:12.000Z' } },
                 clockOutExample:{ value: { shopId: 1, shiftId: 456, type: 'OUT', scannedAt: '2025-09-05T01:03:45.000Z' } }
               }
             }
@@ -2120,9 +2120,9 @@ examples: {
             'application/json': {
                             schema: { $ref: '#/components/schemas/AttendanceCreateRequest' },
               examples: {
-                inWithChosenTime:  { value: { shopId: 1, shiftId: 123, type: 'IN',  at: '2025-09-05T03:00:00.000Z' } },
+                inWithChosenTime:  { value: { shopId: 1,type: 'IN',  at: '2025-09-05T03:00:00.000Z' } },
                 outWithChosenTime: { value: { shopId: 1, shiftId: 123, type: 'OUT', at: '2025-09-05T10:00:00.000Z' } },
-                noteIncluded:      { value: { shopId: 1, shiftId: 123, type: 'IN',  at: '2025-09-05T03:00:00.000Z', memo: '버스 지연' } }
+                noteIncluded:      { value: { shopId: 1,  type: 'IN',  at: '2025-09-05T03:00:00.000Z', memo: '버스 지연' } }
               }
             }
           }
