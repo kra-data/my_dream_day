@@ -74,7 +74,7 @@ model WorkShift {
   employee         Employee           @relation(fields: [employeeId], references: [id], onDelete: Cascade)
   settlement       PayrollSettlement? @relation(fields: [settlementId], references: [id])
   shop             Shop               @relation(fields: [shopId], references: [id], onDelete: Cascade)
-
+  adminChecked Boolean  @default(false)
   @@index([shopId, employeeId, startAt])
   @@index([employeeId, status])
   @@index([settlementId])
@@ -138,6 +138,5 @@ enum WorkShiftStatus {
   IN_PROGRESS
   COMPLETED
   CANCELED
-  MISSED
   REVIEW
 }
