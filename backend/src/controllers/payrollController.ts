@@ -1003,8 +1003,13 @@ export const getEmployeeStatusList = async (req: AuthRequiredRequest, res: Respo
   });
 
   // settlement 필터
-  const filtered = settlement ? items.filter(i => i.settlement.status === settlement) : items;
+  // ✅ 0원(정산 대상 없음) 직원 제외
+  const nonZero = items.filter(i => (i.amount ?? 0) > 0);
 
+  // settlement(PAID/PENDING) 필터 (요청이 있는 경우만 적용)
+  const filtered = settlement
+    ? nonZero.filter(i => i.settlement.status === settlement)
+    : nonZero;
   // 정렬
   const dir = order === 'desc' ? -1 : 1;
   filtered.sort((a, b) => {
