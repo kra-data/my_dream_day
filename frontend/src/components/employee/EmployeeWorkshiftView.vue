@@ -79,13 +79,21 @@
             </div>
 
             <div class="shift-actions">
-              <button 
-                v-if="workshiftStore.isShiftUpcoming(shift)"
-                @click="handleEditShift(shift)" 
-                class="action-btn edit-btn"
+              <button
+                @click="handleEditShift(shift)"
+                class="btn btn-warning btn-sm"
                 title="일정 수정"
               >
-                <AppIcon name="edit" :size="14" />
+                <AppIcon name="edit" :size="14" class="mr-1" />
+                수정
+              </button>
+              <button
+                @click="handleDeleteShift(shift)"
+                class="btn btn-danger btn-sm"
+                title="일정 취소"
+              >
+                <AppIcon name="trash-2" :size="14" class="mr-1" />
+                삭제
               </button>
             </div>
           </div>
@@ -143,6 +151,14 @@
       @update="handleUpdateWorkshift"
       @close="closeEditModal"
     />
+
+    <!-- 근무 일정 취소 모달 -->
+    <EmployeeWorkshiftDeleteModal
+      v-if="showDeleteModal && selectedShift"
+      :shift="selectedShift"
+      @delete="handleDeleteWorkshift"
+      @close="closeDeleteModal"
+    />
   </div>
 </template>
 
@@ -153,13 +169,15 @@ import { useAuthStore } from '@/stores/auth'
 import StatusBadge from '@/components/StatusBadge.vue'
 import EmployeeWorkshiftCreateModal from './EmployeeWorkshiftCreateModal.vue'
 import EmployeeWorkshiftEditModal from './EmployeeWorkshiftEditModal.vue'
+import EmployeeWorkshiftDeleteModal from './EmployeeWorkshiftDeleteModal.vue'
 
 export default {
   name: 'EmployeeWorkshiftView',
   components: {
     StatusBadge,
     EmployeeWorkshiftCreateModal,
-    EmployeeWorkshiftEditModal
+    EmployeeWorkshiftEditModal,
+    EmployeeWorkshiftDeleteModal
   },
   setup() {
     const workshiftStore = useWorkshiftStore()
@@ -168,6 +186,7 @@ export default {
     const currentWeek = ref(new Date())
     const showCreateModal = ref(false)
     const showEditModal = ref(false)
+    const showDeleteModal = ref(false)
     const selectedShift = ref(null)
     const createModalDate = ref(null)
     
@@ -311,17 +330,39 @@ export default {
       selectedShift.value = shift
       showEditModal.value = true
     }
+
+    const handleDeleteShift = (shift) => {
+      selectedShift.value = shift
+      showDeleteModal.value = true
+    }
     
-    const handleUpdateWorkshift = async (shiftData) => {
+    const handleUpdateWorkshift = async (updateData) => {
       try {
-        // Employee can only edit their own shifts via the my workshifts API
-        // This would require a different API endpoint for employee updates
-        console.log('Update shift data:', shiftData)
-        // For now, we'll show a message that updates need admin approval
-        alert('근무 일정 변경은 관리자 승인이 필요합니다. 관리자에게 문의해주세요.')
-        closeEditModal()
+        if (updateData.success) {
+          console.log('Workshift updated successfully')
+          closeEditModal()
+          // Refresh workshifts to update the UI
+          await refreshWorkshifts()
+        } else {
+          console.error('Update failed:', updateData)
+        }
       } catch (error) {
         console.error('Failed to update workshift:', error)
+      }
+    }
+
+    const handleDeleteWorkshift = async (deleteData) => {
+      try {
+        if (deleteData.success) {
+          console.log('Workshift deleted successfully:', deleteData.shiftId)
+          closeDeleteModal()
+          // Refresh workshifts to update the UI
+          await refreshWorkshifts()
+        } else {
+          console.error('Delete failed:', deleteData)
+        }
+      } catch (error) {
+        console.error('Failed to delete workshift:', error)
       }
     }
     
@@ -340,6 +381,11 @@ export default {
     
     const closeEditModal = () => {
       showEditModal.value = false
+      selectedShift.value = null
+    }
+
+    const closeDeleteModal = () => {
+      showDeleteModal.value = false
       selectedShift.value = null
     }
     
@@ -362,6 +408,7 @@ export default {
       upcomingShifts,
       showCreateModal,
       showEditModal,
+      showDeleteModal,
       selectedShift,
       createModalDate,
       previousWeek,
@@ -373,10 +420,13 @@ export default {
       getTimeUntilShift,
       handleCreateWorkshift,
       handleEditShift,
+      handleDeleteShift,
       handleUpdateWorkshift,
+      handleDeleteWorkshift,
       openCreateModal,
       closeCreateModal,
-      closeEditModal
+      closeEditModal,
+      closeDeleteModal
     }
   }
 }

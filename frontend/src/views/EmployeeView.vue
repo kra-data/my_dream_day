@@ -27,10 +27,12 @@
       />
 
       <!-- 오늘의 근무 일정 -->
-      <TodayWorkshifts 
+      <TodayWorkshifts
         :attendance-store="attendanceStore"
         :attendance-loading="attendanceLoading"
         @attendance-updated="handleAttendanceUpdate"
+        @qr-check-in-requested="handleQRCheckInRequest"
+        @qr-check-out-requested="handleQRCheckOutRequest"
       />
 
       <!-- 이번 주 근무 현황 -->
@@ -59,9 +61,46 @@
     />
 
     <!-- 마이페이지 모달 -->
-    <MyPageModal 
+    <MyPageModal
       :show="showMyPage"
       @close="showMyPage = false"
+    />
+
+    <!-- QR 스캐너 모달 -->
+    <QRScannerModal
+      v-if="showQRScanner"
+      @scan-result="handleQRScanCompleted"
+      @close="closeQRScanner"
+    />
+
+    <!-- 출근 확인 모달 -->
+    <CheckInConfirmationModal
+      v-if="showCheckInConfirmation"
+      :show="true"
+      :preview-data="checkInPreviewData"
+      :loading="attendanceLoading"
+      @confirm="handleCheckInConfirm"
+      @close="closeCheckInConfirmation"
+    />
+
+    <!-- 퇴근 확인 모달 -->
+    <CheckOutConfirmationModal
+      v-if="showCheckOutConfirmation"
+      :show="true"
+      :preview-data="checkOutPreviewData"
+      :loading="attendanceLoading"
+      @confirm="handleCheckOutConfirm"
+      @close="closeCheckOutConfirmation"
+    />
+
+    <!-- 출퇴근 결과 모달 -->
+    <AttendanceResultModal
+      v-if="showAttendanceResult"
+      :show="true"
+      :type="attendanceResultType"
+      :result-data="attendanceResultData"
+      :error-message="attendanceErrorMessage"
+      @close="closeAttendanceResult"
     />
   </div>
 </template>
@@ -74,6 +113,10 @@ import WeekSummary from '@/components/employee/WeekSummary.vue'
 import MonthlyCalendar from '@/components/employee/MonthlyCalendar.vue'
 import QRModal from '@/components/employee/QRModal.vue'
 import MyPageModal from '@/components/employee/MyPageModal.vue'
+import QRScannerModal from '@/components/employee/QRScannerModal.vue'
+import CheckInConfirmationModal from '@/components/employee/CheckInConfirmationModal.vue'
+import CheckOutConfirmationModal from '@/components/employee/CheckOutConfirmationModal.vue'
+import AttendanceResultModal from '@/components/employee/AttendanceResultModal.vue'
 import EmployeeWorkshiftView from '@/components/employee/EmployeeWorkshiftView.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useAttendanceStore } from '@/stores/attendance'
@@ -88,6 +131,10 @@ export default {
     MonthlyCalendar,
     QRModal,
     MyPageModal,
+    QRScannerModal,
+    CheckInConfirmationModal,
+    CheckOutConfirmationModal,
+    AttendanceResultModal,
     EmployeeWorkshiftView
   },
   setup() {
@@ -156,7 +203,21 @@ export default {
       showQRScanModal: false,
       showMyPage: false,
       qrAction: null,
-      scanResult: null
+      scanResult: null,
+      // QR 및 출퇴근 모달 상태
+      showQRScanner: false,
+      showCheckInConfirmation: false,
+      showCheckOutConfirmation: false,
+      checkInPreviewData: null,
+      checkOutPreviewData: null,
+      showAttendanceResult: false,
+      attendanceResultType: 'success',
+      attendanceResultData: null,
+      attendanceErrorMessage: '',
+      // QR 스캔 유형 ('IN' | 'OUT')
+      qrScanType: null,
+      // 현재 선택된 근무 시프트
+      currentShift: null
     }
   },
   computed: {
@@ -461,6 +522,276 @@ export default {
       } catch (error) {
         console.error('근무 일정 업데이트 실패:', error)
       }
+    },
+
+    // QR 및 출퇴근 모달 관리 함수들
+    handleQRCheckInRequest() {
+      console.log('QR check-in requested')
+      this.qrScanType = 'IN'
+      this.showQRScanner = true
+    },
+
+    handleQRCheckOutRequest(shift = null) {
+      console.log('QR check-out requested', shift)
+      this.qrScanType = 'OUT'
+      this.currentShift = shift
+      this.showQRScanner = true
+    },
+
+    async handleQRScanCompleted(qrData) {
+      console.log('QR scan completed:', qrData, 'type:', this.qrScanType)
+      this.showQRScanner = false
+
+      if (!qrData) {
+        this.showAttendanceError('QR 코드를 입력해주세요')
+        return
+      }
+
+      try {
+        if (this.qrScanType === 'OUT') {
+          // 퇴근 처리
+          const previewData = await this.processQRDataForCheckout(qrData)
+          this.checkOutPreviewData = previewData
+          this.showCheckOutConfirmation = true
+        } else {
+          // 출근 처리 (기존 로직)
+          const previewData = await this.processQRData(qrData)
+          this.checkInPreviewData = previewData
+          this.showCheckInConfirmation = true
+        }
+      } catch (error) {
+        const errorType = this.qrScanType === 'OUT' ? '퇴근' : '출근'
+        console.error(`${errorType} 미리보기 실패:`, error)
+        this.showAttendanceError(error.message || `${errorType} 미리보기에 실패했습니다`)
+      }
+    },
+
+    async processQRData(qrData) {
+      // JWT 토큰 추출 및 디코딩
+      const jwtToken = this.extractTokenFromURL(qrData)
+      const payload = this.decodeJWT(jwtToken)
+      const scannedAt = new Date().toISOString()
+
+      // 출근 미리보기 API 호출
+      const previewData = await this.attendanceStore.attendancePreview(
+        payload.shopId,
+        'IN',
+        scannedAt
+      )
+
+      if (!previewData || typeof previewData !== 'object') {
+        throw new Error('출근 미리보기 데이터가 올바르지 않습니다')
+      }
+
+      return {
+        ...previewData,
+        qrPayload: payload,
+        scannedAt: scannedAt,
+        suggestedAt: previewData.suggestedAt || scannedAt,
+        message: previewData.message || '출근 시간을 확인해주세요'
+      }
+    },
+
+    async processQRDataForCheckout(qrData) {
+      // JWT 토큰 추출 및 디코딩
+      const jwtToken = this.extractTokenFromURL(qrData)
+      const payload = this.decodeJWT(jwtToken)
+      const scannedAt = new Date().toISOString()
+
+      // 퇴근할 시프트 ID 확인
+      const shiftId = this.currentShift?.id || null
+
+      if (!shiftId) {
+        throw new Error('퇴근할 근무 일정을 찾을 수 없습니다')
+      }
+
+      // 퇴근 미리보기 API 호출 (shiftId 포함)
+      const previewData = await this.attendanceStore.attendancePreview(
+        payload.shopId,
+        'OUT',
+        scannedAt,
+        shiftId
+      )
+
+      if (!previewData || typeof previewData !== 'object') {
+        throw new Error('퇴근 미리보기 데이터가 올바르지 않습니다')
+      }
+
+      return {
+        ...previewData,
+        qrPayload: payload,
+        scannedAt: scannedAt,
+        suggestedAt: previewData.suggestedAt || scannedAt,
+        message: previewData.message || '퇴근 시간을 확인해주세요',
+        currentShift: this.currentShift
+      }
+    },
+
+    extractTokenFromURL(qrData) {
+      if (!qrData || typeof qrData !== 'string') {
+        throw new Error('유효하지 않은 QR 코드 데이터입니다')
+      }
+
+      if (qrData.includes('token=')) {
+        try {
+          const url = new URL(qrData)
+          const token = url.searchParams.get('token')
+          if (!token) {
+            throw new Error('URL에서 토큰을 찾을 수 없습니다')
+          }
+          return token.trim()
+        } catch {
+          throw new Error('URL 형식이 올바르지 않습니다')
+        }
+      }
+      return qrData.trim()
+    },
+
+    decodeJWT(token) {
+      try {
+        if (!token || typeof token !== 'string') {
+          throw new Error('유효하지 않은 토큰입니다')
+        }
+
+        const parts = token.split('.')
+        if (parts.length !== 3) {
+          throw new Error('유효하지 않은 JWT 형식입니다')
+        }
+
+        let payload = parts[1]
+        payload = payload.replace(/-/g, '+').replace(/_/g, '/')
+        while (payload.length % 4) {
+          payload += '='
+        }
+
+        const decoded = atob(payload)
+        const parsedPayload = JSON.parse(decoded)
+
+        if (!parsedPayload.shopId || typeof parsedPayload.shopId !== 'number') {
+          throw new Error('매장 ID가 없거나 유효하지 않습니다')
+        }
+
+        if (parsedPayload.purpose !== 'attendance') {
+          throw new Error('출근용 QR 코드가 아닙니다')
+        }
+
+        return parsedPayload
+      } catch (error) {
+        throw new Error('QR 코드를 해석할 수 없습니다: ' + error.message)
+      }
+    },
+
+    async handleCheckInConfirm(confirmedTime) {
+      console.log('Check-in confirmed:', confirmedTime)
+      this.showCheckInConfirmation = false
+
+      try {
+        if (!this.checkInPreviewData?.qrPayload) {
+          throw new Error('QR 코드 정보가 없습니다')
+        }
+
+        const { qrPayload } = this.checkInPreviewData
+        const finalTime = confirmedTime instanceof Date ? confirmedTime.toISOString() : confirmedTime
+
+        const result = await this.attendanceStore.qrAttendance(
+          qrPayload.shopId,
+          'IN',
+          finalTime
+        )
+
+        // 성공 결과 표시
+        this.attendanceResultType = 'success'
+        this.attendanceResultData = result
+        this.showAttendanceResult = true
+
+        // 근무 일정 새로고침
+        await this.handleAttendanceUpdate()
+      } catch (error) {
+        console.error('출근 처리 실패:', error)
+        this.showAttendanceError(error.message || '출근 처리에 실패했습니다')
+      }
+    },
+
+    async handleCheckOutConfirm(confirmedTime) {
+      console.log('Check-out confirmed:', confirmedTime)
+      this.showCheckOutConfirmation = false
+
+      try {
+        if (!this.checkOutPreviewData?.qrPayload) {
+          throw new Error('QR 코드 정보가 없습니다')
+        }
+
+        const { qrPayload, currentShift } = this.checkOutPreviewData
+        const finalTime = confirmedTime instanceof Date ? confirmedTime.toISOString() : confirmedTime
+
+        // 퇴근 API 호출 - shiftId와 함께 전송
+        const payload = {
+          shopId: qrPayload.shopId,
+          type: 'OUT',
+          at: finalTime
+        }
+
+        // currentShift가 있으면 shiftId 추가
+        if (currentShift && currentShift.id) {
+          payload.shiftId = currentShift.id
+        }
+
+        const result = await this.attendanceStore.qrAttendance(
+          payload.shopId,
+          payload.type,
+          payload.at,
+          payload.shiftId
+        )
+
+        // 성공 결과 표시
+        this.attendanceResultType = 'success'
+        this.attendanceResultData = result
+        this.showAttendanceResult = true
+
+        // 근무 일정 새로고침
+        await this.handleAttendanceUpdate()
+      } catch (error) {
+        console.error('퇴근 처리 실패:', error)
+        this.showAttendanceError(error.message || '퇴근 처리에 실패했습니다')
+      }
+    },
+
+    showAttendanceError(message) {
+      let userFriendlyMessage = message
+
+      if (message.includes('JWT') || message.includes('해석할 수 없습니다') || message.includes('토큰')) {
+        userFriendlyMessage = 'QR 코드가 유효하지 않습니다. 다시 스캔해주세요.'
+      } else if (message.includes('shopId') || message.includes('매장')) {
+        userFriendlyMessage = '매장 정보가 일치하지 않습니다. 올바른 QR 코드를 스캔해주세요.'
+      } else if (message.includes('purpose') || message.includes('출근용')) {
+        userFriendlyMessage = '이 QR 코드는 출근용이 아닙니다. 올바른 QR 코드를 스캔해주세요.'
+      }
+
+      this.attendanceResultType = 'error'
+      this.attendanceErrorMessage = userFriendlyMessage
+      this.showAttendanceResult = true
+    },
+
+    closeQRScanner() {
+      this.showQRScanner = false
+    },
+
+    closeCheckInConfirmation() {
+      this.showCheckInConfirmation = false
+      this.checkInPreviewData = null
+    },
+
+    closeCheckOutConfirmation() {
+      this.showCheckOutConfirmation = false
+      this.checkOutPreviewData = null
+      this.currentShift = null
+    },
+
+    closeAttendanceResult() {
+      this.showAttendanceResult = false
+      this.attendanceResultType = 'success'
+      this.attendanceResultData = null
+      this.attendanceErrorMessage = ''
     },
 
     async logout() {

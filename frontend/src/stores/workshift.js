@@ -58,25 +58,25 @@ export const useWorkshiftStore = defineStore('workshift', () => {
   const createMyWorkshift = async (shiftData) => {
     loading.value = true
     error.value = null
-    
+
     try {
       const api = getApiInstance()
       const response = await api.post('/my/workshifts', {
         startAt: shiftData.startAt,
         endAt: shiftData.endAt
       })
-      
+
       const newShift = response.data
       myWorkshifts.value.push(newShift)
-      
+
       // 새로운 일정이 현재 캘린더 월에 해당하는 경우에만 추가
       const shiftDate = new Date(newShift.startAt)
       const currentDate = selectedDate.value
-      if (shiftDate.getFullYear() === currentDate.getFullYear() && 
+      if (shiftDate.getFullYear() === currentDate.getFullYear() &&
           shiftDate.getMonth() === currentDate.getMonth()) {
         calendarWorkshifts.value.push(newShift)
       }
-      
+
       return newShift
     } catch (err) {
       // Handle specific error cases
@@ -86,6 +86,46 @@ export const useWorkshiftStore = defineStore('workshift', () => {
         error.value = err.response?.data?.message || '근무 일정 생성에 실패했습니다'
       }
       console.error('Failed to create my workshift:', err)
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+
+  const updateMyWorkshift = async (shiftId, shiftData) => {
+    if (!shiftId) {
+      throw new Error('shiftId is required for updating my workshift')
+    }
+
+    loading.value = true
+    error.value = null
+
+    try {
+      const api = getApiInstance()
+      const response = await api.put(`/my/workshifts/${shiftId}`, {
+        startAt: shiftData.startAt,
+        endAt: shiftData.endAt,
+        memo: shiftData.memo || ''
+      })
+
+      const updatedShift = response.data.shift
+
+      // Update in myWorkshifts array
+      const index = myWorkshifts.value.findIndex(shift => shift.id === shiftId)
+      if (index !== -1) {
+        myWorkshifts.value[index] = updatedShift
+      }
+
+      // Update in calendarWorkshifts array if exists
+      const calendarIndex = calendarWorkshifts.value.findIndex(shift => shift.id === shiftId)
+      if (calendarIndex !== -1) {
+        calendarWorkshifts.value[calendarIndex] = updatedShift
+      }
+
+      return response.data
+    } catch (err) {
+      error.value = err.response?.data?.message || '내 근무 일정 수정에 실패했습니다'
+      console.error('Failed to update my workshift:', err)
       throw err
     } finally {
       loading.value = false
@@ -160,10 +200,7 @@ export const useWorkshiftStore = defineStore('workshift', () => {
     }
   }
 
-  const updateWorkshift = async (shopId, shiftId, shiftData) => {
-    if (!shopId) {
-      throw new Error('shopId is required for updating workshift')
-    }
+  const updateWorkshift = async (shiftId, shiftData) => {
     if (!shiftId) {
       throw new Error('shiftId is required for updating workshift')
     }
@@ -173,10 +210,10 @@ export const useWorkshiftStore = defineStore('workshift', () => {
     
     try {
       const api = getApiInstance()
-      const response = await api.put(`/admin/shops/${shopId}/workshifts/${shiftId}`, {
+      const response = await api.put(`/my/workshifts/${shiftId}`, {
         startAt: shiftData.startAt,
         endAt: shiftData.endAt,
-        status: shiftData.status || 'SCHEDULED'
+        memo: shiftData.memo
       })
       
       const updatedShift = response.data
@@ -185,12 +222,10 @@ export const useWorkshiftStore = defineStore('workshift', () => {
         workshifts.value[index] = updatedShift
       }
       
-      // Update calendar data as well
       const calendarIndex = calendarWorkshifts.value.findIndex(shift => shift.id === shiftId)
       if (calendarIndex !== -1) {
         calendarWorkshifts.value[calendarIndex] = updatedShift
       }
-      
       return updatedShift
     } catch (err) {
       error.value = err.response?.data?.message || '근무 일정 수정에 실패했습니다'
@@ -214,7 +249,7 @@ export const useWorkshiftStore = defineStore('workshift', () => {
     
     try {
       const api = getApiInstance()
-      await api.delete(`/admin/shops/${shopId}/workshifts/${shiftId}`)
+      await api.delete(`/my/workshifts/${shiftId}`)
       
       // Remove from local state
       workshifts.value = workshifts.value.filter(shift => shift.id !== shiftId)
@@ -388,9 +423,10 @@ export const useWorkshiftStore = defineStore('workshift', () => {
   }
 
   const formatShiftTime = (startAt, endAt) => {
+    if (!startAt) return '-'
+
     const start = new Date(startAt)
-    const end = new Date(endAt)
-    
+
     const formatTime = (date) => {
       return date.toLocaleTimeString('ko-KR', {
         hour: '2-digit',
@@ -398,17 +434,36 @@ export const useWorkshiftStore = defineStore('workshift', () => {
         hour12: false
       })
     }
-    
+
+    // Handle null endAt case
+    if (!endAt) {
+      return `${formatTime(start)} - 미정`
+    }
+
+    const end = new Date(endAt)
     return `${formatTime(start)} - ${formatTime(end)}`
   }
 
   const getShiftDuration = (startAt, endAt) => {
+    if (!startAt) return '-'
+
+    // Handle null endAt case
+    if (!endAt) {
+      return '미정'
+    }
+
     const start = new Date(startAt)
     const end = new Date(endAt)
     const diffMs = end - start
+
+    // Handle negative duration
+    if (diffMs < 0) {
+      return '미정'
+    }
+
     const diffHours = Math.floor(diffMs / (1000 * 60 * 60))
     const diffMinutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60))
-    
+
     return `${diffHours}시간 ${diffMinutes}분`
   }
 
@@ -429,10 +484,6 @@ export const useWorkshiftStore = defineStore('workshift', () => {
 
   const getShiftStatus = (shift) => {
     if (shift.status) return shift.status
-    
-    if (isShiftActive(shift)) return 'ACTIVE'
-    if (isShiftUpcoming(shift)) return 'UPCOMING'
-    return 'COMPLETED'
   }
 
   const clearError = () => {
@@ -506,6 +557,7 @@ export const useWorkshiftStore = defineStore('workshift', () => {
     // Employee actions
     fetchMyWorkshifts,
     createMyWorkshift,
+    updateMyWorkshift,
 
     // Admin actions
     fetchAllWorkshifts,

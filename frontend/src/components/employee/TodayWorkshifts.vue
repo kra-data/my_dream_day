@@ -28,14 +28,23 @@
       <div class="no-shifts-content">
         <AppIcon name="calendar-x" :size="48" class="opacity-50" />
         <h4>오늘 예정된 근무가 없습니다</h4>
-        <p>출근하시려면 먼저 근무 일정을 생성해야 합니다.</p>
-        <button 
-          @click="showCreateShiftModal = true" 
-          class="btn btn-primary btn-base"
-        >
-          <AppIcon name="plus" :size="16" class="mr-1" />
-          근무 생성하기
-        </button>
+        <p>근무 일정을 생성하거나 바로 출근할 수 있습니다.</p>
+        <div class="no-shifts-actions">
+          <button
+            @click="showCreateShiftModal = true"
+            class="btn btn-primary btn-base"
+          >
+            <AppIcon name="plus" :size="16" class="mr-1" />
+            근무 생성하기
+          </button>
+          <button
+            @click="startDirectCheckIn"
+            class="btn btn-success btn-base"
+          >
+            <AppIcon name="qr-code" :size="16" class="mr-1" />
+            바로 출근하기
+          </button>
+        </div>
       </div>
     </div>
 
@@ -79,31 +88,32 @@
 
         <!-- 출퇴근 버튼 -->
         <div class="shift-actions">
+
           <!-- 출근 버튼 -->
-          <button 
+          <button
             v-if="canCheckInToShift(shift)"
-            @click="checkInToShift(shift)"
+            @click="startQRCheckIn(shift)"
             class="btn btn-success btn-sm"
             :class="{ 'btn-loading': attendanceLoading }"
             :disabled="attendanceLoading"
           >
             <span v-if="!attendanceLoading">
-              <AppIcon name="arrow-right" :size="16" class="mr-1" />
+              <AppIcon name="qr-code" :size="16" class="mr-1" />
               출근하기
             </span>
             <span v-else>출근 처리 중...</span>
           </button>
 
-          <!-- 퇴근 버튼 -->
-          <button 
+          <!-- 퇴근 버튼 (QR 기반) -->
+          <button
             v-if="canCheckOutFromShift(shift)"
-            @click="checkOutFromShift(shift)"
-            class="btn btn-warning btn-sm"
+            @click="startQRCheckOut(shift)"
+            class="btn btn-success btn-sm"
             :class="{ 'btn-loading': attendanceLoading }"
             :disabled="attendanceLoading"
           >
             <span v-if="!attendanceLoading">
-              <AppIcon name="arrow-left" :size="16" class="mr-1" />
+              <AppIcon name="qr-code" :size="16" class="mr-1" />
               퇴근하기
             </span>
             <span v-else>퇴근 처리 중...</span>
@@ -114,15 +124,51 @@
             <AppIcon name="check" :size="16" class="mr-1" />
             <span>근무 완료</span>
           </div>
+
+          <!-- 편집 버튼 (근무 시작 전이나 미완료 근무만) -->
+          <button
+            @click="handleEditShift(shift)"
+            class="btn btn-warning btn-sm"
+            title="근무 일정 수정"
+          >
+            <AppIcon name="edit" :size="14" class="mr-1" />
+            수정
+          </button>
+
+          <!-- 취소 버튼 (근무 시작 전이나 미완료 근무만) -->
+          <button
+            @click="handleDeleteShift(shift)"
+            class="btn btn-danger btn-sm"
+            title="근무 일정 취소"
+          >
+            <AppIcon name="trash-2" :size="14" class="mr-1" />
+            삭제
+          </button>
         </div>
       </div>
     </div>
 
     <!-- 근무 생성 모달 -->
-    <EmployeeWorkshiftCreateModal 
+    <EmployeeWorkshiftCreateModal
       v-if="showCreateShiftModal"
       @close="showCreateShiftModal = false"
       @create="handleShiftCreated"
+    />
+
+    <!-- 근무 편집 모달 -->
+    <EmployeeWorkshiftEditModal
+      v-if="showEditModal && selectedShift"
+      :shift="selectedShift"
+      @update="handleUpdateWorkshift"
+      @close="closeEditModal"
+    />
+
+    <!-- 근무 취소 모달 -->
+    <EmployeeWorkshiftDeleteModal
+      v-if="showDeleteModal && selectedShift"
+      :shift="selectedShift"
+      @delete="handleDeleteWorkshift"
+      @close="closeDeleteModal"
     />
 
     <!-- 메모 작성 모달 -->
@@ -136,6 +182,7 @@
       @proceed-without-memo="handleProceedWithoutMemo"
       @cancel="handleCancelMemo"
     />
+
   </div>
 </template>
 
@@ -144,6 +191,8 @@ import { computed, ref } from 'vue'
 import AppIcon from '@/components/AppIcon.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
 import EmployeeWorkshiftCreateModal from '@/components/employee/EmployeeWorkshiftCreateModal.vue'
+import EmployeeWorkshiftEditModal from '@/components/employee/EmployeeWorkshiftEditModal.vue'
+import EmployeeWorkshiftDeleteModal from '@/components/employee/EmployeeWorkshiftDeleteModal.vue'
 import AttendanceMemoModal from '@/components/employee/AttendanceMemoModal.vue'
 import { useWorkshiftStore } from '@/stores/workshift'
 
@@ -153,7 +202,9 @@ export default {
     AppIcon,
     StatusBadge,
     EmployeeWorkshiftCreateModal,
-    AttendanceMemoModal
+    EmployeeWorkshiftEditModal,
+    EmployeeWorkshiftDeleteModal,
+    AttendanceMemoModal,
   },
   props: {
     attendanceStore: {
@@ -168,6 +219,9 @@ export default {
   setup(props, { emit }) {
     const workshiftStore = useWorkshiftStore()
     const showCreateShiftModal = ref(false)
+    const showEditModal = ref(false)
+    const showDeleteModal = ref(false)
+    const selectedShift = ref(null)
     const showMemoModal = ref(false)
     const memoModalData = ref({
       shift: null,
@@ -175,6 +229,9 @@ export default {
       irregularityType: '',
       timeDifference: 0
     })
+
+    // 현재 선택된 근무
+    const currentShift = ref(null)
 
     // 오늘의 근무 일정 필터링 - Use workshift store filtering
     const todayShifts = computed(() => {
@@ -275,11 +332,38 @@ export default {
       return workshiftStore.getShiftDuration(startAt, endAt)
     }
 
-    // 출퇴근 처리 함수들
+    // QR 기반 출근 시작 함수 - 이벤트 emit
+    const startQRCheckIn = (shift = null) => {
+      if (props.attendanceLoading) {
+        return // 이미 처리 중인 경우 리턴
+      }
+      currentShift.value = shift
+      emit('qr-check-in-requested')
+    }
+
+    // 근무 없이 바로 출근 시작
+    const startDirectCheckIn = () => {
+      if (props.attendanceLoading) {
+        return // 이미 처리 중인 경우 리턴
+      }
+      startQRCheckIn(null)
+    }
+
+    // QR 기반 퇴근 시작 함수 - 이벤트 emit
+    const startQRCheckOut = (shift) => {
+      if (props.attendanceLoading) {
+        return // 이미 처리 중인 경우 리턴
+      }
+      currentShift.value = shift
+      emit('qr-check-out-requested', shift)
+    }
+
+
+    // 기존 출퇴근 처리 함수들 (기존 근무 일정이 있는 경우)
     const checkInToShift = async (shift) => {
       // 이상 상황 감지
       const irregularity = detectIrregularity(shift, true)
-      
+
       if (irregularity.hasIrregularity) {
         // 메모 모달 표시
         memoModalData.value = {
@@ -291,7 +375,7 @@ export default {
         showMemoModal.value = true
         return
       }
-      
+
       // 정상 출근 처리
       await processAttendance(shift, true)
     }
@@ -358,6 +442,7 @@ export default {
       memoModalData.value = { shift: null, isCheckIn: true, irregularityType: '', timeDifference: 0 }
     }
 
+
     // 근무 일정 새로고침
     const refreshWorkshifts = async () => {
       try {
@@ -380,10 +465,68 @@ export default {
       }
     }
 
+    // 근무 편집 처리
+    const handleEditShift = (shift) => {
+      selectedShift.value = shift
+      showEditModal.value = true
+    }
+
+    // 근무 취소 처리
+    const handleDeleteShift = (shift) => {
+      selectedShift.value = shift
+      showDeleteModal.value = true
+    }
+
+    const handleUpdateWorkshift = async (updateData) => {
+      try {
+        if (updateData.success) {
+          console.log('Workshift updated successfully')
+          closeEditModal()
+          // Refresh today's workshifts to update the UI
+          await refreshWorkshifts()
+          emit('attendance-updated')
+        } else {
+          console.error('Update failed:', updateData)
+        }
+      } catch (error) {
+        console.error('근무 일정 수정 실패:', error)
+      }
+    }
+
+    const handleDeleteWorkshift = async (deleteData) => {
+      try {
+        if (deleteData.success) {
+          console.log('Workshift deleted successfully:', deleteData.shiftId)
+          closeDeleteModal()
+          // Refresh today's workshifts to update the UI
+          await refreshWorkshifts()
+          emit('attendance-updated')
+        } else {
+          console.error('Delete failed:', deleteData)
+        }
+      } catch (error) {
+        console.error('근무 일정 취소 실패:', error)
+      }
+    }
+
+    const closeEditModal = () => {
+      showEditModal.value = false
+      selectedShift.value = null
+    }
+
+    const closeDeleteModal = () => {
+      showDeleteModal.value = false
+      selectedShift.value = null
+    }
+
     return {
       showCreateShiftModal,
+      showEditModal,
+      showDeleteModal,
+      selectedShift,
       showMemoModal,
       memoModalData,
+      currentShift,
       todayShifts,
       isShiftActive,
       isShiftCompleted,
@@ -395,16 +538,25 @@ export default {
       formatTime,
       formatShiftTime,
       getShiftDuration,
+      startQRCheckIn,
+      startDirectCheckIn,
+      startQRCheckOut,
       checkInToShift,
       checkOutFromShift,
       refreshWorkshifts,
       handleShiftCreated,
+      handleEditShift,
+      handleDeleteShift,
+      handleUpdateWorkshift,
+      handleDeleteWorkshift,
+      closeEditModal,
+      closeDeleteModal,
       handleProceedWithMemo,
       handleProceedWithoutMemo,
       handleCancelMemo,
     }
   },
-  emits: ['attendance-updated']
+  emits: ['attendance-updated', 'qr-check-in-requested', 'qr-check-out-requested']
 }
 </script>
 
