@@ -7,35 +7,32 @@ export type AutoReviewPastEndResult = {
 };
 
 // tolerances & batch 설정 (ENV로 조정 가능)
-const PAST_END_TOLERANCE_MIN = Number(process.env.PAST_END_TOLERANCE_MIN ?? '120'); // 2h
+const NO_OUT_AFTER_IN_MIN   = Number(process.env.NO_OUT_AFTER_IN_MIN ?? '720');
 const REVIEW_JOB_BATCH_SIZE  = Number(process.env.REVIEW_JOB_BATCH_SIZE ?? '500');
-const REVIEW_MEMO_PAST_END   = process.env.REVIEW_MEMO_PAST_END ?? '퇴근처리가 되지 않아 관리자 승인이 필요합니다.';
+const REVIEW_MEMO_PAST_END   = process.env.REVIEW_MEMO_PAST_END ?? '출근 후 12시간 이상 퇴근 미기록으로 관리자 검토가 필요합니다.';
 
 /**
- * 퇴근 예정시간(endAt) + tolerance 경과했는데 OUT 기록이 없고
- * 상태가 SCHEDULED/IN_PROGRESS인 시프트를 REVIEW로 전환한다.
+ * 출근시간(actualInAt) 기준 NO_OUT_AFTER_IN_MIN(기본 12시간) 이상 경과했고
+ * 퇴근 기록(actualOutAt)이 없으며
+ * 상태가 IN_PROGRESS(진행중)인 시프트를 REVIEW로 전환한다.
  *
- * - 대상: endAt < now - tol, actualOutAt IS NULL, status IN (SCHEDULED, IN_PROGRESS), actualInAt IS NOT NULL
- *   (IN/OUT 모두 없는 케이스는 별도 autoReviewNoInNoOut 잡이 처리)
- * - reviewReason: 'LATE_OUT' (스키마가 string이면 as any)
- * - memo: REVIEW_MEMO_PAST_END
+ * - endAt 이 null 로 생성될 수 있으므로 endAt 을 사용하지 않는다.
+ * - actualInAt 이 없는(SCHEDULED) 건은 대상에서 제외한다.
  */
 export async function autoReviewPastEndShifts(now: Date = new Date()): Promise<AutoReviewPastEndResult> {
-  const threshold = new Date(now.getTime() - PAST_END_TOLERANCE_MIN * 60_000);
 
   let processedCount = 0;
   let cursorId: number | null = null;
-
+const threshold = new Date(now.getTime() - NO_OUT_AFTER_IN_MIN * 60 * 1000);
   // 선택 타입(암시적 any 방지)
   type IdOnly = Prisma.WorkShiftGetPayload<{ select: { id: true } }>;
 
   for (;;) {
-    const rows: IdOnly[] = await prisma.workShift.findMany({
-      where: {
-        endAt: { lt: threshold },
+     const rows: IdOnly[] = await prisma.workShift.findMany({
+       where: {
+        actualInAt: { lte: threshold },
         actualOutAt: null,
-        actualInAt: { not: null }, // IN만 찍힌 케이스만 처리 (둘 다 없음은 다른 잡에서)
-        status: { in: ['SCHEDULED', 'IN_PROGRESS'] as WorkShiftStatus[] },
+        status: WorkShiftStatus.IN_PROGRESS,
       },
       select: { id: true },
       orderBy: { id: 'asc' },
@@ -50,7 +47,7 @@ export async function autoReviewPastEndShifts(now: Date = new Date()): Promise<A
     const res = await prisma.workShift.updateMany({
       where: { id: { in: ids } },
       data: {
-        status: 'REVIEW' as WorkShiftStatus,
+        status: WorkShiftStatus.REVIEW,
         reviewReason: 'LATE_OUT' as any,
         reviewResolvedAt: null,
         memo: REVIEW_MEMO_PAST_END,
