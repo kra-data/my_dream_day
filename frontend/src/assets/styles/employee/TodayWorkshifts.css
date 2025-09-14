@@ -47,6 +47,19 @@
   gap: var(--space-3);
 }
 
+.no-shifts-actions {
+  display: flex;
+  gap: var(--space-3);
+  margin-top: var(--space-2);
+}
+
+@media (max-width: 640px) {
+  .no-shifts-actions {
+    flex-direction: column;
+    width: 100%;
+  }
+}
+
 .no-shifts-content h4 {
   margin: 0;
   color: var(--color-text-primary);

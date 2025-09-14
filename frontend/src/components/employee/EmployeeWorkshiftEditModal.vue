@@ -35,23 +35,8 @@
         </div>
 
         <form @submit.prevent="handleSubmit">
-          <!-- 변경 요청 사항 -->
-          <div class="form-group">
-            <label for="changeType">변경 유형 *</label>
-            <select
-              id="changeType"
-              v-model="form.changeType"
-              required
-              class="form-control"
-            >
-              <option value="">변경 유형을 선택하세요</option>
-              <option value="time">시간 변경</option>
-              <option value="cancel">일정 취소</option>
-            </select>
-          </div>
 
-          <!-- 시간 변경인 경우 -->
-          <template v-if="form.changeType === 'time'">
+          <!-- 시간 변경 -->
             <!-- 새 시작 시간 -->
             <div class="form-group">
               <label for="newStartTime">새 시작 시간 *</label>
@@ -84,18 +69,17 @@
                 <span class="preview-value">{{ newWorkDuration }}</span>
               </div>
             </div>
-          </template>
 
           <!-- 변경 사유 -->
           <div class="form-group">
-            <label for="reason">변경 사유 *</label>
+            <label for="reason">시간 변경 사유 *</label>
             <textarea
               id="reason"
               v-model="form.reason"
               required
               class="form-control"
               rows="3"
-              placeholder="변경 사유를 상세히 작성해주세요 (관리자 승인에 참고됩니다)"
+              placeholder="시간 변경 사유를 상세히 작성해주세요 (관리자 승인에 참고됩니다)"
             ></textarea>
           </div>
 
@@ -108,8 +92,6 @@
               <p><strong>변경 요청 안내</strong></p>
               <ul>
                 <li>변경 요청은 관리자 승인이 필요합니다</li>
-                <li>승인까지 기존 일정이 유지됩니다</li>
-                <li>근무 시작 전까지만 변경 요청이 가능합니다</li>
                 <li>급한 경우 직접 관리자에게 연락해주세요</li>
               </ul>
             </div>
@@ -134,10 +116,71 @@
       </div>
     </div>
   </div>
+
+  <!-- 수정 성공 모달 -->
+  <div v-if="showSuccessModal" class="modal-backdrop" @click="handleSuccessModalClose">
+    <div class="modal success-modal" @click.stop>
+      <div class="modal-header">
+        <h3>
+          <AppIcon name="check-circle" :size="18" class="inline-block mr-2 text-success" />
+          근무 일정 수정 완료
+        </h3>
+        <button @click="handleSuccessModalClose" class="close-btn">
+          <AppIcon name="close" :size="16" />
+        </button>
+      </div>
+
+      <div class="modal-body">
+        <!-- 성공 메시지 -->
+        <div class="success-message">
+          <div class="success-icon">
+            <AppIcon name="check" :size="24" />
+          </div>
+          <div class="success-content">
+            <p><strong>근무 일정이 성공적으로 수정되었습니다!</strong></p>
+          </div>
+        </div>
+
+        <!-- 수정된 일정 정보 -->
+        <div v-if="successData && successData.shift" class="updated-shift-info">
+          <h4>
+            <AppIcon name="calendar" :size="16" class="inline-block mr-2" />
+            수정된 일정
+          </h4>
+          <div class="shift-details">
+            <div class="detail-item">
+              <span class="detail-label">날짜:</span>
+              <span class="detail-value">{{ formatDate(successData.shift.startAt) }}</span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label">시간:</span>
+              <span class="detail-value">{{ formatShiftTime(successData.shift.startAt, successData.shift.endAt) }}</span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label">근무 시간:</span>
+              <span class="detail-value">{{ getShiftDuration(successData.shift.startAt, successData.shift.endAt) }}</span>
+            </div>
+            <div v-if="successData.shift.memo" class="detail-item">
+              <span class="detail-label">메모:</span>
+              <span class="detail-value">{{ successData.shift.memo }}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 버튼 -->
+        <div class="modal-actions">
+          <button @click="handleSuccessModalClose" class="btn btn-success">
+            확인
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
 </template>
 
 <script>
 import { ref, computed, onMounted } from 'vue'
+import { useWorkshiftStore } from '@/stores/workshift'
 
 export default {
   name: 'EmployeeWorkshiftEditModal',
@@ -149,11 +192,13 @@ export default {
   },
   emits: ['update', 'close'],
   setup(props, { emit }) {
+    const workshiftStore = useWorkshiftStore()
     const loading = ref(false)
     const error = ref('')
+    const showSuccessModal = ref(false)
+    const successData = ref(null)
     
     const form = ref({
-      changeType: '',
       newStartTime: '',
       newEndTime: '',
       reason: ''
@@ -161,15 +206,10 @@ export default {
     
     // 폼 유효성 검사
     const isFormValid = computed(() => {
-      if (!form.value.changeType || !form.value.reason.trim()) return false
-      
-      if (form.value.changeType === 'time') {
-        return form.value.newStartTime && 
-               form.value.newEndTime && 
-               isValidNewTime.value
-      }
-      
-      return true
+      return form.value.newStartTime &&
+             form.value.newEndTime &&
+             form.value.reason.trim() &&
+             isValidNewTime.value
     })
     
     // 새로운 시간 유효성 검사
@@ -209,26 +249,23 @@ export default {
       error.value = ''
       
       try {
-        let requestData = {
-          changeType: form.value.changeType,
-          reason: form.value.reason.trim(),
-          originalShift: props.shift
+        const shiftStartDate = new Date(props.shift.startAt)
+        const shiftDate = `${shiftStartDate.getFullYear()}-${String(shiftStartDate.getMonth() + 1).padStart(2, '0')}-${String(shiftStartDate.getDate()).padStart(2, '0')}`
+        const newStartDateTime = new Date(`${shiftDate}T${form.value.newStartTime}:00`)
+        const newEndDateTime = new Date(`${shiftDate}T${form.value.newEndTime}:00`)
+
+        const shiftData = {
+          startAt: newStartDateTime.toISOString(),
+          endAt: newEndDateTime.toISOString(),
+          memo: form.value.reason.trim()
         }
-        
-        if (form.value.changeType === 'time') {
-          const shiftStartDate = new Date(props.shift.startAt)
-          const shiftDate = `${shiftStartDate.getFullYear()}-${String(shiftStartDate.getMonth() + 1).padStart(2, '0')}-${String(shiftStartDate.getDate()).padStart(2, '0')}`
-          const newStartDateTime = new Date(`${shiftDate}T${form.value.newStartTime}:00`)
-          const newEndDateTime = new Date(`${shiftDate}T${form.value.newEndTime}:00`)
-          
-          requestData = {
-            ...requestData,
-            newStartAt: newStartDateTime.toISOString(),
-            newEndAt: newEndDateTime.toISOString()
-          }
-        }
-        
-        emit('update', requestData)
+
+        // Call the API directly
+        const response = await workshiftStore.updateMyWorkshift(props.shift.id, shiftData)
+
+        // Store success data and show success modal
+        successData.value = response
+        showSuccessModal.value = true
       } catch (err) {
         error.value = err.message || '변경 요청 중 오류가 발생했습니다'
       } finally {
@@ -237,6 +274,13 @@ export default {
     }
     
     const handleBackdropClick = () => {
+      emit('close')
+    }
+
+    const handleSuccessModalClose = () => {
+      showSuccessModal.value = false
+      successData.value = null
+      emit('update', { success: true })
       emit('close')
     }
     
@@ -300,8 +344,11 @@ export default {
       isFormValid,
       isValidNewTime,
       newWorkDuration,
+      showSuccessModal,
+      successData,
       handleSubmit,
       handleBackdropClick,
+      handleSuccessModalClose,
       formatDate,
       formatShiftTime,
       getShiftDuration

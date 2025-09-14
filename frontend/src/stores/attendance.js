@@ -4,8 +4,7 @@ import { useAuthStore } from './auth'
 import { useEmployeesStore } from './employees'
 
 export const useAttendanceStore = defineStore('attendance', () => {
-  // State
-  const records = ref([]) // 관리자용 - 전체 직원 기록
+  const records = ref([])
   const todaySummary = ref({
     totalEmployees: 0,
     checkedIn: 0,
@@ -16,9 +15,8 @@ export const useAttendanceStore = defineStore('attendance', () => {
   const recentActivities = ref([])
   const loading = ref(false)
   const error = ref(null)
-  const isEmpty = ref(false) // 데이터가 비어있는지 표시 (에러와 구분)
-  
-  // 현재 사용자의 출퇴근 상태 (직원용)
+  const isEmpty = ref(false)
+
   const currentStatus = ref({
     onDuty: false,
     clockInAt: null,
@@ -26,19 +24,14 @@ export const useAttendanceStore = defineStore('attendance', () => {
     extraMinutes: 0
   })
 
-  // 직원의 과거 기록 (통계용)
-  const employeeRecords = ref([])
-  
-  // 오늘의 근무 일정
-  const todayWorkshifts = ref([])
 
-  // API 인스턴스 가져오기
+  const employeeRecords = ref([])
+  const todayWorkshifts = ref([])
   const getApiInstance = () => {
     const authStore = useAuthStore()
     return authStore.getApiInstance()
   }
 
-  // 현재 매장 ID 가져오기
   const getShopId = () => {
     const authStore = useAuthStore()
     const user = JSON.parse(localStorage.getItem('user'));
@@ -48,8 +41,6 @@ export const useAttendanceStore = defineStore('attendance', () => {
 
   // ============= 현재 사용자 상태 관련 (직원용) =============
   
-
-  // 오늘의 내 근무 일정 조회
   const fetchTodayWorkshifts = async () => {
     loading.value = true
     error.value = null
@@ -72,24 +63,99 @@ export const useAttendanceStore = defineStore('attendance', () => {
     }
   }
 
-  // 직원 마이페이지 정산 정보 조회
-  const fetchMySettlement = async (anchor = null, cycleStartDay = null) => {
+  // 직원 마이페이지 개요 정보 조회
+  const fetchMyOverview = async () => {
     loading.value = true
     error.value = null
-    
+
     try {
       const api = getApiInstance()
-      const params = {}
-      if (anchor) params.anchor = anchor
-      if (cycleStartDay) params.cycleStartDay = cycleStartDay
-      
-      const response = await api.get('/my/settlement', { params })
-      
-      console.log('마이페이지 정산 정보 조회 완료:', response.data)
+      const response = await api.get('/my/overview')
+
+      console.log('마이페이지 개요 정보 조회 완료:', response.data)
       return response.data
     } catch (error) {
-      console.error('마이페이지 정산 정보 조회 실패:', error)
-      error.value = error.response?.data?.message || error.message || '정산 정보를 불러오는데 실패했습니다'
+      console.error('마이페이지 개요 정보 조회 실패:', error)
+      error.value = error.response?.data?.message || error.message || '개요 정보를 불러오는데 실패했습니다'
+      throw error
+    } finally {
+      loading.value = false
+    }
+  }
+
+  // 출퇴근 미리보기 API
+  const attendancePreview = async (shopId, type, scannedAt, shiftId = null) => {
+    loading.value = true
+    error.value = null
+
+    try {
+      const api = getApiInstance()
+      const payload = {
+        shopId,
+        type,
+        scannedAt
+      }
+
+      // shiftId가 있으면 페이로드에 추가 (퇴근시 사용)
+      if (shiftId) {
+        payload.shiftId = shiftId
+      }
+
+      const response = await api.post('/attendance/preview', payload)
+
+      console.log('출퇴근 미리보기 완료:', response.data)
+      return response.data
+    } catch (error) {
+      console.error('출퇴근 미리보기 실패:', error)
+      error.value = error.response?.data?.message || error.message || '출퇴근 미리보기에 실패했습니다'
+      throw error
+    } finally {
+      loading.value = false
+    }
+  }
+
+  // 새로운 QR 기반 출퇴근 API
+  const qrAttendance = async (shopId, type, at, shiftId = null) => {
+    loading.value = true
+    error.value = null
+
+    try {
+      const api = getApiInstance()
+      const payload = {
+        shopId,
+        type,
+        at
+      }
+
+      // shiftId가 있으면 페이로드에 추가 (퇴근시 사용)
+      if (shiftId) {
+        payload.shiftId = shiftId
+      }
+
+      const response = await api.post('/attendance', payload)
+
+      console.log('QR 출퇴근 완료:', response.data)
+
+      // 상태 업데이트
+      if (type === 'IN') {
+        currentStatus.value = {
+          ...currentStatus.value,
+          onDuty: true,
+          clockInAt: response.data.clockInAt,
+          shiftId: response.data.shiftId
+        }
+      } else if (type === 'OUT') {
+        currentStatus.value = {
+          ...currentStatus.value,
+          onDuty: false,
+          clockOutAt: at
+        }
+      }
+
+      return response.data
+    } catch (error) {
+      console.error('QR 출퇴근 실패:', error)
+      error.value = error.response?.data?.message || error.message || '출퇴근 처리에 실패했습니다'
       throw error
     } finally {
       loading.value = false
@@ -816,7 +882,9 @@ export const useAttendanceStore = defineStore('attendance', () => {
     
     // 직원용 Actions
     fetchTodayWorkshifts,
-    fetchMySettlement,
+    fetchMyOverview,
+    attendancePreview,
+    qrAttendance,
     initializeEmployeeData,
     getEmployeeStatistics,
     

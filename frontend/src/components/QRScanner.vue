@@ -53,9 +53,18 @@ export default {
     this.checkCameraSupport()
   },
   beforeUnmount() {
-    if (this.scanner) {
-      this.scanner.destroy()
+    this.cleanupScanner()
+  },
+
+  // 중복 마운트 방지
+  activated() {
+    if (!this.scanner) {
+      this.checkCameraSupport()
     }
+  },
+
+  deactivated() {
+    this.cleanupScanner()
   },
   methods: {
     async checkCameraSupport() {
@@ -88,13 +97,8 @@ export default {
     
     handleScanResult(result) {
       this.$emit('scan-result', result.data)
-      // 스캔 후 잠시 멈추기
+      // 스캔 후 스캐너 중지 (모달이 닫히기 때문에 재시작 불필요)
       this.stopScanner()
-      setTimeout(() => {
-        if (this.scanner) {
-          this.startScanner()
-        }
-      }, 2000)
     },
     
     toggleScanner() {
@@ -106,24 +110,63 @@ export default {
     },
     
     startScanner() {
-      if (this.scanner) {
-        this.scanner.start()
-        this.isScanning = true
-        this.error = null
+      if (this.scanner && !this.isScanning) {
+        try {
+          this.scanner.start()
+          this.isScanning = true
+          this.error = null
+        } catch (error) {
+          console.error('스캐너 시작 실패:', error)
+          this.error = '스캐너를 시작할 수 없습니다. 다시 시도해주세요.'
+          // 스캐너 재시작 시도
+          this.restartScanner()
+        }
       }
     },
     
     stopScanner() {
-      if (this.scanner) {
-        this.scanner.stop()
-        this.isScanning = false
+      if (this.scanner && this.isScanning) {
+        try {
+          this.scanner.stop()
+          this.isScanning = false
+        } catch (error) {
+          console.warn('스캐너 중지 실패:', error)
+          this.isScanning = false
+        }
       }
     },
     
     async switchCamera() {
-      if (this.scanner) {
-        await this.scanner.setCamera('environment')
+      if (this.scanner && this.isScanning) {
+        try {
+          await this.scanner.setCamera('environment')
+        } catch (error) {
+          console.warn('카메라 전환 실패:', error)
+          this.error = '카메라 전환에 실패했습니다'
+        }
       }
+    },
+
+    // 스캐너 정리 함수 추가
+    cleanupScanner() {
+      if (this.scanner) {
+        try {
+          this.stopScanner()
+          this.scanner.destroy()
+        } catch (error) {
+          console.warn('스캐너 정리 중 오류:', error)
+        }
+        this.scanner = null
+        this.isScanning = false
+      }
+    },
+
+    // 스캐너 재시작 함수
+    restartScanner() {
+      this.cleanupScanner()
+      setTimeout(() => {
+        this.checkCameraSupport()
+      }, 100)
     }
   }
 }
