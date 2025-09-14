@@ -15,7 +15,9 @@ import {
   adminDeleteShift,
   adminListReviewShifts,
   adminGetShiftDetail,
-  resolveReviewShiftScheduleOnly
+  resolveReviewShiftScheduleOnly,
+    adminListUncheckedCompletedShiftsYesterday,
+  adminSetShiftChecked
 } from '../controllers/workShiftController';
 import { getEmployeeStatusList,getEmployeeStatusDetail,payrollOverview,exportPayrollXlsx,getSettlementSummary,settleEmployeeCycle,settleAllEmployeesCycle } from '../controllers/payrollController';
 // ✅ 추가: 타입 안전 래퍼 & 정산 컨트롤러
@@ -87,4 +89,7 @@ router.post('/shops/:shopId/payroll/employees/:employeeId', withUser(settleEmplo
 router.get('/shops/:shopId/payroll/employees/:employeeId', withUser(getEmployeeStatusDetail));
 router.get('/shops/:shopId/payroll/employees', withUser(getEmployeeStatusList));
 router.post('/shops/:shopId/payroll/settlements', withUser(settleAllEmployeesCycle));
+
+router.get('/shops/:shopId/shifts/yesterday/unchecked', withUser(adminListUncheckedCompletedShiftsYesterday));
+router.put('/shops/:shopId/shifts/:shiftId/admin-check', withUser(adminSetShiftChecked));
 export default router;

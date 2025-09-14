@@ -18,7 +18,13 @@ const intersectMinutes = (a0: Date, a1: Date, b0: Date, b1: Date) => {
   if (en <= st) return 0;
   return diffMinutes(st, en);
 };
-
+const kstYesterdayRange = () => {
+  const now = new Date();
+  const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+  const start = startOfKstDay(yesterday);
+  const end   = endOfKstDay(yesterday);
+  return { start, end };
+};
 const OPEN_END = new Date('9999-12-31T23:59:59.999Z');
 
 const endOrMax = (d: Date | null) => d ?? OPEN_END;
@@ -628,6 +634,58 @@ export const myUpdateShift = async (req: AuthRequiredRequest, res: Response): Pr
       startAt: true, endAt: true, status: true,
       reviewReason: true, memo: true,
       updatedAt: true, workedMinutes: true
+    }
+  });
+
+  res.json({ ok: true, shift: updated });
+};
+/* ───────────────── 관리자/점주: (어제) 미체크 & 완료된 근무일정 목록 ───────────────── */
+export const adminListUncheckedCompletedShiftsYesterday = async (req: AuthRequiredRequest, res: Response) => {
+  const shopId = Number(req.params.shopId);
+  if (req.user.shopId !== shopId) { res.status(403).json({ error: '다른 가게는 조회할 수 없습니다.' }); return; }
+
+  const { start, end } = kstYesterdayRange();
+
+  const rows = await prisma.workShift.findMany({
+    where: {
+      shopId,
+      status: 'COMPLETED',
+      adminChecked: false,          // ✅ 아직 체크 안 된 것만
+      startAt: { lt: end },         // 어제와 교집합
+      endAt:   { gt: start },
+    },
+    orderBy: [{ startAt: 'asc' }, { employeeId: 'asc' }],
+    select: {
+      id: true, employeeId: true, startAt: true, endAt: true,
+      workedMinutes: true, finalPayAmount: true, status: true, adminChecked: true,
+      employee: {
+        select: { name: true, position: true, section: true, personalColor: true, pay: true, payUnit: true }
+      }
+    }
+  });
+
+  res.json({
+    ok: true,
+    range: { start, end },
+    items: rows
+  });
+};
+
+/* ───────────────── 관리자/점주: 근무일정 체크 처리 ───────────────── */
+export const adminSetShiftChecked = async (req: AuthRequiredRequest, res: Response) => {
+  const shopId  = Number(req.params.shopId);
+  const shiftId = Number(req.params.shiftId);
+  if (req.user.shopId !== shopId) { res.status(403).json({ error: '다른 가게는 관리할 수 없습니다.' }); return; }
+
+  const shift = await prisma.workShift.findUnique({ where: { id: shiftId } });
+  if (!shift || shift.shopId !== shopId) { res.status(404).json({ error: '일정을 찾을 수 없습니다.' }); return; }
+
+  const updated = await prisma.workShift.update({
+    where: { id: shiftId },
+    data: { adminChecked: true }, // ✅ 체크 처리
+    select: {
+      id: true, shopId: true, employeeId: true, startAt: true, endAt: true,
+      status: true, adminChecked: true, updatedAt: true
     }
   });
 

@@ -71,6 +71,7 @@ model WorkShift {
   finalPayAmount   Int?
   isSettled        Boolean            @default(false)
   memo             String?
+  adminChecked     Boolean            @default(false)
   employee         Employee           @relation(fields: [employeeId], references: [id], onDelete: Cascade)
   settlement       PayrollSettlement? @relation(fields: [settlementId], references: [id])
   shop             Shop               @relation(fields: [shopId], references: [id], onDelete: Cascade)
@@ -138,6 +139,5 @@ enum WorkShiftStatus {
   IN_PROGRESS
   COMPLETED
   CANCELED
-  MISSED
   REVIEW
 }

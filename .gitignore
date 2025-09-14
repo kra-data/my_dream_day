@@ -53,9 +53,13 @@ build/
 *.swo
 *.bak
 
-# Optional: PostgreSQL dump
 *.sql
 *.dump
+# ⬇️ Prisma 마이그레이션은 커밋할 것 (전역 *.sql 무시 예외)
+!prisma/migrations/**
+!prisma/schema.prisma
+# 로컬 백업은 커밋하지 않음
+prisma/_migrations_backup/
 
 # Next.js 빌드 출력물
 .next/
@@ -100,3 +104,4 @@ build/
 # package-lock.json
 # yarn.lock
 # pnpm-lock.yaml
+backend/prisma/_migrations_backup/migration_lock.toml
