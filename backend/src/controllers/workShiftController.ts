@@ -282,9 +282,7 @@ export const resolveReviewShiftScheduleOnly = async (req: AuthRequiredRequest, r
   const nextActualOutAt = shift.actualOutAt;
 
   // 상태 결정(실근무 기록 유무만으로)
-  let nextStatus: any =
-    (nextActualInAt && nextActualOutAt) ? 'COMPLETED'
-    : (nextActualInAt ? 'IN_PROGRESS' : 'SCHEDULED');
+  let nextStatus: any ='COMPLETED';
 
   // 분 계산
  const computedActualMinutes =
@@ -310,7 +308,7 @@ export const resolveReviewShiftScheduleOnly = async (req: AuthRequiredRequest, r
       reviewResolvedAt: new Date(),
       reviewedBy: req.user.userId,
       // 상태/산출치 갱신
-      status: nextStatus,
+      status: 'COMPLETED',
       actualMinutes: computedActualMinutes,
       workedMinutes: computedWorkedMinutes,
       finalPayAmount: nextFinalPayAmount,
