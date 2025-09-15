@@ -33,7 +33,8 @@
             :class="['tab-button', { active: activeTab === tab.id }]"
             @click="handleTabClick(tab.id)"
           >
-            {{ tab.icon }} {{ tab.name }}
+            <AppIcon :name="tab.icon" :size="20" class="tab-icon" />
+            <span>{{ tab.name }}</span>
           </button>
         </div>
 
@@ -63,6 +64,7 @@ import AdminSalaryView from '@/components/admin/AdminSalaryView.vue'
 import AdminRecordsView from '@/components/admin/AdminRecordsView.vue'
 import AdminAnalyticsView from '@/components/admin/AdminAnalyticsView.vue'
 import ReviewAlert from '@/components/admin/ReviewAlert.vue'
+import AppIcon from '@/components/AppIcon.vue'
 
 export default {
   name: 'AdminView',
@@ -73,7 +75,8 @@ export default {
     AdminSalaryView,
     AdminRecordsView,
     AdminAnalyticsView,
-    ReviewAlert
+    ReviewAlert,
+    AppIcon
   },
   setup() {
     const employeesStore = useEmployeesStore()
@@ -141,12 +144,7 @@ export default {
             
             console.log(`🔄 AdminView: 급여 데이터 로딩 시작 (${year}년 ${month}월)`)
             
-            // 순차 실행으로 서버 부하 감소
-            await payrollStore.fetchPayrollDashboard(year, month)
-            await new Promise(resolve => setTimeout(resolve, 200)) // 200ms 간격
-            await payrollStore.fetchEmployeePayrolls(year, month)
-            
-            console.log('✅ AdminView: 급여 데이터 로딩 완료')
+            await payrollStore.fetchEmployeePayrollList(year, month)
             break
           }
             
@@ -163,12 +161,10 @@ export default {
       }
     }
     
-    // 데이터 재시도
     const retryFetchData = async () => {
       await initializeData()
     }
-    
-    // 컴포넌트 마운트 시 데이터 초기화
+
     onMounted(() => {
       initializeData()
     })
@@ -192,12 +188,12 @@ export default {
       activeTab: 'dashboard',
       loadedTabs: new Set(['dashboard']), // 이미 로드된 탭 추적
       tabs: [
-        { id: 'workshift', name: '근무 일정', icon: '📅', component: 'AdminWorkshiftView' },
-        { id: 'dashboard', name: '대시보드', icon: '📊', component: 'AdminDashboardView' },
-        { id: 'employees', name: '직원 관리', icon: '👥', component: 'AdminEmployeeView' },
-        { id: 'payroll', name: '급여 관리', icon: '💰', component: 'AdminSalaryView' },
-        { id: 'records', name: '출퇴근 기록', icon: '📋', component: 'AdminRecordsView' },
-        // { id: 'analytics', name: '통계', icon: '📈', component: 'AdminAnalyticsView' }
+        { id: 'workshift', name: '근무 일정', icon: 'calendar', component: 'AdminWorkshiftView' },
+        { id: 'dashboard', name: '대시보드', icon: 'dashboard', component: 'AdminDashboardView' },
+        { id: 'employees', name: '직원 관리', icon: 'users', component: 'AdminEmployeeView' },
+        { id: 'payroll', name: '급여 관리', icon: 'money', component: 'AdminSalaryView' },
+        { id: 'records', name: '출퇴근 기록', icon: 'clipboard', component: 'AdminRecordsView' },
+        // { id: 'analytics', name: '통계', icon: 'analytics', component: 'AdminAnalyticsView' }
       ]
     }
   },
@@ -213,17 +209,6 @@ export default {
       
       // 탭 변경
       this.activeTab = tabId
-      
-      // payroll 탭 디버깅
-      if (tabId === 'payroll') {
-        console.log('💰 급여관리 탭 선택됨')
-        console.log('현재 payrollStore 상태:', {
-          dashboard: this.payrollStore.payrollDashboard,
-          employees: this.payrollStore.employeePayrolls,
-          loading: this.payrollStore.loading,
-          error: this.payrollStore.error
-        })
-      }
       
       // 해당 탭의 데이터가 아직 로드되지 않았으면 로드
       if (!this.loadedTabs.has(tabId)) {

@@ -95,6 +95,10 @@
 
 .tab-button {
   flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
   padding: var(--space-3) var(--space-4);
   border: none;
   background: transparent;
@@ -105,6 +109,10 @@
   color: var(--color-text-secondary);
   transition: all var(--transition-fast);
   white-space: nowrap;
+}
+
+.tab-button .tab-icon {
+  flex-shrink: 0;
 }
 
 .tab-button:hover {
@@ -157,9 +165,9 @@
   
   .tab-button {
     padding: var(--space-3);
-    text-align: center;
     font-size: var(--text-sm);
     border-radius: var(--radius-base);
+    gap: var(--space-1);
   }
   
   .admin-header h1 {
@@ -205,6 +213,12 @@
   .tab-button {
     padding: var(--space-3) var(--space-2);
     font-size: var(--text-sm);
+    gap: var(--space-1);
+  }
+
+  .tab-button .tab-icon {
+    width: 16px;
+    height: 16px;
   }
   
   .loading-container,

@@ -154,134 +154,247 @@
     </div>
 
     <!-- Memo Modal -->
-    <div v-if="showMemoModal" class="modal-overlay" @click="closeMemoModal">
-      <div class="modal-content memo-modal-content" @click.stop>
-        <div class="modal-header">
-          <h3><AppIcon name="message-square" :size="20" class="mr-2" />메모 내용</h3>
-          <button @click="closeMemoModal" class="modal-close">&times;</button>
-        </div>
-        <div class="modal-body">
-          <div class="memo-content-display">
-            {{ selectedMemo }}
+    <Teleport to="body">
+      <div v-if="showMemoModal" class="modal-overlay" @click="closeMemoModal">
+        <div class="modal-content memo-modal-content" @click.stop>
+          <div class="modal-header">
+            <h3><AppIcon name="message-square" :size="20" class="mr-2" />메모 내용</h3>
+            <button @click="closeMemoModal" class="modal-close">&times;</button>
+          </div>
+          <div class="modal-body">
+            <div class="memo-content-display">
+              {{ selectedMemo }}
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button @click="closeMemoModal" class="btn btn-primary">
+              확인
+            </button>
           </div>
         </div>
-        <div class="modal-footer">
-          <button @click="closeMemoModal" class="btn btn-primary">
-            확인
-          </button>
-        </div>
       </div>
-    </div>
+    </Teleport>
 
     <!-- Review Modal -->
-    <div v-if="showReviewModal && selectedReview" class="modal-overlay" @click="closeReviewModal">
-      <div class="modal-content review-modal-content" @click.stop>
-        <div class="modal-header">
-          <h3><AppIcon name="eye" :size="20" class="mr-2" />근무 기록 검토</h3>
-          <button @click="closeReviewModal" class="modal-close">&times;</button>
-        </div>
-        <div class="modal-body">
-          <!-- Employee Info -->
-          <div class="review-employee-info">
-            <div class="employee-info-modal">
-              <div 
-                class="employee-avatar-modal" 
-                :style="{ backgroundColor: selectedReview.employee.personalColor || getDefaultColor(selectedReview.employee.position) }"
-              >
-                {{ selectedReview.employee.name.charAt(0) }}
-              </div>
-              <div class="employee-details-modal">
-                <h4>{{ selectedReview.employee.name }}</h4>
-                <p>{{ getSectionText(selectedReview.employee.section) }} · {{ getPositionText(selectedReview.employee.position) }}</p>
-              </div>
-            </div>
+    <Teleport to="body">
+      <div v-if="showReviewModal && selectedReview" class="modal-overlay" @click="closeReviewModal">
+        <div class="modal-content review-modal-content" @click.stop>
+          <div class="modal-header">
+            <h3><AppIcon name="eye" :size="20" class="mr-2" />근무 기록 검토</h3>
+            <button @click="closeReviewModal" class="modal-close">&times;</button>
           </div>
-
-          <!-- Issue Details -->
-          <div class="issue-details-modal">
-            <h4>검토 사유</h4>
-            <div class="issue-badge-modal" :class="getIssueClass(selectedReview.reviewReason)">
-              <AppIcon :name="getIssueIcon(selectedReview.reviewReason)" :size="16" />
-              {{ getIssueDescription(selectedReview.reviewReason) }}
-            </div>
-            <p class="issue-detail-text">{{ getIssueDetail(selectedReview) }}</p>
-          </div>
-
-          <!-- Time Comparison -->
-          <div class="time-comparison-modal">
-            <div class="time-section">
-              <h4>예정 시간</h4>
-              <div class="time-display-modal scheduled">
-                {{ formatTime(selectedReview.startAt) }} - {{ formatTime(selectedReview.endAt) }}
-                <span class="duration">({{ getScheduledDuration(selectedReview) }}분)</span>
+          <div class="modal-body">
+            <!-- Employee Info -->
+            <div class="review-employee-info">
+              <div class="employee-info-modal">
+                <div
+                  class="employee-avatar-modal"
+                  :style="{ backgroundColor: selectedReview.employee.personalColor || getDefaultColor(selectedReview.employee.position) }"
+                >
+                  {{ selectedReview.employee.name.charAt(0) }}
+                </div>
+                <div class="employee-details-modal">
+                  <h4>{{ selectedReview.employee.name }}</h4>
+                  <p>{{ getSectionText(selectedReview.employee.section) }} · {{ getPositionText(selectedReview.employee.position) }}</p>
+                </div>
               </div>
             </div>
-            <div class="time-section">
-              <h4>실제 시간</h4>
-              <div class="time-display-modal actual">
-                <span :class="{ missing: !selectedReview.actualInAt }">
-                  {{ selectedReview.actualInAt ? formatTime(selectedReview.actualInAt) : '미기록' }}
-                </span>
-                <span> - </span>
-                <span :class="{ missing: !selectedReview.actualOutAt }">
-                  {{ selectedReview.actualOutAt ? formatTime(selectedReview.actualOutAt) : '미기록' }}
-                </span>
-                <span class="duration">({{ selectedReview.actualMinutes || 0 }}분)</span>
+
+            <!-- Issue Details -->
+            <div class="issue-details-modal">
+              <h4>검토 사유</h4>
+              <div class="issue-badge-modal" :class="getIssueClass(selectedReview.reviewReason)">
+                <AppIcon :name="getIssueIcon(selectedReview.reviewReason)" :size="16" />
+                {{ getIssueDescription(selectedReview.reviewReason) }}
+              </div>
+              <p class="issue-detail-text">{{ getIssueDetail(selectedReview) }}</p>
+            </div>
+
+            <!-- Time Comparison -->
+            <div class="time-comparison-modal">
+              <div class="time-section">
+                <h4>예정 시간</h4>
+                <div class="time-display-modal scheduled">
+                  {{ formatTime(selectedReview.startAt) }} - {{ formatTime(selectedReview.endAt) }}
+                  <span class="duration">({{ getScheduledDuration(selectedReview) }}분)</span>
+                </div>
+              </div>
+              <div class="time-section">
+                <h4>실제 시간</h4>
+                <div class="time-display-modal actual">
+                  <span :class="{ missing: !selectedReview.actualInAt }">
+                    {{ selectedReview.actualInAt ? formatTime(selectedReview.actualInAt) : '미기록' }}
+                  </span>
+                  <span> - </span>
+                  <span :class="{ missing: !selectedReview.actualOutAt }">
+                    {{ selectedReview.actualOutAt ? formatTime(selectedReview.actualOutAt) : '미기록' }}
+                  </span>
+                  <span class="duration">({{ selectedReview.actualMinutes || 0 }}분)</span>
+                </div>
               </div>
             </div>
-          </div>
 
-          <!-- Employee Memo -->
-          <div v-if="selectedReview.memo" class="employee-memo-modal">
-            <h4>직원 메모</h4>
-            <div class="memo-content">{{ selectedReview.memo }}</div>
-          </div>
+            <!-- Employee Memo -->
+            <div v-if="selectedReview.memo" class="employee-memo-modal">
+              <h4>직원 메모</h4>
+              <div class="memo-content">{{ selectedReview.memo }}</div>
+            </div>
 
-          <!-- Edit Form -->
-          <div class="edit-form-modal">
-            <h4>시간 수정 및 승인</h4>
-            <div class="form-grid-modal">
+            <!-- Edit Form -->
+            <div class="edit-form-modal">
+              <h4>시간 수정 및 승인</h4>
+              <div class="form-grid-modal">
+                <div class="form-group">
+                  <label for="modal-start">출근 시간</label>
+                  <input
+                    id="modal-start"
+                    type="datetime-local"
+                    v-model="editForm.startAt"
+                    class="form-input-modal"
+                  />
+                </div>
+                <div class="form-group">
+                  <label for="modal-end">퇴근 시간</label>
+                  <input
+                    id="modal-end"
+                    type="datetime-local"
+                    v-model="editForm.endAt"
+                    class="form-input-modal"
+                  />
+                </div>
+              </div>
               <div class="form-group">
-                <label for="modal-start">출근 시간</label>
-                <input 
-                  id="modal-start"
-                  type="datetime-local" 
-                  v-model="editForm.startAt" 
-                  class="form-input-modal" 
-                />
+                <label for="modal-admin-note">관리자 메모</label>
+                <textarea
+                  id="modal-admin-note"
+                  v-model="editForm.adminNote"
+                  placeholder="승인 처리에 대한 메모를 입력하세요"
+                  class="form-textarea-modal"
+                  rows="3"
+                ></textarea>
               </div>
-              <div class="form-group">
-                <label for="modal-end">퇴근 시간</label>
-                <input 
-                  id="modal-end"
-                  type="datetime-local" 
-                  v-model="editForm.endAt" 
-                  class="form-input-modal" 
-                />
-              </div>
-            </div>
-            <div class="form-group">
-              <label for="modal-admin-note">관리자 메모</label>
-              <textarea 
-                id="modal-admin-note"
-                v-model="editForm.adminNote"
-                placeholder="승인 처리에 대한 메모를 입력하세요"
-                class="form-textarea-modal"
-                rows="3"
-              ></textarea>
             </div>
           </div>
-        </div>
-        <div class="modal-footer">
-          <button @click="closeReviewModal" class="btn btn-secondary">
-            취소
-          </button>
-          <button @click="confirmReviewUpdate" class="btn btn-primary">
-            승인 처리
-          </button>
+          <div class="modal-footer">
+            <button @click="closeReviewModal" class="btn btn-secondary">
+              취소
+            </button>
+            <button @click="confirmReviewUpdate" class="btn btn-primary">
+              승인 처리
+            </button>
+          </div>
         </div>
       </div>
-    </div>
+    </Teleport>
+
+    <!-- Confirmation Modal -->
+    <Teleport to="body">
+      <div v-if="showConfirmationModal && confirmationData" class="modal-overlay" @click="closeConfirmationModal">
+        <div class="modal-content confirmation-modal-content" @click.stop>
+          <div class="modal-header">
+            <h3><AppIcon name="check-circle" :size="20" class="mr-2" />처리 완료</h3>
+            <button @click="closeConfirmationModal" class="modal-close">&times;</button>
+          </div>
+          <div class="modal-body">
+            <div class="confirmation-content">
+              <!-- Success Message -->
+              <div class="success-banner">
+                <div class="success-icon">
+                  <AppIcon name="check-circle" :size="24" />
+                </div>
+                <div class="success-text">
+                  <h4>근무 검토가 성공적으로 완료되었습니다</h4>
+                  <p>처리된 근무 기록의 세부 정보를 확인하세요.</p>
+                </div>
+              </div>
+
+              <!-- Employee Info -->
+              <div class="confirmation-employee-info">
+                <div class="employee-info-confirmation">
+                  <div
+                    class="employee-avatar-confirmation"
+                    :style="{ backgroundColor: confirmationData.shift?.employee?.personalColor || getDefaultColor(confirmationData.shift?.employee?.position) }"
+                  >
+                    {{ confirmationData.shift?.employee?.name?.charAt(0) || '?' }}
+                  </div>
+                  <div class="employee-details-confirmation">
+                    <h4>{{ confirmationData.shift?.employee?.name || '직원' }}</h4>
+                    <p>{{ getSectionText(confirmationData.shift?.employee?.section) }} · {{ getPositionText(confirmationData.shift?.employee?.position) }}</p>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Processed Information -->
+              <div class="processed-info">
+                <div class="info-grid">
+                  <div class="info-item">
+                    <label>처리 상태</label>
+                    <div class="status-badge" :class="getStatusClass(confirmationData.shift?.status)">
+                      <AppIcon :name="getStatusIcon(confirmationData.shift?.status)" :size="14" />
+                      {{ getStatusText(confirmationData.shift?.status) }}
+                    </div>
+                  </div>
+                  <div class="info-item">
+                    <label>최종 급여</label>
+                    <div class="pay-amount">{{ formatCurrency(confirmationData.shift?.finalPayAmount || 0) }}</div>
+                  </div>
+                  <div class="info-item">
+                    <label>실제 근무 시간</label>
+                    <div class="work-time">{{ formatTime(confirmationData.shift?.startAt) }} - {{ formatTime(confirmationData.shift?.endAt) }}</div>
+                  </div>
+                  <div class="info-item">
+                    <label>근무 시간</label>
+                    <div class="work-duration">{{ confirmationData.shift?.actualMinutes || 0 }}분 ({{ confirmationData.shift?.workedMinutes || 0 }}분 근무)</div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Processing Details -->
+              <div v-if="confirmationData.shift?.memo" class="processing-memo">
+                <h5>처리 메모</h5>
+                <div class="memo-display">{{ confirmationData.shift.memo }}</div>
+              </div>
+
+              <!-- Summary Information -->
+              <div v-if="confirmationData.summary" class="summary-info">
+                <h5>처리 요약</h5>
+                <div class="summary-grid">
+                  <div class="summary-item">
+                    <span class="summary-label">최종 상태:</span>
+                    <span class="summary-value">{{ getStatusText(confirmationData.summary.status) }}</span>
+                  </div>
+                  <div class="summary-item">
+                    <span class="summary-label">실제 근무:</span>
+                    <span class="summary-value">{{ confirmationData.summary.actualMinutes }}분</span>
+                  </div>
+                  <div class="summary-item">
+                    <span class="summary-label">인정 근무:</span>
+                    <span class="summary-value">{{ confirmationData.summary.workedMinutes }}분</span>
+                  </div>
+                  <div class="summary-item">
+                    <span class="summary-label">급여:</span>
+                    <span class="summary-value">{{ formatCurrency(confirmationData.summary.finalPayAmount) }}</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Processing Time -->
+              <div class="processing-time">
+                <small>
+                  <AppIcon name="clock" :size="12" class="mr-1" />
+                  처리 시간: {{ formatDateTime(confirmationData.shift?.reviewResolvedAt) }}
+                </small>
+              </div>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button @click="closeConfirmationModal" class="btn btn-primary">
+              확인
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>
 
@@ -306,8 +419,10 @@ const editForm = ref({
 // Modal states
 const showMemoModal = ref(false)
 const showReviewModal = ref(false)
+const showConfirmationModal = ref(false)
 const selectedMemo = ref('')
 const selectedReview = ref(null)
+const confirmationData = ref(null)
 
 // Computed properties
 const reviewWorkshifts = computed(() => workshiftStore.reviewWorkshifts || [])
@@ -390,12 +505,18 @@ const confirmUpdate = async (workshiftId) => {
     const startAt = startTime.toISOString()
     const endAt = endTime.toISOString()
     
-    await workshiftStore.resolveReviewWorkshift(authStore.user.shopId, workshiftId, editForm.value.status, {
+    const result = await workshiftStore.resolveReviewWorkshift(authStore.user.shopId, workshiftId, {
       startAt,
       endAt,
-      adminNote: editForm.value.adminNote
+      memo: editForm.value.adminNote
     })
-    
+
+    console.log('✅ Review resolved successfully:', result)
+
+    // Show confirmation modal
+    showConfirmationModal.value = true
+    confirmationData.value = result
+
     // Reset form
     cancelEdit()
   } catch (err) {
@@ -540,9 +661,17 @@ const quickApprove = async (workshiftId) => {
 
   if (confirm('이 근무 기록을 현재 상태로 승인하시겠습니까?')) {
     try {
-      await workshiftStore.resolveReviewWorkshift(authStore.user.shopId, workshiftId, 'COMPLETED', {
-        adminNote: '관리자 승인 처리'
+      const result = await workshiftStore.resolveReviewWorkshift(authStore.user.shopId, workshiftId, {
+        startAt: review.actualInAt || review.startAt,
+        endAt: review.actualOutAt || review.endAt,
+        memo: '관리자 승인 처리'
       })
+
+      console.log('✅ Quick approve resolved successfully:', result)
+
+      // Show confirmation modal
+      showConfirmationModal.value = true
+      confirmationData.value = result
     } catch (error) {
       console.error('Failed to approve workshift:', error)
       alert('승인 처리 중 오류가 발생했습니다.')
@@ -594,7 +723,7 @@ const closeReviewModal = () => {
 
 const confirmReviewUpdate = async () => {
   if (!selectedReview.value) return
-  
+
   try {
     // 출근시간과 퇴근시간 둘 다 필수 입력 검증
     if (!editForm.value.startAt || !editForm.value.endAt) {
@@ -605,7 +734,7 @@ const confirmReviewUpdate = async () => {
     // 시간 유효성 검증
     const startTime = new Date(editForm.value.startAt)
     const endTime = new Date(editForm.value.endAt)
-    
+
     if (startTime >= endTime) {
       alert('퇴근 시간은 출근 시간보다 늦어야 합니다.')
       return
@@ -614,19 +743,73 @@ const confirmReviewUpdate = async () => {
     // Convert datetime-local format back to ISO string
     const startAt = startTime.toISOString()
     const endAt = endTime.toISOString()
-    
-    await workshiftStore.resolveReviewWorkshift(authStore.user.shopId, selectedReview.value.id, editForm.value.status, {
+
+    const result = await workshiftStore.resolveReviewWorkshift(authStore.user.shopId, selectedReview.value.id, {
       startAt,
       endAt,
-      adminNote: editForm.value.adminNote
+      memo: editForm.value.adminNote
     })
-    
-    // Close modal
+
+    console.log('✅ Review modal resolved successfully:', result)
+
+    // Show confirmation modal
+    showConfirmationModal.value = true
+    confirmationData.value = result
+
+    // Close review modal
     closeReviewModal()
   } catch (err) {
     console.error('Failed to update workshift:', err)
     alert('근무 시간 승인 처리 중 오류가 발생했습니다.')
   }
+}
+
+// Confirmation modal methods
+const closeConfirmationModal = () => {
+  showConfirmationModal.value = false
+  confirmationData.value = null
+}
+
+const getStatusClass = (status) => {
+  const classes = {
+    'COMPLETED': 'status-completed',
+    'CANCELLED': 'status-cancelled',
+    'SCHEDULED': 'status-scheduled'
+  }
+  return classes[status] || 'status-default'
+}
+
+const getStatusIcon = (status) => {
+  const icons = {
+    'COMPLETED': 'check-circle',
+    'CANCELLED': 'x-circle',
+    'SCHEDULED': 'clock'
+  }
+  return icons[status] || 'help-circle'
+}
+
+const getStatusText = (status) => {
+  const texts = {
+    'COMPLETED': '완료',
+    'CANCELLED': '취소됨',
+    'SCHEDULED': '예정'
+  }
+  return texts[status] || status
+}
+
+const formatCurrency = (amount) => {
+  return new Intl.NumberFormat('ko-KR', { style: 'currency', currency: 'KRW' }).format(amount)
+}
+
+const formatDateTime = (dateString) => {
+  if (!dateString) return '-'
+  return new Date(dateString).toLocaleString('ko-KR', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit'
+  })
 }
 
 </script>
