@@ -200,12 +200,29 @@ export default {
     
     const handleUpdateWorkshift = async (shiftData) => {
       try {
-        await workshiftStore.updateWorkshift(
+        // Format data for admin API
+        // For now, assume schedule modification (startAt, endAt, status)
+        // Future: Could add logic to detect if it's attendance modification
+        const adminUpdateData = {
+          startAt: shiftData.startAt,
+          endAt: shiftData.endAt,
+          status: shiftData.status
+        }
+
+        console.log('Admin updating workshift:', {
+          shopId: authStore.user.shopId,
+          shiftId: selectedShift.value.id,
+          updateData: adminUpdateData
+        })
+
+        // Use admin API for updating employee workshifts
+        const result = await workshiftStore.updateEmployeeWorkshift(
           authStore.user.shopId,
           selectedShift.value.id,
-          shiftData
+          adminUpdateData
         )
-        
+
+        console.log('Admin workshift update successful:', result)
         closeEditModal()
         await refreshData()
       } catch (error) {
@@ -218,9 +235,10 @@ export default {
       if (!confirm(`${shift.employee?.name}님의 ${formatShiftTime(shift.startAt, shift.endAt)} 근무 일정을 삭제하시겠습니까?`)) {
         return
       }
-      
+
       try {
-        await workshiftStore.deleteWorkshift(authStore.user.shopId, shift.id)
+        // Use admin API for deleting employee workshifts
+        await workshiftStore.deleteEmployeeWorkshift(authStore.user.shopId, shift.id)
         await refreshData()
       } catch (error) {
         console.error('Failed to delete workshift:', error)

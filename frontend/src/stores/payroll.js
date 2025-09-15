@@ -3,11 +3,9 @@ import { ref } from 'vue'
 import { useAuthStore } from './auth'
 
 export const usePayrollStore = defineStore('payroll', () => {
-  // State
   const loading = ref(false)
+  const loadingDetail = ref(false)
   const error = ref(null)
-  
-  // 급여 대시보드 데이터
   const payrollDashboard = ref({
     year: new Date().getFullYear(),
     month: new Date().getMonth() + 1,
@@ -17,15 +15,9 @@ export const usePayrollStore = defineStore('payroll', () => {
     totalWorkedMinutes: 0
   })
   
-  // 급여 개요 데이터 (새로운 API 전용)
   const payrollOverview = ref(null)
-  
-  // 직원별 급여 현황 데이터
   const employeePayrollList = ref(null)
-  
-  // 직원 상세 급여 데이터
   const employeeDetail = ref(null)
-
   const payrollSettings = ref({
     standardWorkHours: 8,
     overtimeRate: 1.5,
@@ -33,7 +25,6 @@ export const usePayrollStore = defineStore('payroll', () => {
     absentDeduction: 50000
   })
 
-  // API 인스턴스 가져오기 (보안 강화)
   const getApiInstance = () => {
     const authStore = useAuthStore()
     const apiInstance = authStore.getApiInstance()
@@ -52,8 +43,7 @@ export const usePayrollStore = defineStore('payroll', () => {
     if (!shopId) {
       throw new Error('매장 ID를 찾을 수 없습니다. 사용자 권한을 확인하세요.')
     }
-    
-    // 숫자형 shopId 검증
+
     if (!Number.isInteger(Number(shopId)) || Number(shopId) <= 0) {
       throw new Error('유효하지 않은 매장 ID입니다.')
     }
@@ -61,7 +51,6 @@ export const usePayrollStore = defineStore('payroll', () => {
     return shopId
   }
   
-  // 보안 검증 함수
   const validateAdminPermission = () => {
     const authStore = useAuthStore()
     
@@ -76,7 +65,6 @@ export const usePayrollStore = defineStore('payroll', () => {
     return true
   }
   
-  // 입력 데이터 검증
   const validateDateParams = (year, month) => {
     if (year && (!Number.isInteger(year) || year < 2020 || year > 2030)) {
       throw new Error('유효하지 않은 연도입니다.')
@@ -89,15 +77,25 @@ export const usePayrollStore = defineStore('payroll', () => {
     return true
   }
 
-  // Helper functions for API data processing would go here if needed
-
-  // 요청 캐시 및 중복 방지
   const requestCache = ref(new Map())
   const activeRequests = ref(new Set())
 
-  // Actions - 실제 API 연동
+  // 캐시 무효화 함수
+  const invalidateCache = (pattern = null) => {
+    if (pattern) {
+      // 특정 패턴과 일치하는 캐시만 삭제
+      for (const [key] of requestCache.value) {
+        if (key.includes(pattern)) {
+          requestCache.value.delete(key)
+        }
+      }
+    } else {
+      // 전체 캐시 삭제
+      requestCache.value.clear()
+    }
+    console.log(`💧 캐시 무효화 완료: ${pattern || '전체'}`)
+  }
 
-  // 1. 직원별 급여 현황 목록 조회
   const fetchEmployeePayrollList = async (year = null, month = null) => {
     validateAdminPermission()
     
@@ -105,7 +103,6 @@ export const usePayrollStore = defineStore('payroll', () => {
     const targetMonth = month || (new Date().getMonth() + 1)
     
     validateDateParams(targetYear, targetMonth)
-    
     const requestKey = `employee_list_${targetYear}_${targetMonth}`
     
     if (activeRequests.value.has(requestKey)) {
@@ -135,7 +132,6 @@ export const usePayrollStore = defineStore('payroll', () => {
       const listData = response.data
       employeePayrollList.value = listData
       
-      // 캐시에 저장
       requestCache.value.set(requestKey, {
         data: listData,
         timestamp: Date.now()
@@ -169,7 +165,7 @@ export const usePayrollStore = defineStore('payroll', () => {
     }
   }
 
-  // 2. 직원 상세 급여 정보 조회
+
   const fetchEmployeePayrollDetail = async (employeeId, year = null, month = null) => {
     validateAdminPermission()
     
@@ -182,7 +178,7 @@ export const usePayrollStore = defineStore('payroll', () => {
       throw new Error('유효하지 않은 직원 ID입니다.')
     }
     
-    loading.value = true
+    loadingDetail.value = true
     error.value = null
 
     try {
@@ -212,11 +208,10 @@ export const usePayrollStore = defineStore('payroll', () => {
       }
       throw err
     } finally {
-      loading.value = false
+      loadingDetail.value = false
     }
   }
 
-  // 3. 직원 정산 처리
   const processEmployeeSettlement = async (employeeId, year, month) => {
   validateAdminPermission();
 
@@ -252,6 +247,10 @@ export const usePayrollStore = defineStore('payroll', () => {
 
     const settlementResult = response.data;
     console.log('직원 정산 처리 완료:', settlementResult);
+
+    // 정산 완료 후 관련 캐시 무효화
+    invalidateCache(`${year}_${month}`);
+
     return settlementResult;
   } catch (err) {
     console.error('직원 정산 처리 실패:', err.response?.data || err);
@@ -273,9 +272,7 @@ export const usePayrollStore = defineStore('payroll', () => {
   }
 };
 
-  // 엑셀 다운로드 기능 (새로운 API 엔드포인트)
   const exportPayrollExcel = async (year = null, month = null, cycleStartDay = null) => {
-    // 보안 검증
     validateAdminPermission()
     
     const targetYear = year || new Date().getFullYear()
@@ -299,7 +296,6 @@ export const usePayrollStore = defineStore('payroll', () => {
         month: targetMonth
       }
       
-      // cycleStartDay가 제공되고 1이 아닌 경우에만 추가 (기본값 1일은 생략)
       if (cycleStartDay && cycleStartDay !== 1 && cycleStartDay >= 1 && cycleStartDay <= 31) {
         params.cycleStartDay = cycleStartDay
       }
@@ -309,7 +305,6 @@ export const usePayrollStore = defineStore('payroll', () => {
         responseType: 'blob' // XLSX binary stream을 위한 설정
       })
       
-      // 브라우저에서 파일 다운로드 처리
       const blob = new Blob([response.data], { 
         type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' 
       })
@@ -343,13 +338,7 @@ export const usePayrollStore = defineStore('payroll', () => {
   }
 
 
-
-
-
-
-  // 급여 개요 데이터 조회 (새로운 API)
   const fetchPayrollOverview = async (year = null, month = null, cycleStartDay = null) => {
-    // 보안 검증
     validateAdminPermission()
     
     const targetYear = year || new Date().getFullYear()
@@ -358,14 +347,11 @@ export const usePayrollStore = defineStore('payroll', () => {
     validateDateParams(targetYear, targetMonth)
     
     const requestKey = `overview_${targetYear}_${targetMonth}_${cycleStartDay || 'default'}`
-    
-    // 이미 동일한 요청이 진행 중이면 대기
     if (activeRequests.value.has(requestKey)) {
       console.log('동일한 급여 개요 요청이 진행 중, 대기...')
       return
     }
     
-    // 캐시된 데이터가 있고 5분 이내면 재사용
     const cached = requestCache.value.get(requestKey)
     if (cached && (Date.now() - cached.timestamp < 5 * 60 * 1000)) {
       console.log('💾 캐시된 급여 개요 데이터 사용')
@@ -388,8 +374,6 @@ export const usePayrollStore = defineStore('payroll', () => {
         year: targetYear, 
         month: targetMonth 
       }
-      
-      // cycleStartDay가 제공되고 1이 아닌 경우에만 추가 (기본값 1일은 생략)
       if (cycleStartDay && cycleStartDay !== 1 && cycleStartDay >= 1 && cycleStartDay <= 31) {
         params.cycleStartDay = cycleStartDay
       }
@@ -434,10 +418,7 @@ export const usePayrollStore = defineStore('payroll', () => {
         }
       }
       
-      // payrollOverview state에 데이터 저장
       payrollOverview.value = overviewData
-      
-      // 기존 payrollDashboard 업데이트
       payrollDashboard.value = {
         ...payrollDashboard.value,
         year: overviewData.year,
@@ -448,7 +429,6 @@ export const usePayrollStore = defineStore('payroll', () => {
         totalWorkedMinutes: overviewData.hourly.shiftCount * 480 // 추정값
       }
       
-      // 캐시에 저장
       requestCache.value.set(requestKey, {
         data: overviewData,
         timestamp: Date.now()
@@ -503,7 +483,6 @@ export const usePayrollStore = defineStore('payroll', () => {
     }
   }
 
-  // Utility functions
   const formatWorkDuration = (minutes) => {
     if (!minutes || minutes === 0) return '0시간 0분'
     
@@ -518,39 +497,39 @@ export const usePayrollStore = defineStore('payroll', () => {
     return `${amount.toLocaleString()}원`
   }
 
-  // 4. 대량 정산 처리
   const processBulkSettlement = async (year = null, month = null) => {
     validateAdminPermission()
-    
+
     const targetYear = year || new Date().getFullYear()
     const targetMonth = month || (new Date().getMonth() + 1)
-    
+
     validateDateParams(targetYear, targetMonth)
-    
+
     loading.value = true
     error.value = null
 
     try {
       const api = getApiInstance()
       const shopId = getShopId()
-      
+
       const response = await api.post(`/admin/shops/${shopId}/payroll/settlements`, {
         year: targetYear,
         month: targetMonth,
-        cycleStartDay: 1 // 기본값, 필요시 파라미터로 받을 수 있음
+        cycleStartDay: 1
       })
-      
+
       const result = response.data
       console.log('대량 정산 처리 완료:', result)
-      
-      // 정산 후 데이터 새로고침
+
+      // 캐시 무효화 후 데이터 새로고침
+      invalidateCache()
       await fetchEmployeePayrollList(targetYear, targetMonth)
       await fetchPayrollOverview(targetYear, targetMonth)
-      
+
       return result
     } catch (err) {
       console.error('대량 정산 처리 실패:', err)
-      
+
       if (err.response?.status === 404) {
         error.value = '정산할 급여 정보를 찾을 수 없습니다.'
       } else if (err.response?.status === 401) {
@@ -562,7 +541,7 @@ export const usePayrollStore = defineStore('payroll', () => {
       } else {
         error.value = '정산 처리 중 오류가 발생했습니다.'
       }
-      
+
       throw new Error(error.value)
     } finally {
       loading.value = false
@@ -578,7 +557,8 @@ export const usePayrollStore = defineStore('payroll', () => {
     payrollSettings,
     employeePayrollList,
     employeeDetail,
-    
+    requestCache,
+
     // Actions
     fetchPayrollOverview,
     fetchEmployeePayrollList,
@@ -586,10 +566,11 @@ export const usePayrollStore = defineStore('payroll', () => {
     processEmployeeSettlement,
     processBulkSettlement,
     exportPayrollExcel,
-    
+    invalidateCache,
+
     getApiInstance,
     getShopId,
-    
+
     // Utilities
     formatWorkDuration,
     formatSalary

@@ -366,66 +366,141 @@
     <div v-if="showDetailModal" class="modal-overlay" @click="closeDetailModal">
       <div class="modal-container" @click.stop>
         <div class="modal-header">
-          <h3>{{ selectedEmployee?.name || '직원' }}님 급여 상세</h3>
+          <h3>{{ selectedEmployee?.employee?.name || '직원' }}님 급여 상세</h3>
           <button @click="closeDetailModal" class="modal-close">&times;</button>
         </div>
 
-        <div v-if="payrollStore.loading" class="modal-loading">
+        <div v-if="detailLoading" class="modal-loading">
           <div class="loading-spinner large"></div>
           <p>상세 정보를 불러오는 중...</p>
         </div>
 
-        <div v-else-if="payrollStore.error" class="modal-error">
+        <div v-else-if="!selectedEmployee" class="modal-error">
           <div class="error-icon"><AppIcon name="warning" :size="64" /></div>
-          <h4>오류가 발생했습니다</h4>
-          <p>{{ payrollStore.error }}</p>
+          <h4>데이터를 찾을 수 없습니다</h4>
+          <p>직원 상세 정보를 불러오지 못했습니다.</p>
           <button @click="closeDetailModal" class="btn btn-primary">확인</button>
         </div>
         
         <div v-else-if="selectedEmployee" class="modal-content">
-          <!-- 요약 정보 -->
+          <!-- 직원 기본 정보 -->
+          <div class="employee-header">
+            <div class="employee-basic-info">
+              <div
+                class="employee-avatar large"
+                :style="{ backgroundColor: getDefaultPersonalColor(selectedEmployee.employee?.position) }"
+              >
+                {{ getInitial(selectedEmployee.employee?.name || '') }}
+              </div>
+              <div class="employee-details">
+                <h4>{{ selectedEmployee.employee?.name || '알 수 없음' }}</h4>
+                <div class="employee-meta">
+                  <span class="employee-position">{{ formatPosition(selectedEmployee.employee?.position) }}</span>
+                  <span class="employee-id">ID: {{ selectedEmployee.employee?.id }}</span>
+                </div>
+                <div class="employee-payment-info">
+                  <span class="pay-type">{{ selectedEmployee.employee?.payUnit === 'HOURLY' ? '시급제' : '월급제' }}</span>
+                  <span class="pay-rate">{{ formatCurrency(selectedEmployee.employee?.pay || 0) }}{{ selectedEmployee.employee?.payUnit === 'HOURLY' ? '/시간' : '/월' }}</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- 정산 기간 정보 -->
+            <div class="cycle-info">
+              <div class="cycle-period">
+                <span class="cycle-label">정산 기간</span>
+                <span class="cycle-dates">{{ selectedEmployee.cycle?.label || `${selectedEmployee.year}년 ${selectedEmployee.month}월` }}</span>
+              </div>
+              <div class="settlement-status-info">
+                <span class="settlement-label">정산 상태</span>
+                <div class="settlement-status-badge" :class="selectedEmployee.settlement?.status === 'PAID' ? 'settled' : 'pending'">
+                  <AppIcon :name="selectedEmployee.settlement?.status === 'PAID' ? 'success' : 'clock'" :size="14" />
+                  <span>{{ selectedEmployee.settlement?.status === 'PAID' ? '정산 완료' : '정산 대기' }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 급여 요약 정보 -->
           <div class="detail-summary">
             <div class="summary-grid">
               <div class="summary-card">
                 <span class="summary-label">근무 일수</span>
-                <span class="summary-value">{{ selectedEmployee.daysWorked }}일</span>
+                <span class="summary-value">{{ selectedEmployee.daysWorked || 0 }}일</span>
               </div>
               <div class="summary-card">
                 <span class="summary-label">총 근무시간</span>
-                <span class="summary-value">{{ formatMinutes(selectedEmployee.workedMinutes) }}</span>
+                <span class="summary-value">{{ formatMinutes(selectedEmployee.workedMinutes || 0) }}</span>
               </div>
               <div class="summary-card">
-                <span class="summary-label">연장 근무시간</span>
-                <span class="summary-value overtime">{{ formatMinutes(selectedEmployee.extraMinutes) }}</span>
+                <span class="summary-label">근무 건수</span>
+                <span class="summary-value">{{ (selectedEmployee.logs || []).length }}건</span>
               </div>
               <div class="summary-card total">
-                <span class="summary-label">예상 급여</span>
-                <span class="summary-value">{{ formatCurrency(selectedEmployee.amount) }}</span>
+                <span class="summary-label">총 급여</span>
+                <span class="summary-value">{{ formatCurrency(selectedEmployee.amount || 0) }}</span>
               </div>
             </div>
-            
-            <!-- 추가 정보 카드 -->
-            <div class="employee-extra-info">
-              <div class="info-grid">
-                <div class="info-card">
-                  <span class="info-label">급여 형태</span>
-                  <span class="info-value">
-                    {{ selectedEmployee.hourlyPay ? '시급제' : '월급제' }}
+          </div>
+
+          <!-- 계좌 정보 -->
+          <div v-if="selectedEmployee.employee?.bank || selectedEmployee.employee?.accountNumber" class="account-info">
+            <h5>계좌 정보</h5>
+            <div class="account-details">
+              <div class="account-item">
+                <span class="account-label">은행</span>
+                <span class="account-value">{{ selectedEmployee.employee?.bank || '-' }}</span>
+              </div>
+              <div class="account-item">
+                <span class="account-label">계좌번호</span>
+                <span class="account-value">{{ selectedEmployee.employee?.accountNumber || '-' }}</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 근무 기록 상세 -->
+          <div v-if="selectedEmployee.logs && selectedEmployee.logs.length > 0" class="work-logs">
+            <h5>근무 기록</h5>
+            <div class="logs-container">
+              <div class="logs-header">
+                <span>날짜</span>
+                <span>계획 근무시간</span>
+                <span>실제 근무시간</span>
+                <span>급여액</span>
+                <span>상태</span>
+              </div>
+              <div class="logs-list">
+                <div v-for="log in selectedEmployee.logs" :key="log.id" class="log-item">
+                  <span class="log-date">{{ formatLogDate(log.date) }}</span>
+                  <span class="log-planned-time">
+                    {{ formatLogTime(log.plannedStart, log.plannedEnd) }}
+                  </span>
+                  <span class="log-actual-time" :class="{ 'overtime': log.actualMinutes > log.workedMinutes }">
+                    {{ formatLogActualTime(log.actualInAt, log.actualOutAt) }}
+                    <small v-if="log.actualMinutes !== log.workedMinutes" class="minutes-diff">
+                      ({{ log.actualMinutes }}분)
+                    </small>
+                  </span>
+                  <span class="log-amount">{{ formatCurrency(log.finalPayAmount || 0) }}</span>
+                  <span class="log-status" :class="log.status?.toLowerCase()">
+                    {{ formatLogStatus(log.status) }}
                   </span>
                 </div>
-                <div class="info-card">
-                  <span class="info-label">기본급</span>
-                  <span class="info-value">
-                    {{ selectedEmployee.hourlyPay 
-                        ? formatCurrency(selectedEmployee.hourlyPay) + '/시간'
-                        : formatCurrency(selectedEmployee.monthlyPay) + '/월'
-                    }}
-                  </span>
-                </div>
-                <div class="info-card">
-                  <span class="info-label">직위</span>
-                  <span class="info-value">{{ formatPosition(selectedEmployee.position) }}</span>
-                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 정산 정보 (정산 완료된 경우만) -->
+          <div v-if="selectedEmployee.settlement?.status === 'PAID' && selectedEmployee.settlement?.settledAt" class="settlement-info-detail">
+            <h5>정산 정보</h5>
+            <div class="settlement-details">
+              <div class="settlement-item">
+                <span class="settlement-label">정산 ID</span>
+                <span class="settlement-value">#{{ selectedEmployee.settlement?.settlementId || 'N/A' }}</span>
+              </div>
+              <div class="settlement-item">
+                <span class="settlement-label">정산 완료일</span>
+                <span class="settlement-value">{{ formatDateTime(selectedEmployee.settlement?.settledAt) }}</span>
               </div>
             </div>
           </div>
@@ -445,88 +520,20 @@
     <!-- 정산 확인 모달 -->
     <EmployeeSettlementModal
       v-if="showSettlementModal"
-      :settlementData="settlementModalData"
-      :loading="payrollStore.loading"
+      :employeeId="settlementModalData?.employee?.employeeId"
+      :year="selectedYear"
+      :month="selectedMonth"
+      :processLoading="payrollStore.loading"
       @confirm="confirmSettlement"
       @cancel="cancelSettlement"
     />
     
-    <!-- 정산 결과 모달 -->
-    <div v-if="showSettlementResultModal" class="modal-backdrop" @click="closeSettlementResult">
-      <div class="modal settlement-result-modal" @click.stop>
-        <div class="modal-header">
-          <h3>
-            <AppIcon name="check" :size="18" class="inline-block mr-2 text-green-500" />
-            정산 완료
-          </h3>
-          <button @click="closeSettlementResult" class="close-btn">
-            <AppIcon name="close" :size="16" />
-          </button>
-        </div>
-        
-        <div class="modal-body">
-          <div v-if="settlementResult" class="settlement-completed">
-            <div class="success-message">
-              <div class="success-icon">✅</div>
-              <h4>정산이 성공적으로 완료되었습니다!</h4>
-            </div>
-            
-            <div class="settlement-details">
-              <div class="detail-row">
-                <span class="label">정산 ID</span>
-                <span class="value">#{{ settlementResult.id }}</span>
-              </div>
-              <div class="detail-row">
-                <span class="label">정산 기간</span>
-                <span class="value">{{ formatDateRange(settlementResult.cycleStart, settlementResult.cycleEnd) }}</span>
-              </div>
-              <div class="detail-row">
-                <span class="label">총 근무시간</span>
-                <span class="value">{{ formatMinutes(settlementResult.workedMinutes) }}</span>
-              </div>
-              <div class="detail-row">
-                <span class="label">기본급</span>
-                <span class="value">{{ formatCurrency(settlementResult.basePay) }}</span>
-              </div>
-              <div class="detail-row">
-                <span class="label">총 급여</span>
-                <span class="value">{{ formatCurrency(settlementResult.totalPay) }}</span>
-              </div>
-              <div class="detail-row tax">
-                <span class="label">소득세</span>
-                <span class="value">-{{ formatCurrency(settlementResult.incomeTax) }}</span>
-              </div>
-              <div class="detail-row tax">
-                <span class="label">지방소득세</span>
-                <span class="value">-{{ formatCurrency(settlementResult.localIncomeTax) }}</span>
-              </div>
-              <div v-if="settlementResult.otherTax > 0" class="detail-row tax">
-                <span class="label">기타 세금</span>
-                <span class="value">-{{ formatCurrency(settlementResult.otherTax) }}</span>
-              </div>
-              <div class="detail-row total">
-                <span class="label">실 지급액</span>
-                <span class="value">{{ formatCurrency(settlementResult.netPay) }}</span>
-              </div>
-              <div v-if="settlementResult.note" class="detail-row">
-                <span class="label">메모</span>
-                <span class="value">{{ settlementResult.note }}</span>
-              </div>
-            </div>
-            
-            <div class="settlement-timestamp">
-              정산 완료: {{ formatDateTime(settlementResult.settledAt) }}
-            </div>
-          </div>
-          
-          <div class="modal-actions">
-            <button @click="closeSettlementResult" class="btn btn-primary">
-              확인
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
+    <!-- 정산 완료 모달 -->
+    <SettlementCompletedModal
+      v-if="showSettlementCompletedModal && settlementCompletedData"
+      :settlementData="settlementCompletedData"
+      @close="closeSettlementCompleted"
+    />
   </div>
 </template>
 
@@ -535,12 +542,14 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { usePayrollStore } from '@/stores/payroll'
 import AppIcon from '@/components/AppIcon.vue'
 import EmployeeSettlementModal from '@/components/admin/EmployeeSettlementModal.vue'
+import SettlementCompletedModal from '@/components/admin/SettlementCompletedModal.vue'
 
 export default {
   name: 'AdminSalaryView',
   components: {
     AppIcon,
-    EmployeeSettlementModal
+    EmployeeSettlementModal,
+    SettlementCompletedModal
   },
   setup() {
     const payrollStore = usePayrollStore()
@@ -551,6 +560,7 @@ export default {
     const selectedMonth = ref(new Date().getMonth() + 1)
     const showDetailModal = ref(false)
     const selectedEmployee = ref(null)
+    const detailLoading = ref(false) // 모달 전용 로딩 상태
     const searchQuery = ref('')
     const positionFilter = ref('')
     const settlementFilter = ref('')
@@ -568,8 +578,8 @@ export default {
     // 모달 상태 관리
     const showSettlementModal = ref(false)
     const settlementModalData = ref(null)
-    const settlementResult = ref(null)
-    const showSettlementResultModal = ref(false)
+    const showSettlementCompletedModal = ref(false)
+    const settlementCompletedData = ref(null)
     
     let fetchTimeout = null
     
@@ -681,7 +691,6 @@ export default {
       return filtered
     })
     
-    // 더보기 관련 computed 속성들
     const hasMoreItems = computed(() => {
       return displayedItemsCount.value < filteredEmployees.value.length
     })
@@ -694,8 +703,6 @@ export default {
       return filteredEmployees.value.slice(0, displayedItemsCount.value)
     })
     
-    
-    // API 함수들은 payrollStore에서 직접 호출
     
     const onDateChange = async () => {
       if (fetchTimeout) {
@@ -720,6 +727,24 @@ export default {
         showNotification('error', '데이터 새로고침에 실패했습니다.')
       }
     }
+
+    const refreshAllData = async () => {
+      try {
+        // 캐시 무효화
+        payrollStore.requestCache.value.clear()
+
+        // 모든 데이터 새로고침
+        await Promise.all([
+          payrollStore.fetchEmployeePayrollList(selectedYear.value, selectedMonth.value),
+          payrollStore.fetchPayrollOverview(selectedYear.value, selectedMonth.value)
+        ])
+
+        console.log('✅ 전체 데이터 새로고침 완료')
+      } catch (error) {
+        console.error('❌ 데이터 새로고침 실패:', error)
+        throw error
+      }
+    }
     
     // TODO: API 구현 후 정산 사이클 변경 기능 추가
     const onCycleStartDayChange = () => {
@@ -742,15 +767,30 @@ export default {
       }
     }
     
-    const viewEmployeeDetail = (employeeId) => {
-      const items = payrollStore.employeePayrollList?.items || []
-      selectedEmployee.value = items.find(emp => emp.employeeId === employeeId)
+    const viewEmployeeDetail = async (employeeId) => {
       showDetailModal.value = true
+      detailLoading.value = true
+      selectedEmployee.value = null
+
+
+      try {
+        const detail = await payrollStore.fetchEmployeePayrollDetail(employeeId)
+        console.log('✅ 직원 상세 정보 로드 완료:', detail)
+        selectedEmployee.value = detail
+      } catch (e) {
+        console.error('❌ 직원 상세 정보 로드 실패:', e)
+        showDetailModal.value = false // 실패 시 모달 닫기
+        showNotification('error', '직원 상세 정보를 불러오는데 실패했습니다.')
+      } finally {
+        detailLoading.value = false
+        console.log('🏁 직원 상세 조회 완료 - detailLoading:', detailLoading.value, 'payrollStore.loading:', payrollStore.loading)
+      }
     }
     
     const closeDetailModal = () => {
       showDetailModal.value = false
       selectedEmployee.value = null
+      detailLoading.value = false
     }
     
     // TODO: API 구현 후 정산 처리 기능 추가
@@ -763,48 +803,37 @@ export default {
         showNotification('warning', '정산할 급여가 없습니다.')
         return
       }
-      
-      // 정산 모달 데이터 설정
+
       settlementModalData.value = {
-        employee: employee,
-        amount: employee.amount,
-        workedMinutes: employee.workedMinutes || 0,
-        // API에서 받은 세금 정보가 있다면 사용, 없다면 기본 계산
-        incomeTax: employee.incomeTax || Math.floor(employee.amount * 0.03),
-        localIncomeTax: employee.localIncomeTax || Math.floor(employee.amount * 0.003),
-        otherTax: employee.otherTax || 0
+        employee: employee
       }
-      
-      // 실 지급액 계산
-      const totalTax = settlementModalData.value.incomeTax + settlementModalData.value.localIncomeTax + settlementModalData.value.otherTax
-      settlementModalData.value.netAmount = Math.max(0, employee.amount - totalTax)
-      
+
       showSettlementModal.value = true
     }
     
-    const confirmSettlement = async () => {
-      const employee = settlementModalData.value?.employee
-      if (!employee) return
-      
-      settlingEmployeeId.value = employee.employeeId
-      
+    const confirmSettlement = async (settlementData) => {
+      const { employeeId, year, month, employeeDetail } = settlementData
+      if (!employeeId || !employeeDetail) return
+
+      settlingEmployeeId.value = employeeId
+
       try {
-        const result = await payrollStore.processEmployeeSettlement(employee.employeeId, selectedYear.value, selectedMonth.value)
-        
-        // 모달 닫기
+        const result = await payrollStore.processEmployeeSettlement(employeeId, year, month)
+
         showSettlementModal.value = false
-        
-        // 정산 완료 후 데이터 새로고침
-        await payrollStore.fetchEmployeePayrollList(selectedYear.value, selectedMonth.value)
-        
-        // 정산 결과 표시
-        settlementResult.value = result.settlement
-        showSettlementResultModal.value = true
-        
+
+        // 정산 완료 모달 데이터 설정
+        settlementCompletedData.value = result
+        showSettlementCompletedModal.value = true
+
+        // 데이터 새로고침 - 캐시 무효화 포함
+        await refreshAllData()
+
         console.log('정산 결과:', result)
+        showNotification('success', `${employeeDetail.employee.name}님 정산이 완료되었습니다.`)
       } catch (error) {
-        console.error(`${employee.name} 정산 처리 실패:`, error)
-        showNotification('error', `${employee.name}님 정산 처리에 실패했습니다: ${error.message || '알 수 없는 오류'}`)
+        console.error(`직원 정산 처리 실패:`, error)
+        showNotification('error', `정산 처리에 실패했습니다: ${error.message || '알 수 없는 오류'}`)
       } finally {
         settlingEmployeeId.value = null
       }
@@ -815,9 +844,9 @@ export default {
       settlementModalData.value = null
     }
     
-    const closeSettlementResult = () => {
-      showSettlementResultModal.value = false
-      settlementResult.value = null
+    const closeSettlementCompleted = () => {
+      showSettlementCompletedModal.value = false
+      settlementCompletedData.value = null
     }
     
     const sortBy = (field) => {
@@ -827,7 +856,6 @@ export default {
         sortField.value = field
         sortDirection.value = 'asc'
       }
-      // 정렬 변경 시 표시 항목 수 초기화
       displayedItemsCount.value = itemsPerPage.value
     }
     
@@ -990,6 +1018,53 @@ export default {
       }
       return positionColors[position] || '#6b7280'
     }
+
+    // 근무 기록 관련 포맷팅 함수들
+    const formatLogDate = (dateString) => {
+      if (!dateString) return '-'
+      const date = new Date(dateString)
+      return date.toLocaleDateString('ko-KR', {
+        month: 'short',
+        day: 'numeric',
+        weekday: 'short'
+      })
+    }
+
+    const formatLogTime = (startTime, endTime) => {
+      if (!startTime || !endTime) return '-'
+      const start = new Date(startTime)
+      const end = new Date(endTime)
+      const formatTime = (date) => date.toLocaleTimeString('ko-KR', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false
+      })
+      return `${formatTime(start)} - ${formatTime(end)}`
+    }
+
+    const formatLogActualTime = (actualIn, actualOut) => {
+      if (!actualIn || !actualOut) return '-'
+      const inTime = new Date(actualIn)
+      const outTime = new Date(actualOut)
+      const formatTime = (date) => date.toLocaleTimeString('ko-KR', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false
+      })
+      return `${formatTime(inTime)} - ${formatTime(outTime)}`
+    }
+
+    const formatLogStatus = (status) => {
+      const statuses = {
+        'SCHEDULED': '예정',
+        'COMPLETED': '완료',
+        'IN_PROGRESS': '진행중',
+        'CANCELLED': '취소',
+        'LATE': '지각',
+        'EARLY_LEAVE': '조퇴'
+      }
+      return statuses[status] || status
+    }
     
     // 검색어 변경시 표시 항목 수 리셋
     watch([searchQuery, positionFilter, settlementFilter], () => {
@@ -1020,10 +1095,11 @@ export default {
       selectedMonth,
       showDetailModal,
       selectedEmployee,
+      detailLoading,
       showSettlementModal,
       settlementModalData,
-      settlementResult,
-      showSettlementResultModal,
+      showSettlementCompletedModal,
+      settlementCompletedData,
       searchQuery,
       positionFilter,
       settlementFilter,
@@ -1062,7 +1138,8 @@ export default {
       processIndividualSettlement,
       confirmSettlement,
       cancelSettlement,
-      closeSettlementResult,
+      closeSettlementCompleted,
+      refreshAllData,
       sortBy,
       loadMoreItems,
       showNotification,
@@ -1088,7 +1165,11 @@ export default {
       getSettlementStatusClass,
       getSettlementStatusIcon,
       getSettlementStatusText,
-      getDefaultPersonalColor
+      getDefaultPersonalColor,
+      formatLogDate,
+      formatLogTime,
+      formatLogActualTime,
+      formatLogStatus
     }
   }
 }

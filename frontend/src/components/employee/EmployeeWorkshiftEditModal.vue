@@ -261,7 +261,7 @@ export default {
         }
 
         // Call the API directly
-        const response = await workshiftStore.updateMyWorkshift(props.shift.id, shiftData)
+        const response = await workshiftStore.updateWorkshift(props.shift.id, shiftData)
 
         // Store success data and show success modal
         successData.value = response
