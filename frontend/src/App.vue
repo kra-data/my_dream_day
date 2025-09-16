@@ -43,14 +43,14 @@
         </div>
 
         <div class="nav-user">
-          <span class="user-name">{{ user?.name }}님</span>
-          <button @click="logout" class="logout-btn">
-           로그아웃
+          <span class="user-name" :title="user?.name + '님'">{{ user?.name }}님</span>
+          <button @click="logout" class="logout-btn" type="button" aria-label="로그아웃">
+            로그아웃
           </button>
         </div>
 
         <!-- 모바일 햄버거 메뉴 -->
-        <div class="nav-toggle" @click="toggleMobileMenu">
+        <div class="nav-toggle" @click="toggleMobileMenu" role="button" aria-label="메뉴 열기" tabindex="0" @keydown.enter="toggleMobileMenu" @keydown.space="toggleMobileMenu">
           <span class="bar"></span>
           <span class="bar"></span>
           <span class="bar"></span>
@@ -69,7 +69,6 @@
         <p>&copy; 2025 마이드림데이 All rights reserved.</p>
         <div class="footer-links">
           <a href="#" class="footer-link">점장님께 문의하세요.</a>
-          <a href="#" class="footer-link">문의: 문지언</a>
         </div>
       </div>
     </footer>

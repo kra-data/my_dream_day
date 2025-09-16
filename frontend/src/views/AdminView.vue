@@ -39,11 +39,25 @@
         </div>
 
         <!-- 동적 컴포넌트 렌더링 -->
-        <component 
-          :is="currentTabComponent" 
+        <component
+          :is="currentTabComponent"
           @retry-fetch="retryFetchData"
         />
       </div>
+
+      <!-- 모바일 하단 네비게이션 -->
+      <nav class="mobile-bottom-nav">
+        <button
+          v-for="tab in tabs"
+          :key="`mobile-${tab.id}`"
+          :class="['mobile-nav-item', { active: activeTab === tab.id }]"
+          @click="handleTabClick(tab.id)"
+          :aria-label="`${tab.name} 탭으로 이동`"
+        >
+          <AppIcon :name="tab.icon" :size="20" class="mobile-nav-icon" />
+          <span class="mobile-nav-label">{{ tab.name }}</span>
+        </button>
+      </nav>
     </div>
   </div>
 </template>
