@@ -6,7 +6,7 @@
         <div class="nav-brand">
           <router-link :to="homeRoute" class="brand-link">
             <img 
-              src="/src/assets/logo.png" 
+              src="/src/assets/images/logo.png" 
               alt="마이드림데이 로고" 
               class="nav-logo logo-base logo-hover" 
               loading="eager"
