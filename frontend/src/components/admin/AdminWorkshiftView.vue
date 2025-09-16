@@ -1,52 +1,18 @@
 <template>
   <div class="workshift-view">
-    <div class="workshift-header">
-      <div class="header-content">
-        <h2>
-          <AppIcon name="calendar" :size="20" class="inline-block mr-2" />
-          근무 일정 관리
-        </h2>
-        <p>직원들의 근무 일정을 관리하고 달력으로 확인하세요</p>
-      </div>
-      <div class="header-actions">
-        <div class="employee-filter">
-          <select 
-            v-model="selectedEmployeeId" 
-            @change="handleEmployeeFilter"
-            class="employee-select"
-          >
-            <option value="">전체 직원</option>
-            <option 
-              v-for="employee in employeesStore.employees" 
-              :key="employee.id" 
-              :value="employee.id"
-            >
-              {{ employee.name }} ({{ formatSection(employee.section) }})
-            </option>
-          </select>
-        </div>
-        <button @click="showCreateModal = true" class="btn btn-primary">
-          <AppIcon name="plus" :size="16" class="mr-1" />
-          새 일정 등록
-        </button>
-        <button @click="refreshData" class="btn btn-secondary" :disabled="workshiftStore.loading">
-          <AppIcon name="arrows-up-down" :size="16" class="mr-1" />
-          새로고침
-        </button>
-      </div>
-    </div>
-
-    <!-- 달력 뷰 -->
-    <div class="calendar-container">
-      <WorkshiftCalendar 
-        :workshifts="workshiftStore.calendarWorkshifts"
-        :selected-date="workshiftStore.selectedDate"
-        :loading="workshiftStore.loading"
-        @date-select="handleDateSelect"
-        @shift-select="handleShiftSelect"
-        @create-shift="handleCreateShift"
-      />
-    </div>
+    <!-- 캘린더 컴포넌트 -->
+    <WorkshiftCalendar
+      :workshifts="workshiftStore.calendarWorkshifts"
+      :selected-date="workshiftStore.selectedDate"
+      :loading="workshiftStore.loading"
+      :employees="employeesStore.employees"
+      @date-select="handleDateSelect"
+      @shift-select="handleShiftSelect"
+      @create-shift="handleCreateShift"
+      @employee-filter="handleEmployeeFilter"
+      @refresh="refreshData"
+      @create-new="() => showCreateModal = true"
+    />
 
     <!-- 선택된 날짜의 일정 목록 -->
     <div v-if="selectedDateShifts.length > 0" class="daily-shifts">
@@ -263,7 +229,8 @@ export default {
       )
     }
     
-    const handleEmployeeFilter = async () => {
+    const handleEmployeeFilter = async (employeeId) => {
+      selectedEmployeeId.value = employeeId || ''
       await refreshData() // 단순히 새 데이터 로드
     }
     

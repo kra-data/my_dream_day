@@ -1,0 +1,933 @@
+/* ==========================================
+   WorkshiftCalendar - Mobile-First Design
+   ========================================== */
+
+/* � �Lt */
+.workshift-calendar {
+  width: 100%;
+  max-width: 100vw;
+  margin: 0 auto;
+  padding: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+/* ==========================================
+    � �4 � \�
+   ========================================== */
+
+.selected-shift-info {
+  background: linear-gradient(135deg, #e0e7ff 0%, #f3f4f6 100%);
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 12px;
+  color: #374151;
+  box-shadow: 0 2px 4px rgba(99, 102, 241, 0.1);
+  border: 1px solid rgba(99, 102, 241, 0.2);
+  animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.selected-shift-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.employee-header-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.employee-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: #3b82f6;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: bold;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  border: 1px solid white;
+}
+
+.selected-shift-header h4 {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.close-btn {
+  background: rgba(99, 102, 241, 0.1);
+  border: 1px solid rgba(99, 102, 241, 0.2);
+  color: #6366f1;
+  padding: 2px 4px;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 0.7rem;
+  transition: all 0.2s;
+  min-height: 20px;
+  min-width: 20px;
+}
+
+.close-btn:hover {
+  background: rgba(99, 102, 241, 0.15);
+  border-color: rgba(99, 102, 241, 0.3);
+}
+
+.selected-shift-details {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 6px;
+}
+
+.detail-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 6px;
+  background: rgba(255, 255, 255, 0.6);
+  border: 1px solid rgba(99, 102, 241, 0.1);
+  border-radius: 4px;
+  backdrop-filter: blur(10px);
+}
+
+.detail-item .label {
+  font-weight: 500;
+  color: #6b7280;
+  font-size: 0.75rem;
+}
+
+.detail-item .value {
+  font-weight: 600;
+  text-align: right;
+  color: #374151;
+  font-size: 0.75rem;
+}
+
+/* ==========================================
+   ��T �T - �)� �x
+   ========================================== */
+
+.calendar-header {
+  background: white;
+  border-radius: 8px 8px 0 0;
+  box-shadow: none;
+  border: 1px solid #e5e7eb;
+  border-bottom: none;
+  overflow: hidden;
+  margin-bottom: 0;
+}
+
+/* �� �d � */
+.header-top {
+  padding: 6px 10px;
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  border-bottom: 1px solid #e2e8f0;
+}
+
+/* $D�tX �d */
+.nav-controls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.nav-btn {
+  padding: 2px 4px;
+  background: white;
+  border: 1px solid #d1d5db;
+  border-radius: 3px;
+  cursor: pointer;
+  font-weight: 500;
+  color: #374151;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  font-size: 0.65rem;
+  min-height: 20px;
+  /* 모바일 오버라이드 대비 */
+  height: 20px;
+  width: auto;
+}
+
+.nav-btn:hover:not(:disabled) {
+  background: #f9fafb;
+  border-color: #3b82f6;
+}
+
+.nav-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.current-month {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #1f2937;
+  text-align: center;
+  flex: 1;
+}
+
+/* �T �d */
+.header-controls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.employee-filter {
+  flex: 1;
+  min-width: 120px;
+}
+
+.employee-select-compact {
+  width: 100%;
+  padding: 2px 4px;
+  border: 1px solid #d1d5db;
+  border-radius: 2px;
+  background: white;
+  color: #374151;
+  font-size: 0.6rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-height: 20px;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+}
+
+.employee-select-compact:hover {
+  border-color: #3b82f6;
+  box-shadow: 0 1px 3px rgba(59, 130, 246, 0.1);
+}
+
+.employee-select-compact:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+}
+
+.calendar-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.btn-compact {
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  border-radius: 2px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  font-size: 0;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+}
+
+.btn-compact.btn-primary {
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+  color: white;
+  border: 1px solid #2563eb;
+}
+
+.btn-compact.btn-primary:hover:not(:disabled) {
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(37, 99, 235, 0.2);
+}
+
+.btn-compact.btn-secondary {
+  background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%);
+  color: white;
+  border: 1px solid #4b5563;
+}
+
+.btn-compact.btn-secondary:hover:not(:disabled) {
+  background: linear-gradient(135deg, #4b5563 0%, #374151 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(75, 85, 99, 0.2);
+}
+
+.btn-compact:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+}
+
+/* X� �  � � */
+/* 헤더 하단 제거됨 */
+
+/* View controls 제거됨 */
+
+/* ==========================================
+   \) ��
+   ========================================== */
+
+.loading-state {
+  text-align: center;
+  padding: 40px 20px;
+  color: #6b7280;
+}
+
+.loading-spinner {
+  width: 24px;
+  height: 24px;
+  border: 2px solid #f3f4f6;
+  border-top: 2px solid #3b82f6;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin: 0 auto 12px;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* ==========================================
+   � ��T - �| \T
+   ========================================== */
+
+.calendar-grid {
+  background: white;
+  border-radius: 0 0 8px 8px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  border: 1px solid #e5e7eb;
+  border-top: none;
+}
+
+.weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  background: #f8fafc;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.weekday {
+  padding: 6px 4px;
+  text-align: center;
+  font-weight: 600;
+  color: #6b7280;
+  font-size: 0.65rem;
+  border-right: 1px solid #e5e7eb;
+}
+
+.weekday:last-child {
+  border-right: none;
+}
+
+.dates-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+}
+
+.date-cell {
+  height: 70px;
+  min-height: 70px;
+  max-height: 70px;
+  border-right: 1px solid #e5e7eb;
+  border-bottom: 1px solid #e5e7eb;
+  padding: 4px;
+  position: relative;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  flex-direction: column;
+  background: #ffffff;
+  overflow: hidden;
+}
+
+.date-cell:nth-child(7n) {
+  border-right: none;
+}
+
+.date-cell:hover {
+  background: #f8fafc;
+}
+
+.date-cell.other-month {
+  color: #d1d5db;
+  background: #fafafa;
+}
+
+.date-cell.today {
+  background: #dbeafe;
+  border: 1px solid #3b82f6;
+}
+
+.date-cell.selected {
+  background: #e0e7ff;
+  color: #4338ca;
+  border: 1px solid #6366f1;
+}
+
+.date-cell.has-shifts {
+  background: #f8fafc;
+}
+
+.date-cell.selected.has-shifts {
+  background: #e0e7ff;
+  border-color: #6366f1;
+}
+
+.date-header {
+  display: flex;
+  justify-content: flex-start;
+  align-items: flex-start;
+  margin-bottom: 2px;
+  min-height: 14px;
+  gap: 2px;
+}
+
+.date-number {
+  font-weight: 600;
+  font-size: 0.7rem;
+  line-height: 1;
+  color: #1f2937;
+}
+
+.date-cell.other-month .date-number {
+  color: #d1d5db;
+}
+
+/* || D� \� � */
+.daily-cost-boxes {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: auto;
+  padding-top: 2px;
+}
+
+.daily-cost-box {
+  font-size: 0.45rem;
+  font-weight: 700;
+  border-radius: 2px;
+  padding: 1px 2px;
+  line-height: 1.2;
+  white-space: nowrap;
+  max-width: 45px;
+  text-align: center;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  text-shadow: 0 1px 1px rgba(255, 255, 255, 0.8);
+  flex-shrink: 0;
+}
+
+.daily-cost-box.total-people {
+  color: #1f2937;
+  background: rgba(59, 130, 246, 0.15);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
+.daily-cost-box.part-time-cost {
+  color: #dc2626;
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid #fecaca;
+}
+
+/* ��� �4 | �Lt */
+.date-shifts-container {
+  flex: 1;
+  margin: 2px 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  max-height: 35px;
+  min-height: 20px;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  /* 부드러운 스크롤 */
+  scroll-behavior: smooth;
+  /* iOS 모멘텀 스크롤 */
+  -webkit-overflow-scrolling: touch;
+}
+
+.date-shifts-container::-webkit-scrollbar {
+  display: none;
+}
+
+.date-shifts {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  align-items: stretch;
+}
+
+.shift-indicator-simple {
+  background: var(--status-color, #3b82f6);
+  color: white;
+  border-radius: 2px;
+  padding: 2px 4px;
+  font-size: 0.5rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: left;
+  line-height: 1.2;
+  position: relative;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  opacity: 0.9;
+  border-left: 2px solid var(--personal-color, #3b82f6);
+}
+
+.shift-indicator-simple:hover {
+  opacity: 1;
+  transform: scale(1.02);
+}
+
+.shift-indicator-simple.selected {
+  opacity: 1;
+  transform: scale(1.02);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+
+.shift-indicator-simple .employee-name {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.shift-indicator-simple .status-icon {
+  background: #f59e0b;
+  color: white;
+  border-radius: 50%;
+  width: 8px;
+  height: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 6px;
+  font-weight: bold;
+  position: absolute;
+  top: 1px;
+  right: 1px;
+}
+
+/* ��� ��|� */
+.shift-indicator-simple.status-scheduled {
+  background: #3b82f6;
+}
+
+.shift-indicator-simple.status-in_progress {
+  background: #10b981;
+  animation: pulse 2s ease-in-out infinite alternate;
+}
+
+.shift-indicator-simple.status-completed {
+  background: #6b7280;
+  opacity: 0.7;
+  text-decoration: line-through;
+}
+
+.shift-indicator-simple.status-missed {
+  background: #dc2626;
+  text-decoration: line-through;
+}
+
+.shift-indicator-simple.status-review {
+  background: #dc2626;
+  border: 1px dashed #dc2626;
+}
+
+/* + 버튼 완전 제거됨 */
+
+/* 플로팅 액션 버튼 (FAB) */
+.floating-action-btn {
+  position: fixed;
+  bottom: 90px;
+  right: 20px;
+  width: 50px;
+  height: 50px;
+  border: none;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: white;
+  cursor: pointer;
+  font-size: 20px;
+  font-weight: bold;
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid white;
+}
+
+.floating-action-btn:hover {
+  transform: scale(1.05);
+  box-shadow: 0 6px 16px rgba(16, 185, 129, 0.4);
+  background: linear-gradient(135deg, #059669 0%, #047857 100%);
+}
+
+.floating-action-btn:active {
+  transform: scale(0.95);
+}
+
+/* FAB 아이콘 회전 효과 */
+.floating-action-btn .fab-icon {
+  transition: transform 0.3s ease;
+}
+
+.floating-action-btn:hover .fab-icon {
+  transform: rotate(90deg);
+}
+
+/* ==========================================
+   � � (��@ �x)
+   ========================================== */
+
+/* 주간 뷰 제거됨 */
+
+/* week-header 제거됨 */
+
+/* time-column 제거됨 */
+
+/* week-day-header 제거됨 */
+
+/* week-day-header:hover 제거됨 */
+
+/* week-day-header.today 제거됨 */
+
+/* day-name 제거됨 */
+
+/* day-date 제거됨 */
+
+/* day-count 제거됨 */
+
+/* week-grid 제거됨 */
+
+/* week-grid .time-column 제거됨 */
+
+/* time-slot 제거됨 */
+
+/* week-day-column 제거됨 */
+
+/* hour-slot 제거됨 */
+
+/* hour-slot:hover 제거됨 */
+
+/* week-shift 제거됨 */
+
+/* week-shift:hover 제거됨 */
+
+/* shift-content 제거됨 */
+
+/* shift-employee 제거됨 */
+
+/* shift-time 제거됨 */
+
+/* shift-cost 제거됨 */
+
+/* ==========================================
+   �� Q (481px+)
+   ========================================== */
+
+@media (min-width: 481px) {
+  .workshift-calendar {
+    padding: 0 8px;
+  }
+
+  .selected-shift-info {
+    padding: 16px;
+    margin-bottom: 16px;
+    border-radius: 10px;
+  }
+
+  .employee-avatar {
+    width: 32px;
+    height: 32px;
+    font-size: 0.8rem;
+  }
+
+  .selected-shift-header h4 {
+    font-size: 1rem;
+  }
+
+  .selected-shift-details {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+  }
+
+  .detail-item .label,
+  .detail-item .value {
+    font-size: 0.8rem;
+  }
+
+  .header-top {
+    padding: 10px 16px;
+  }
+
+  .nav-controls {
+    margin-bottom: 10px;
+  }
+
+  .nav-btn {
+    padding: 6px 12px;
+    font-size: 0.8rem;
+    min-height: 32px;
+  }
+
+  .current-month {
+    font-size: 1rem;
+  }
+
+  .employee-select-compact {
+    font-size: 0.75rem;
+    padding: 6px 8px;
+    min-height: 32px;
+  }
+
+  .btn-compact {
+    width: 32px;
+    height: 32px;
+  }
+
+  .view-btn {
+    padding: 6px 16px;
+    font-size: 0.75rem;
+  }
+
+  .weekday {
+    padding: 8px 6px;
+    font-size: 0.7rem;
+  }
+
+  .date-cell {
+    height: 80px;
+    min-height: 80px;
+    max-height: 80px;
+    padding: 6px;
+  }
+
+  .date-number {
+    font-size: 0.8rem;
+  }
+
+  .daily-cost-box {
+    font-size: 0.55rem;
+    max-width: 70px;
+    padding: 2px 4px;
+  }
+
+  .date-shifts-container {
+    max-height: 45px;
+    min-height: 25px;
+  }
+
+  .shift-indicator-simple {
+    font-size: 0.55rem;
+    padding: 3px 5px;
+  }
+
+  .add-shift-btn {
+    width: 18px;
+    height: 18px;
+    font-size: 0.65rem;
+  }
+}
+
+/* ==========================================
+   p�l� Q (769px+)
+   ========================================== */
+
+@media (min-width: 769px) {
+  .workshift-calendar {
+    padding: 0 16px;
+    max-width: 1200px;
+  }
+
+  .selected-shift-info {
+    padding: 20px;
+    margin-bottom: 20px;
+  }
+
+  .selected-shift-details {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+  }
+
+  .detail-item {
+    padding: 8px 10px;
+  }
+
+  .header-top {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 20px;
+  }
+
+  .nav-controls {
+    margin-bottom: 0;
+    gap: 20px;
+  }
+
+  .header-controls {
+    gap: 12px;
+  }
+
+  .employee-filter {
+    min-width: 180px;
+  }
+
+  .employee-select-compact {
+    font-size: 0.8rem;
+    padding: 8px 10px;
+    min-height: 36px;
+  }
+
+  .btn-compact {
+    width: 36px;
+    height: 36px;
+  }
+
+  .header-bottom {
+    padding: 8px 20px;
+  }
+
+  .view-btn {
+    padding: 8px 20px;
+    font-size: 0.8rem;
+  }
+
+  .weekday {
+    padding: 10px 8px;
+    font-size: 0.75rem;
+  }
+
+  .date-cell {
+    height: 100px;
+    min-height: 100px;
+    max-height: 100px;
+    padding: 8px;
+  }
+
+  .date-number {
+    font-size: 0.9rem;
+  }
+
+  .daily-cost-box {
+    font-size: 0.6rem;
+    max-width: 80px;
+    padding: 3px 5px;
+  }
+
+  .date-shifts-container {
+    max-height: 60px;
+    min-height: 30px;
+  }
+
+  .shift-indicator-simple {
+    font-size: 0.6rem;
+    padding: 4px 6px;
+  }
+
+  .add-shift-btn {
+    width: 20px;
+    height: 20px;
+    font-size: 0.7rem;
+  }
+
+  /* 주간 뷰 관련 미디어 쿼리 제거됨 */
+}
+
+/* ==========================================
+   0X ��   & �1
+   ========================================== */
+
+/* 모바일 터치 타겟 및 버튼 크기 강제 오버라이드 */
+@media (max-width: 768px) {
+  .workshift-calendar .nav-btn,
+  .workshift-calendar .btn-compact,
+  .workshift-calendar .close-btn {
+    min-height: 20px !important;
+    min-width: 20px !important;
+    height: 20px !important;
+    width: 20px !important;
+    padding: 2px 4px !important;
+    font-size: 0.6rem !important;
+  }
+
+  .workshift-calendar .employee-select-compact {
+    min-height: 20px !important;
+    height: 20px !important;
+    padding: 2px 4px !important;
+    font-size: 0.6rem !important;
+  }
+
+  .date-cell {
+    height: 70px !important;
+    min-height: 70px !important;
+    max-height: 70px !important;
+  }
+}
+
+/* �� �� */
+.nav-btn:focus,
+.btn-compact:focus,
+.employee-select-compact:focus {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+}
+
+.date-cell:focus {
+  outline: 2px solid #3b82f6;
+  outline-offset: -2px;
+}
+
+/* ���� �X �� */
+@media (prefers-reduced-motion: reduce) {
+  .workshift-calendar * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* �l ��  Q (�� U��) */
+@media (prefers-color-scheme: dark) {
+  /* �l �� ��|@ D�� �  */
+}
+
+/* ==========================================
+   `�TtX
+   ========================================== */
+
+@keyframes pulse {
+  0% { opacity: 1; }
+  50% { opacity: 0.7; }
+  100% { opacity: 1; }
+}
+
+@keyframes blink {
+  0% { opacity: 1; }
+  50% { opacity: 0.5; }
+  100% { opacity: 1; }
+}

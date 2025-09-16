@@ -94,7 +94,7 @@
                     {{ review.actualOutAt ? formatTime(review.actualOutAt) : '미기록' }}
                   </span>
                 </div>
-                <div class="duration-info">{{ review.actualMinutes || 0 }}봄</div>
+                <div class="duration-info">{{ review.actualMinutes || 0 }}분</div>
               </div>
             </div>
             
