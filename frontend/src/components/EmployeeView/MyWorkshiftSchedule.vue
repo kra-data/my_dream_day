@@ -172,7 +172,7 @@ import EmployeeWorkshiftEditModal from './EmployeeWorkshiftEditModal.vue'
 import EmployeeWorkshiftDeleteModal from './EmployeeWorkshiftDeleteModal.vue'
 
 export default {
-  name: 'EmployeeWorkshiftView',
+  name: 'MyWorkshiftSchedule',
   components: {
     StatusBadge,
     EmployeeWorkshiftCreateModal,
@@ -432,4 +432,4 @@ export default {
 }
 </script>
 
-<style scoped src="@/assets/styles/components/EmployeeView/EmployeeWorkshiftView.css"></style>
+<style scoped src="@/assets/styles/components/EmployeeView/MyWorkshiftSchedule.css"></style>
