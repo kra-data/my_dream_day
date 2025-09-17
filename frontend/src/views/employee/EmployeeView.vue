@@ -39,7 +39,7 @@
       <WeekSummary />
 
       <!-- 내 근무 일정 -->
-      <EmployeeWorkshiftView />
+      <MyWorkshiftSchedule />
 
       <!-- 월간 캘린더 -->
       <MonthlyCalendar 
@@ -117,7 +117,7 @@ import QRScannerModal from '@/components/EmployeeView/QRScannerModal.vue'
 import CheckInConfirmationModal from '@/components/EmployeeView/CheckInConfirmationModal.vue'
 import CheckOutConfirmationModal from '@/components/EmployeeView/CheckOutConfirmationModal.vue'
 import AttendanceResultModal from '@/components/EmployeeView/AttendanceResultModal.vue'
-import EmployeeWorkshiftView from '@/components/EmployeeView/EmployeeWorkshiftView.vue'
+import MyWorkshiftSchedule from '@/components/EmployeeView/MyWorkshiftSchedule.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useAttendanceStore } from '@/stores/attendance'
 import { useWorkshiftStore } from '@/stores/workshift'
@@ -135,7 +135,7 @@ export default {
     CheckInConfirmationModal,
     CheckOutConfirmationModal,
     AttendanceResultModal,
-    EmployeeWorkshiftView
+    MyWorkshiftSchedule,
   },
   setup() {
     const authStore = useAuthStore()
