@@ -536,71 +536,95 @@ export const settleEmployeeCycle: (req: AuthRequiredRequest, res: Response) => P
       select: { id: true, workedMinutes: true, finalPayAmount: true }
     });
 
-    const workedMinutes = shifts.reduce((s, x) => s + (x.workedMinutes ?? 0), 0);
+    const workedMinutesDelta = shifts.reduce((s, x) => s + (x.workedMinutes ?? 0), 0);
 
     // 급여 계산
-    let basePay = 0;
-    let totalPay = 0;
+    let basePayDelta = 0;
+    let totalPayDelta = 0;
 
     if (emp.payUnit === 'HOURLY') {
-      // finalPayAmount 합(미확정 제외; 이미 COMPLETED 전제)
-      totalPay = shifts.reduce((s, x) => s + (x.finalPayAmount ?? 0), 0);
-      basePay = totalPay;
-      // HOURLY인데 근무 0이면 방지(원하면 허용 가능)
-      if (totalPay === 0) {
-        res.status(400).json({ error: '해당 사이클에 정산할 확정 근무가 없습니다.' });
-        return;
+      totalPayDelta = shifts.reduce((s, x) => s + (x.finalPayAmount ?? 0), 0);
+      basePayDelta  = totalPayDelta;
+      if (totalPayDelta === 0) {
+        res.status(400).json({ error: '정산할 미정산 시프트가 없습니다.' }); return;
       }
     } else {
-      // MONTHLY: 월급 그대로(필요하면 비례계산 로직 추가)
-      basePay = emp.pay ?? 0;
-      totalPay = basePay;
+      res.status(400).json({error:'월급제 가불은 불가능합니다.'}); return;
     }
 
-    // 세금(정책: HOURLY만 3.3% 적용; 강제 플래그 있으면 적용)
-    let incomeTax = 0, localIncomeTax = 0, otherTax = 0, netPay = totalPay;
     const shouldWithhold = emp.payUnit === 'HOURLY';
-    if (shouldWithhold) {
-      const t = calcTaxesTruncate(totalPay);
-      incomeTax = t.incomeTax;
-      localIncomeTax = t.localIncomeTax;
-      otherTax = floorWon(totalPay * OTHER_TAX_RATE);
-      netPay = t.net;
-    }
-
-    // 트랜잭션: 정산 스냅샷 생성 + 시프트 settlementId 업데이트
+    // 트랜잭션: 기존 레코드 있으면 UPDATE 누적, 없으면 CREATE → 시프트 연결
     const result = await prisma.$transaction(async (tx) => {
-      const settlement = await tx.payrollSettlement.create({
-        data: {
-          shopId,
-          employeeId,
-          cycleStart: cycle.start,
-          cycleEnd: cycle.end,
-          workedMinutes,
-          basePay,
-          totalPay,
-          incomeTax,
-          localIncomeTax,
-          otherTax,
-          netPay,
-          processedBy: req.user.userId ?? null,
-        }
+      const existed = await tx.payrollSettlement.findFirst({
+        where: { employeeId, cycleStart: cycle.start, cycleEnd: cycle.end }
       });
 
+      let settlementId: number;
+      let updated;
+      if (existed) {
+        const newWorked = (existed.workedMinutes ?? 0) + (emp.payUnit === 'HOURLY' ? workedMinutesDelta : 0);
+        const newBase   = (existed.basePay ?? 0)       + basePayDelta;
+        const newTotal  = (existed.totalPay ?? 0)      + totalPayDelta;
+        let incomeTax = 0, localIncomeTax = 0, otherTax = 0, netPay = newTotal;
+        if (shouldWithhold) {
+          const t = calcTaxesTruncate(newTotal);
+          incomeTax = t.incomeTax;
+          localIncomeTax = t.localIncomeTax;
+          otherTax = floorWon(newTotal * OTHER_TAX_RATE);
+          netPay = t.net;
+        }
+        updated = await tx.payrollSettlement.update({
+          where: { id: existed.id },
+          data: {
+            workedMinutes: newWorked,
+            basePay: newBase,
+            totalPay: newTotal,
+            incomeTax, localIncomeTax, otherTax, netPay,
+            processedBy: req.user.userId ?? existed.processedBy ?? null,
+            settledAt: new Date(),
+            note: existed.note ?? null,
+          }
+        });
+        settlementId = updated.id;
+      } else {
+        let incomeTax = 0, localIncomeTax = 0, otherTax = 0, netPay = totalPayDelta;
+        if (shouldWithhold) {
+          const t = calcTaxesTruncate(totalPayDelta);
+          incomeTax = t.incomeTax;
+          localIncomeTax = t.localIncomeTax;
+          otherTax = floorWon(totalPayDelta * OTHER_TAX_RATE);
+          netPay = t.net;
+        }
+        updated = await tx.payrollSettlement.create({
+          data: {
+            shopId, employeeId,
+            cycleStart: cycle.start, cycleEnd: cycle.end,
+            workedMinutes: emp.payUnit === 'HOURLY' ? workedMinutesDelta : 0,
+            basePay: basePayDelta,
+            totalPay: totalPayDelta,
+            incomeTax, localIncomeTax, otherTax, netPay,
+            processedBy: req.user.userId ?? null,
+            settledAt: new Date(),
+            note: undefined,
+          },
+          select: { id: true }
+        });
+        settlementId = updated.id;
+      }
+
+      // 시급제만 시프트 연결(월급제 가불은 연결할 시프트가 없을 수 있음)
       const { count: appliedShiftCount } = await tx.workShift.updateMany({
         where: {
-          shopId,
-          employeeId,
+          shopId, employeeId,
           status: 'COMPLETED',
           startAt: { gte: cycle.start, lte: cycle.end },
           settlementId: null,
         },
-        data: { settlementId: settlement.id,isSettled:true }
+        data: { settlementId, isSettled: true }
       });
 
-      return { settlement, appliedShiftCount };
+      return { settlement: updated, appliedShiftCount };
     });
-
     res.status(201).json({
       ok: true,
       cycle: { start: cycle.start, end: cycle.end, startDay },
