@@ -8,6 +8,7 @@ export const useWorkshiftStore = defineStore('workshift', () => {
   const myWorkshifts = ref([])
   const reviewWorkshifts = ref([])
   const loading = ref(false)
+  const loadingReview = ref(false)
   const error = ref(null)
   const selectedDate = ref(new Date()) // Today's date as default
   const calendarWorkshifts = ref([])
@@ -92,45 +93,71 @@ export const useWorkshiftStore = defineStore('workshift', () => {
     }
   }
 
-  const updateMyWorkshift = async (shiftId, shiftData) => {
+    const updateWorkshift = async (shiftId, shiftData) => {
     if (!shiftId) {
-      throw new Error('shiftId is required for updating my workshift')
+      throw new Error('shiftId is required for updating workshift')
     }
-
+    
     loading.value = true
     error.value = null
-
+    
     try {
       const api = getApiInstance()
       const response = await api.put(`/my/workshifts/${shiftId}`, {
         startAt: shiftData.startAt,
         endAt: shiftData.endAt,
-        memo: shiftData.memo || ''
+        memo: shiftData.memo
       })
-
-      const updatedShift = response.data.shift
-
-      // Update in myWorkshifts array
-      const index = myWorkshifts.value.findIndex(shift => shift.id === shiftId)
+      
+      const updatedShift = response.data
+      const index = workshifts.value.findIndex(shift => shift.id === shiftId)
       if (index !== -1) {
-        myWorkshifts.value[index] = updatedShift
+        workshifts.value[index] = updatedShift
       }
-
-      // Update in calendarWorkshifts array if exists
+      
       const calendarIndex = calendarWorkshifts.value.findIndex(shift => shift.id === shiftId)
       if (calendarIndex !== -1) {
         calendarWorkshifts.value[calendarIndex] = updatedShift
       }
-
-      return response.data
+      return updatedShift
     } catch (err) {
-      error.value = err.response?.data?.message || '내 근무 일정 수정에 실패했습니다'
-      console.error('Failed to update my workshift:', err)
+      error.value = err.response?.data?.message || '근무 일정 수정에 실패했습니다'
+      console.error('Failed to update workshift:', err)
       throw err
     } finally {
       loading.value = false
     }
   }
+
+  const deleteWorkshift = async (shopId, shiftId) => {
+    if (!shopId) {
+      throw new Error('shopId is required for deleting workshift')
+    }
+    if (!shiftId) {
+      throw new Error('shiftId is required for deleting workshift')
+    }
+    
+    loading.value = true
+    error.value = null
+    
+    try {
+      const api = getApiInstance()
+      await api.delete(`/my/workshifts/${shiftId}`)
+      
+      // Remove from local state
+      workshifts.value = workshifts.value.filter(shift => shift.id !== shiftId)
+      calendarWorkshifts.value = calendarWorkshifts.value.filter(shift => shift.id !== shiftId)
+      
+      return true
+    } catch (err) {
+      error.value = err.response?.data?.message || '근무 일정 삭제에 실패했습니다'
+      console.error('Failed to delete workshift:', err)
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+
 
   // Admin APIs
   const fetchAllWorkshifts = async (shopId, from = null, to = null, employeeId = null) => {
@@ -199,66 +226,77 @@ export const useWorkshiftStore = defineStore('workshift', () => {
       loading.value = false
     }
   }
+  
 
-  const updateWorkshift = async (shiftId, shiftData) => {
-    if (!shiftId) {
-      throw new Error('shiftId is required for updating workshift')
+  const updateEmployeeWorkshift = async (shopId, shiftId, updateData) => {
+    if (!shopId) {
+      throw new Error('shopId is required for updating employee workshift')
     }
-    
+    if (!shiftId) {
+      throw new Error('shiftId is required for updating employee workshift')
+    }
+
     loading.value = true
     error.value = null
-    
+
     try {
       const api = getApiInstance()
-      const response = await api.put(`/my/workshifts/${shiftId}`, {
-        startAt: shiftData.startAt,
-        endAt: shiftData.endAt,
-        memo: shiftData.memo
-      })
-      
-      const updatedShift = response.data
+      const response = await api.put(`/admin/shops/${shopId}/workshifts/${shiftId}`, updateData)
+
+      const result = response.data
+      console.log(response.status)
+      if (response.status != 200) {
+        throw new Error('Employee workshift update failed')
+      }
+
+      console.log(result)
+
+      const updatedShift = result.shift
       const index = workshifts.value.findIndex(shift => shift.id === shiftId)
       if (index !== -1) {
         workshifts.value[index] = updatedShift
       }
-      
+
       const calendarIndex = calendarWorkshifts.value.findIndex(shift => shift.id === shiftId)
       if (calendarIndex !== -1) {
         calendarWorkshifts.value[calendarIndex] = updatedShift
       }
-      return updatedShift
+
+      console.log('Employee workshift updated:', result)
+      return result
     } catch (err) {
-      error.value = err.response?.data?.message || '근무 일정 수정에 실패했습니다'
-      console.error('Failed to update workshift:', err)
+      error.value = err.response?.data?.message || '직원 근무 일정 수정에 실패했습니다'
+      console.error('Failed to update employee workshift:', err)
       throw err
     } finally {
       loading.value = false
     }
   }
 
-  const deleteWorkshift = async (shopId, shiftId) => {
+  const deleteEmployeeWorkshift = async (shopId, shiftId) => {
     if (!shopId) {
-      throw new Error('shopId is required for deleting workshift')
+      throw new Error('shopId is required for deleting employee workshift')
     }
     if (!shiftId) {
-      throw new Error('shiftId is required for deleting workshift')
+      throw new Error('shiftId is required for deleting employee workshift')
     }
-    
+
     loading.value = true
     error.value = null
-    
+
     try {
       const api = getApiInstance()
-      await api.delete(`/my/workshifts/${shiftId}`)
-      
+      await api.delete(`/admin/shops/${shopId}/workshifts/${shiftId}`)
+
       // Remove from local state
       workshifts.value = workshifts.value.filter(shift => shift.id !== shiftId)
       calendarWorkshifts.value = calendarWorkshifts.value.filter(shift => shift.id !== shiftId)
-      
+
+      console.log('Employee workshift deleted:', shiftId)
       return true
     } catch (err) {
-      error.value = err.response?.data?.message || '근무 일정 삭제에 실패했습니다'
-      console.error('Failed to delete workshift:', err)
+      error.value = err.response?.data?.message || '직원 근무 일정 삭제에 실패했습니다'
+      console.error('Failed to delete employee workshift:', err)
       throw err
     } finally {
       loading.value = false
@@ -269,16 +307,16 @@ export const useWorkshiftStore = defineStore('workshift', () => {
     if (!shopId) {
       throw new Error('shopId is required for fetching review workshifts')
     }
-    
+
     loading.value = true
     error.value = null
-    
+
     try {
       const api = getApiInstance()
       const response = await api.get(`/admin/shops/${shopId}/workshifts/review`, {
       })
       reviewWorkshifts.value = response.data?.items || []
-      
+
       return reviewWorkshifts.value
     } catch (err) {
       error.value = err.response?.data?.message || '검토 필요한 근무 일정을 불러오는데 실패했습니다'
@@ -289,40 +327,56 @@ export const useWorkshiftStore = defineStore('workshift', () => {
     }
   }
 
-  const resolveReviewWorkshift = async (shopId, workshiftId, newStatus, updateData = {}) => {
+  const resolveReviewWorkshift = async (shopId, workshiftId, resolveData = {}) => {
     if (!shopId) {
       throw new Error('shopId is required for resolving review workshift')
     }
     if (!workshiftId) {
       throw new Error('workshiftId is required for resolving review workshift')
     }
-    if (!newStatus || !['SCHEDULED', 'COMPLETED', 'CANCELLED'].includes(newStatus)) {
-      throw new Error('Valid status (SCHEDULED/COMPLETED/CANCELLED) is required')
-    }
-    
-    // Find the workshift to get its current data
-    const workshift = reviewWorkshifts.value.find(shift => shift.id === workshiftId)
-    if (!workshift) {
-      throw new Error('Workshift not found')
-    }
-    
+
+    loadingReview.value = true
+    error.value = null
+
     try {
-      // Use the existing updateWorkshift function with the new status and updated times
-      const updatedWorkshift = await updateWorkshift(shopId, workshiftId, {
-        startAt: updateData.startAt || workshift.startAt,
-        endAt: updateData.endAt || workshift.endAt,
-        status: newStatus,
-        adminNote: updateData.adminNote
+      const api = getApiInstance()
+      const response = await api.post(`/admin/shops/${shopId}/workshifts/${workshiftId}/review/resolve`, {
+        startAt: resolveData.startAt,
+        endAt: resolveData.endAt,
+        memo: resolveData.memo
       })
-      
+
+      const result = response.data
+      if (!result.ok) {
+        throw new Error('Review resolution failed')
+      }
+
+      // Update local state with resolved workshift
+      const updatedShift = result.shift
+
       // Remove resolved workshift from review list
       reviewWorkshifts.value = reviewWorkshifts.value.filter(shift => shift.id !== workshiftId)
-      
-      return updatedWorkshift
+
+      // Update workshifts array if exists
+      const index = workshifts.value.findIndex(shift => shift.id === workshiftId)
+      if (index !== -1) {
+        workshifts.value[index] = updatedShift
+      }
+
+      // Update calendar workshifts if exists
+      const calendarIndex = calendarWorkshifts.value.findIndex(shift => shift.id === workshiftId)
+      if (calendarIndex !== -1) {
+        calendarWorkshifts.value[calendarIndex] = updatedShift
+      }
+
+      console.log('Workshift review resolved:', result)
+      return result
     } catch (err) {
       error.value = err.response?.data?.message || '근무 일정 검토 처리에 실패했습니다'
       console.error('Failed to resolve review workshift:', err)
       throw err
+    } finally {
+      loadingReview.value = false
     }
   }
 
@@ -490,14 +544,11 @@ export const useWorkshiftStore = defineStore('workshift', () => {
     error.value = null
   }
 
-  // New filtering utilities for EmployeeView - using UTC for internal logic
   const getTodayWorkshifts = () => {
     const today = new Date()
-    // Use local date for comparison, not UTC
     const todayDateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
     
     return myWorkshifts.value.filter(shift => {
-      // Convert UTC time to local date for comparison
       const shiftDate = new Date(shift.startAt)
       const shiftDateStr = `${shiftDate.getFullYear()}-${String(shiftDate.getMonth() + 1).padStart(2, '0')}-${String(shiftDate.getDate()).padStart(2, '0')}`
       const status = shift.status || 'SCHEDULED'
@@ -557,13 +608,14 @@ export const useWorkshiftStore = defineStore('workshift', () => {
     // Employee actions
     fetchMyWorkshifts,
     createMyWorkshift,
-    updateMyWorkshift,
+    updateWorkshift,
+    deleteWorkshift,
 
     // Admin actions
     fetchAllWorkshifts,
     createEmployeeWorkshift,
-    updateWorkshift,
-    deleteWorkshift,
+    updateEmployeeWorkshift,
+    deleteEmployeeWorkshift,
     fetchReviewWorkshifts,
     resolveReviewWorkshift,
 

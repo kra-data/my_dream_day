@@ -1,0 +1,440 @@
+/* ==========================================
+   Admin Workshift View - Mobile-First Design
+   ========================================== */
+
+.workshift-view {
+  animation: fadeIn 0.3s ease-in;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ==========================================
+   Mobile-First Base Styles (320px+)
+   ========================================== */
+
+.workshift-header {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 12px;
+  padding: 16px;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.header-content h2 {
+  margin: 0 0 4px 0;
+  color: #1f2937;
+  font-size: 1.25rem;
+  line-height: 1.3;
+}
+
+.header-content p {
+  margin: 0;
+  color: #6b7280;
+  font-size: 0.875rem;
+  line-height: 1.4;
+}
+
+
+
+.daily-shifts {
+  background: white;
+  border-radius: 8px;
+  padding: 12px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.daily-shifts h3 {
+  margin: 0 0 12px 0;
+  color: #1f2937;
+  font-size: 1.1rem;
+}
+
+.shifts-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.shift-item {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 6px;
+  border-left: 3px solid #e5e7eb;
+  background: #f8fafc;
+  transition: all 0.2s;
+}
+
+.shift-item:hover {
+  background: #f1f5f9;
+}
+
+.shift-item.shift-status-scheduled {
+  border-left-color: #3b82f6;
+}
+
+.shift-item.shift-status-active {
+  border-left-color: #10b981;
+}
+
+.shift-item.shift-status-completed {
+  border-left-color: #6b7280;
+}
+
+.shift-info {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  flex: 1;
+}
+
+.employee-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.employee-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 12px;
+  transition: all 0.3s ease;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+  border: 1px solid white;
+  flex-shrink: 0;
+}
+
+.employee-details {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+
+.employee-name {
+  font-weight: 600;
+  color: #1f2937;
+  font-size: 0.875rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.employee-dept {
+  font-size: 0.75rem;
+  color: #6b7280;
+}
+
+.shift-time {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.time-range {
+  font-weight: 600;
+  color: #1f2937;
+  font-size: 0.875rem;
+}
+
+.duration {
+  font-size: 0.75rem;
+  color: #6b7280;
+}
+
+.shift-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+/* ==========================================
+   Compact Button System
+   ========================================== */
+
+.btn {
+  padding: 4px 8px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 500;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  font-size: 0.75rem;
+  line-height: 1.3;
+  min-height: 28px;
+  white-space: nowrap;
+  flex: 0 0 auto;
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-sm {
+  padding: 4px 8px;
+  font-size: 0.75rem;
+  min-height: 28px;
+}
+
+.btn-primary {
+  background: #3b82f6;
+  color: white;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: #2563eb;
+}
+
+.btn-secondary {
+  background: #6b7280;
+  color: white;
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: #4b5563;
+}
+
+.btn-outline {
+  background: transparent;
+  color: #3b82f6;
+  border: 1px solid #3b82f6;
+}
+
+.btn-outline:hover {
+  background: #3b82f6;
+  color: white;
+}
+
+.btn-danger {
+  background: #ef4444;
+  color: white;
+}
+
+.btn-danger:hover:not(:disabled) {
+  background: #dc2626;
+}
+
+/* ==========================================
+   Tablet Styles (481px+)
+   ========================================== */
+
+@media (min-width: 481px) {
+  .workshift-header {
+    padding: 20px;
+    margin-bottom: 16px;
+  }
+
+  .header-content h2 {
+    font-size: 1.375rem;
+  }
+
+  .header-content p {
+    font-size: 0.9rem;
+  }
+
+
+  .daily-shifts {
+    padding: 16px;
+  }
+
+  .shift-item {
+    flex-direction: row;
+    align-items: center;
+    padding: 14px;
+  }
+
+  .shift-info {
+    flex-direction: row;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .shift-time {
+    align-items: center;
+    text-align: center;
+  }
+
+  .shift-actions {
+    flex-wrap: nowrap;
+    justify-content: flex-end;
+  }
+
+  .shift-actions .btn {
+    flex: 0 0 auto;
+  }
+
+  .btn {
+    font-size: 0.875rem;
+    min-height: 36px;
+    flex: 0 0 auto;
+  }
+}
+
+/* ==========================================
+   Desktop Styles (769px+)
+   ========================================== */
+
+@media (min-width: 769px) {
+  .workshift-header {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: flex-start;
+    padding: 20px;
+    margin-bottom: 24px;
+  }
+
+  .header-content h2 {
+    font-size: 1.5rem;
+    margin-bottom: 6px;
+  }
+
+  .header-content p {
+    font-size: 0.95rem;
+  }
+
+  .header-actions {
+    flex-direction: row;
+    width: auto;
+    gap: 12px;
+  }
+
+
+  .daily-shifts {
+    padding: 20px;
+  }
+
+  .daily-shifts h3 {
+    font-size: 1.2rem;
+    margin-bottom: 16px;
+  }
+
+  .shifts-list {
+    gap: 12px;
+  }
+
+  .shift-item {
+    padding: 16px;
+  }
+
+  .shift-info {
+    gap: 20px;
+  }
+
+  .employee-avatar {
+    width: 32px;
+    height: 32px;
+    font-size: 14px;
+  }
+
+  .employee-name {
+    font-size: 0.95rem;
+  }
+
+  .employee-dept {
+    font-size: 0.85rem;
+  }
+
+  .time-range {
+    font-size: 0.9rem;
+  }
+
+  .duration {
+    font-size: 0.8rem;
+  }
+
+  .shift-actions {
+    gap: 8px;
+  }
+
+  .btn {
+    padding: 8px 16px;
+    font-size: 0.875rem;
+    min-height: 38px;
+  }
+
+  .btn-sm {
+    padding: 6px 12px;
+    font-size: 0.8rem;
+    min-height: 32px;
+  }
+}
+
+/* ==========================================
+   Large Desktop Styles (1025px+)
+   ========================================== */
+
+@media (min-width: 1025px) {
+  .workshift-header {
+    padding: 24px;
+    margin-bottom: 30px;
+  }
+
+
+  .daily-shifts {
+    padding: 24px;
+  }
+
+}
+
+
+/* ==========================================
+   Touch Target Improvements
+   ========================================== */
+
+@media (max-width: 768px) {
+  .btn,
+  .shift-item {
+    min-height: 44px; /* iOS recommended touch target */
+  }
+
+  .shift-actions .btn {
+    min-height: 40px;
+    padding: 8px 12px;
+  }
+
+}
+
+/* ==========================================
+   Accessibility & Focus States
+   ========================================== */
+
+.btn:focus {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+}
+
+.shift-item:focus-within {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  .workshift-view {
+    animation: none;
+  }
+
+  .btn,
+  .shift-item,
+  .employee-avatar {
+    transition: none;
+  }
+}

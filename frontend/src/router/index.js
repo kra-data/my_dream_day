@@ -7,7 +7,7 @@ const router = createRouter({
     {
       path: '/login',
       name: 'login',
-      component: () => import('@/views/LoginView.vue'),
+      component: () => import('@/views/common/LoginView.vue'),
       meta: { requiresAuth: false }
     },
     {
@@ -31,22 +31,16 @@ const router = createRouter({
     {
       path: '/employee',
       name: 'employee',
-      component: () => import('@/views/EmployeeView.vue'),
+      component: () => import('@/views/employee/EmployeeView.vue'),
       meta: { requiresAuth: true, role: 'employee' }
     },
     {
       path: '/admin',
       name: 'admin',
-      component: () => import('@/views/AdminView.vue'),
+      component: () => import('@/views/admin/AdminView.vue'),
       meta: { requiresAuth: true, role: 'admin' }
     },
     // 기존 라우트들은 인증된 사용자만 접근 가능
-    {
-      path: '/attendance',
-      name: 'attendance',
-      component: () => import('@/views/AttendanceView.vue'),
-      meta: { requiresAuth: true }
-    },
     // 404 fallback - 모든 정의되지 않은 경로 처리
     {
       path: '/:pathMatch(.*)*',
