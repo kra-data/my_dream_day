@@ -516,13 +516,13 @@ export const settleEmployeeCycle: (req: AuthRequiredRequest, res: Response) => P
     if (!emp) { res.status(404).json({ error: 'Employee not found' }); return; }
 
     // 이미 정산된 기록 유무 (고유키: employeeId + cycleStart + cycleEnd)
-    const existing = await prisma.payrollSettlement.findFirst({
-      where: { employeeId, cycleStart: cycle.start, cycleEnd: cycle.end }
-    });
-    if (existing) {
-      res.status(409).json({ error: '이미 정산 완료된 사이클입니다.', settlement: existing });
-      return;
-    }
+    // const existing = await prisma.payrollSettlement.findFirst({
+    //   where: { employeeId, cycleStart: cycle.start, cycleEnd: cycle.end }
+    // });
+    // if (existing) {
+    //   res.status(409).json({ error: '이미 정산 완료된 사이클입니다.', settlement: existing });
+    //   return;
+    // }
 
     // 사이클 내 미정산 & 확정된 근무일정
     const shifts = await prisma.workShift.findMany({
