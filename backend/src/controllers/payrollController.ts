@@ -953,6 +953,10 @@ export const getEmployeeStatusList = async (req: AuthRequiredRequest, res: Respo
       status: 'COMPLETED' as any,
       startAt: { gte: cycle.start },
       endAt:   { lte: cycle.end },
+            OR: [
+        { isSettled: false }
+      ],
+      settlementId: null,
     },
     _sum: {
       workedMinutes: true,
@@ -975,15 +979,38 @@ export const getEmployeeStatusList = async (req: AuthRequiredRequest, res: Respo
   });
   const paidSet = new Map<number, { id: number; settledAt: Date | null }>();
   for (const s of settlements) paidSet.set(s.employeeId, { id: s.id, settledAt: s.settledAt ?? null });
-
+  // 사이클 내 이미 '정산된' 시프트 금액(가불/부분정산 파악용)
+  const settledShifts = await prisma.workShift.findMany({
+    where: {
+      shopId,
+      employeeId: { in: empIds },
+      status: 'COMPLETED',
+      startAt: { gte: cycle.start },
+      endAt:   { lte: cycle.end },
+      settlementId: { not: null },
+    },
+    select: { employeeId: true, finalPayAmount: true }
+  });
+  const settledAmtByEmp = new Map<number, number>();
+  for (const s of settledShifts) {
+    settledAmtByEmp.set(s.employeeId, (settledAmtByEmp.get(s.employeeId) ?? 0) + (s.finalPayAmount ?? 0));
+  }
   // merge
   const items = employees.map(e => {
     const agg = aggByEmp.get(e.id) ?? { workedMinutes: 0, finalPayAmount: 0 };
     const isHourly = e.payUnit === 'HOURLY';
-    const amount = isHourly
+    const outstandingAmount = isHourly
       ? (agg.finalPayAmount || Math.round((agg.workedMinutes / 60) * (e.pay ?? 0)))
       : (e.pay ?? 0);
-    const status = paidSet.has(e.id) ? 'PAID' : 'PENDING';
+    // 이미 사이클 내 정산된 금액(참고용)
+    const settledAmount = settledAmtByEmp.get(e.id) ?? 0;
+    // 상태 판단:
+    // - 시급제: 남은 미정산 금액이 0이면 사실상 PAID
+    // - 월급제: 해당 사이클 결산 레코드가 있으면 PAID, 없으면 outstandingAmount>0 이면 PENDING
+    const status =
+      isHourly
+        ? (outstandingAmount <= 0 ? 'PAID' : 'PENDING')
+        : (paidSet.has(e.id) ? 'PAID' : (outstandingAmount > 0 ? 'PENDING' : 'PAID'));
     return {
       employeeId: e.id,
       personalColor:e.personalColor,
@@ -991,7 +1018,7 @@ export const getEmployeeStatusList = async (req: AuthRequiredRequest, res: Respo
       position: e.position ?? '',
       payUnit: e.payUnit,
       pay: e.pay,
-      amount,
+      amount:outstandingAmount,settledAmount,
       workedMinutes: agg.workedMinutes,
       daysWorked: 0, // 목록에서는 계산 비용 절약(상세에서 정확히 산출). 필요하면 distinct day 집계 추가.
       settlement: {
@@ -1066,16 +1093,30 @@ export const getEmployeeStatusDetail = async (req: AuthRequiredRequest, res: Res
       id: true, startAt: true, endAt: true, status: true,
       actualInAt: true, actualOutAt: true,
       workedMinutes: true, actualMinutes: true,
-      finalPayAmount: true, settlementId: true
+      finalPayAmount: true, settlementId: true, isSettled: true
     }
   });
 
   // 합계
+  // 정산여부로 분리
+  const settledShifts = shifts.filter(r => r.settlementId != null || r.isSettled === true);
+  const outstandingShifts = shifts.filter(r => r.settlementId == null && r.isSettled !== true);
+
+  // 합계
   const workedMinutes = shifts.reduce((s, r) => s + (r.workedMinutes ?? 0), 0);
   const daysWorked = uniqKstDates(shifts.map(s => s.startAt));
-  const amount = emp.payUnit === 'HOURLY'
-    ? (shifts.reduce((s, r) => s + (r.finalPayAmount ?? 0), 0) || Math.round((workedMinutes / 60) * (emp.pay ?? 0)))
-    : (emp.pay ?? 0);
+  // 이미 정산된 금액(사이클 내부)
+  const settledAmount = settledShifts.reduce((s, r) => s + (r.finalPayAmount ?? 0), 0);
+  // 미정산 금액(시프트 기반)
+  const outstandingWorkedMinutes = outstandingShifts.reduce((s, r) => s + (r.workedMinutes ?? 0), 0);
+  const outstandingShiftAmount = outstandingShifts.reduce((s, r) => s + (r.finalPayAmount ?? 0), 0);
+  const outstandingAmountHourly =
+    outstandingShiftAmount || Math.round((outstandingWorkedMinutes / 60) * (emp.pay ?? 0));
+
+  const amount =
+    emp.payUnit === 'HOURLY'
+      ? outstandingAmountHourly
+      : (emp.pay ?? 0);
 
   const logs = shifts.map(r => {
     const k = toKst(r.startAt);
@@ -1099,7 +1140,9 @@ export const getEmployeeStatusDetail = async (req: AuthRequiredRequest, res: Res
     year, month,
     cycle: { start: cycle.start, end: cycle.end, label: cycle.label, startDay: cycle.startDay },
     settlement: {
-      status: settlement ? 'PAID' : 'PENDING',
+      status: emp.payUnit === 'HOURLY'
+        ? (amount <= 0 ? 'PAID' : 'PENDING')
+        : (settlement ? 'PAID' : 'PENDING'),
       settlementId: settlement?.id ?? null,
       settledAt: settlement?.settledAt ?? null
     },
@@ -1109,7 +1152,9 @@ export const getEmployeeStatusDetail = async (req: AuthRequiredRequest, res: Res
     },
     workedMinutes,
     daysWorked,
-    amount,
-    logs
+    amount,            // 남은 미정산 금액(시급제 기준)
+    settledAmount,     // 사이클 내 이미 정산된 금액(가불/부분정산 포함)
+    outstandingAmount: amount, // alias
+   logs
   });
 };

@@ -321,7 +321,7 @@ export const resolveReviewShiftScheduleOnly = async (req: AuthRequiredRequest, r
     ok: true,
     shift: updated,
     summary: {
-      status: nextStatus,
+             status: nextStatus,
       workedMinutes: computedWorkedMinutes,
       actualMinutes: computedActualMinutes,
       finalPayAmount: nextFinalPayAmount,
