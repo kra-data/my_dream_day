@@ -467,13 +467,13 @@ export const getAttendanceRecords = async (req: AuthRequiredRequest, res: Respon
   });
 
   const items = rows.map(s => {
-    const inAt  = s.actualInAt ?? null;
-    const outAt = s.actualOutAt ?? null;
+    const inAt  = s.startAt ?? null;
+    const outAt = s.endAt ?? null;
 
     // 저장값 우선, 없을 때만 보조 계산(레거시 대비)
     const fallbackWorked =
       (inAt && outAt)
-        ? (s.endAt ? intersectMinutes(inAt, outAt, s.startAt, s.endAt) : diffMinutes(inAt, outAt))
+        ? diffMinutes(inAt, outAt)
         : null;
     const fallbackActual =
       (inAt && outAt) ? diffMinutes(inAt, outAt) : null;
