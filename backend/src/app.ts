@@ -4,7 +4,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import morgan from 'morgan';
-import { swaggerServe, swaggerSetup } from './swagger';
+import { swaggerServe, swaggerSetup,swaggerDocument } from './swagger';
 import type { ScheduledTask } from 'node-cron';
 import { registerSchedulers } from './scheduler';
 import { errorHandler, notFound } from './middlewares/errorHandler';
@@ -52,6 +52,11 @@ app.use(
 
 /* 라우트 */
 app.use('/api', routes);
+// 1) JSON만 반환하는 엔드포인트
+app.get('/api/docs.json', (_req, res) => {
+  res.setHeader('Content-Type', 'application/json');
+  res.status(200).send(swaggerDocument); // 또는 res.json(swaggerDocument);
+});
 
 /* Swagger UI at /api/docs */
 app.use('/api/docs', swaggerServe, swaggerSetup);
