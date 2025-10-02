@@ -1470,11 +1470,29 @@ examples: {
       { name: 'year',   in: 'query', required: true, schema: { type: 'integer', minimum: 2000, maximum: 2100 } },
       { name: 'month',  in: 'query', required: true, schema: { type: 'integer', minimum: 1, maximum: 12 } },
       { name: 'cycleStartDay', in: 'query', required: false, schema: { type: 'integer', minimum: 1, maximum: 28 },
-        description: '사이클 시작일(기본: 매장 payday; 제공 시 override)' }
+        description: '사이클 시작일(기본: 매장 payday; 제공 시 override)' },
+              {
+        name: 'includeSensitive',
+        in: 'query',
+        required: false,
+        schema: { type: 'string', enum: ['0','1'], default: '0' },
+        description: '1로 설정 시 엑셀에 주민번호(평문) 컬럼이 추가됩니다. 기본값 0(마스킹만).'
+      },
+      // (선택) 감사 사유
+      {
+        name: 'X-Admin-Action-Reason',
+        in: 'header',
+        required: false,
+        schema: { type: 'string', maxLength: 200 },
+        description: '감사로그용 사유(선택). 예: 급여이체 제출용'
+      }
     ],
     responses: {
       '200': {
-        description: 'XLSX binary stream',
+        description:
+          'XLSX binary stream.\n' +
+          '- 기본 컬럼: 세전/세후 금액 등 + **주민번호(마스킹)**\n' +
+          '- `includeSensitive=1`일 때 **주민번호(평문)** 추가 컬럼이 뒤에 추가됩니다.',
         content: {
           'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': {
             schema: { type: 'string', format: 'binary' }
@@ -1484,6 +1502,17 @@ examples: {
           'Content-Disposition': {
             schema: { type: 'string' },
             description: 'attachment; filename="payroll_<shop>_<YYYY-MM>.xlsx"'
+          },
+
+          // 캐시 금지/스니프 방지 헤더 명세
+          'Cache-Control': {
+            schema: { type: 'string', example: 'no-store, max-age=0' }
+          },
+          'Pragma': {
+            schema: { type: 'string', example: 'no-cache' }
+          },
+          'X-Content-Type-Options': {
+            schema: { type: 'string', example: 'nosniff' }
           }
         }
       },

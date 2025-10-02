@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { prisma } from '../db/prisma';
 import { AuthRequiredRequest } from '../middlewares/requireUser';
 import ExcelJS from 'exceljs';
+import { decryptNationalId } from '../utils/nationalId';
 import type { Position } from '@prisma/client';
 // KST helpers
 const fromKstParts = (y: number, m1: number, d: number, hh = 0, mm = 0, ss = 0, ms = 0) =>
@@ -137,7 +138,7 @@ export const exportPayrollXlsx: (req: AuthRequiredRequest, res: Response) => Pro
     const parsed = q.safeParse(req.query);
     if (!parsed.success) { res.status(400).json({ error: 'Invalid query' }); return; }
     const { year, month } = parsed.data;
-
+const includeSensitive = String(req.query.includeSensitive ?? '') === '1';
     const shop = await prisma.shop.findUnique({ where: { id: shopId }, select: { payday: true, name: true } });
     if (!shop) { res.status(404).json({ error: 'Shop not found' }); return; }
     const startDay = parsed.data.cycleStartDay ?? Math.min(Math.max(shop.payday ?? 1, 1), 28);
@@ -183,7 +184,7 @@ export const exportPayrollXlsx: (req: AuthRequiredRequest, res: Response) => Pro
       where: { shopId, id: { in: employeeIds } }, // ← 사이클 내 근무 있는 직원만
       select: {
         id: true, name: true, pay: true, payUnit: true,
-        bank: true, accountNumber: true,
+        bank: true, accountNumber: true,nationalIdMasked: true,nationalIdEnc: includeSensitive ? true : false,
       }
     });
     // ── 엑셀 작성 ────────────────────────────────────────────
@@ -195,6 +196,9 @@ export const exportPayrollXlsx: (req: AuthRequiredRequest, res: Response) => Pro
       '순번','직원명','은행','계좌번호','기본 시급','총 근무 시간(시간)',
       '기본','소득세','지방소득세','기타세금','지급해야할 돈','세금 공제','최종 지급액'
     ];
+    // ✅ 주민번호 컬럼은 엑셀의 맨 뒤에 배치(기존 금액 컬럼 인덱스 불변)
+    headers.push('주민번호(마스킹)');
+    if (includeSensitive) headers.push('주민번호(평문)');
     ws.addRow(headers);
 
     // 본문
@@ -220,6 +224,12 @@ export const exportPayrollXlsx: (req: AuthRequiredRequest, res: Response) => Pro
           totalGrossWon      += grossWon;
      totalDeductionsWon += deductionsWon;
      totalNetWon        += netWon;
+      // ✅ 주민번호 컬럼(뒤쪽) 준비
+      const nidMasked = (emp as any).nationalIdMasked ?? '';
+      const nidPlain  = includeSensitive && (emp as any).nationalIdEnc
+        ? (decryptNationalId((emp as any).nationalIdEnc) ?? '')
+        : '';
+
       ws.addRow([
         ++rowNo,
         emp.name,
@@ -233,7 +243,9 @@ export const exportPayrollXlsx: (req: AuthRequiredRequest, res: Response) => Pro
         otherTaxWon,          // 기타세금(절사)
         grossWon,             // 지급해야할 돈 = 세전 총액(절사)
         deductionsWon,        // 빠지는 돈 = 공제 합계(절사 합)
-        netWon                // 최종 지급액(절사)
+        netWon,                // 최종 지급액(절사)
+nidMasked,
+...(includeSensitive ? [nidPlain] : [])
       ]);
     }
 
@@ -273,7 +285,9 @@ ws.columns = [
   { width: 12 },  // 기타세금
   { width: 16 },  // 지급해야할 돈
   { width: 12 },  // 빠지는 돈
-  { width: 16 }   // 최종 지급액
+  { width: 16 },   // 최종 지급액
+  { width: 22 },  // 주민번호(마스킹)
+  ...(includeSensitive ? [{ width: 22 }] : [])
 ];
 
 // 헤더 고정
@@ -362,7 +376,10 @@ if (rowNo > 0) {
 
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(filename)}"`);
-
+    // ✅ 캐시 금지 & 보안 헤더 (민감정보 다운로드 안전장치)
+    res.setHeader('Cache-Control', 'no-store, max-age=0');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
     await wb.xlsx.write(res);
     res.end();
   };

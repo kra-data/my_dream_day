@@ -18,6 +18,32 @@ export function encryptNationalId(plain: string): string {
   return Buffer.concat([iv, tag, ct]).toString('base64');
 }
 
+// ✅ 복호화: base64(iv|tag|ciphertext) → plain
+export function decryptNationalId(encB64: string): string {
+  const buf = Buffer.from(encB64, 'base64');
+  // 최소 길이: iv(12) + tag(16) + ct(>=1)
+  if (buf.length < 12 + 16 + 1) {
+    throw new Error('invalid ciphertext payload');
+  }
+  const iv  = buf.subarray(0, 12);
+  const tag = buf.subarray(12, 28);
+  const ct  = buf.subarray(28);
+
+  const decipher = crypto.createDecipheriv('aes-256-gcm', ENC_KEY, iv);
+  decipher.setAuthTag(tag);
+  const plain = Buffer.concat([decipher.update(ct), decipher.final()]);
+  return plain.toString('utf8');
+}
+
+// 안전하게 쓰고 싶으면 실패 시 null 반환 버전도 함께 제공
+export function tryDecryptNationalId(encB64: string): string | null {
+  try {
+    return decryptNationalId(encB64);
+  } catch {
+    return null;
+  }
+}
+
 // 멀티테넌트 스코프 필요 시 shopId를 섞으세요.
 export function hashNationalId(plain: string /* , shopId?: number */): string {
   const h = crypto.createHmac('sha256', HMAC_KEY);
@@ -27,14 +53,11 @@ export function hashNationalId(plain: string /* , shopId?: number */): string {
 }
 
 export function maskNationalId(input: string): string {
-  // 주민번호 형식: 000000-0000000 or 13자리
   const digits = input.replace(/\D/g, '');
   if (digits.length >= 13) {
-    const a = digits.slice(0, 6); // 생년월일
-    const b = digits.slice(6, 7); // 성별 식별 1자리
-    return `${a}-${b}${'*'.repeat(digits.length - 7)}`; // 예: 900101-1******
+    const a = digits.slice(0, 6);
+    const b = digits.slice(6, 7);
+    return `${a}-${b}${'*'.repeat(digits.length - 7)}`;
   }
-  // 일반 숫자 마스킹(fallback)
-  // 앞 2~4자리/뒤 1~2자리만 노출
   return digits.replace(/^(\d{2,4})(\d+)(\d{1,2})$/, (_, p1, mid, p3) => p1 + '*'.repeat(mid.length) + p3);
 }
