@@ -1,6 +1,6 @@
 // routes/adminRouter.ts
 import { NextFunction, Response, Router } from 'express';
-// import * as adminController from '../controllers/adminController';
+import * as adminController from '../controllers/adminController';
 import {
   activeEmployees,
   recentActivities,
@@ -66,11 +66,11 @@ router.use(requireAdmin);
 
 
 /* ───────── 매장 CRUD ───────── */
-// router.get('/shops',                 adminController.getShops);
-// router.post('/shops',                adminController.createShop);
-// router.put('/shops/:shopId',        adminController.updateShop);
-// router.delete('/shops/:shopId',     adminController.deleteShop);
-
+router.get('/shops',                 withUser(adminController.getShops));
+router.post('/shops',                withUser(adminController.createShop));
+router.put('/shops/:shopId',        withUser(adminController.updateShop));
+router.delete('/shops/:shopId',     withUser(adminController.deleteShop));
+router.get('/shops/:shopId',        withUser(adminController.getShopById));
 /* ───────── 직원 CRUD ───────── */
 // router.get('/shops/:shopId/employees',  adminController.getEmployees);
 // router.post('/shops/:shopId/employees', adminController.createEmployee);

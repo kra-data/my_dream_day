@@ -847,6 +847,45 @@ SettleAllEmployeesCycleResponse: {
     }
   }
 },
+// swaggerDocument.components.schemas 안에 추가/교체
+ShopCreateRequest: {
+  type: 'object',
+  required: ['name','hourlyWage','payday'],
+  properties: {
+    name:       { type: 'string', minLength: 1, example: '홍사장분식' },
+    hourlyWage: { type: 'integer', minimum: 1, example: 9860 },
+    payday:     { type: 'integer', minimum: 1, maximum: 31, example: 10 }
+  }
+},
+ShopUpdateRequest: {
+  type: 'object',
+  properties: {
+    name:       { type: 'string', minLength: 1, example: '홍사장분식(리뉴얼)' },
+    hourlyWage: { type: 'integer', minimum: 1, example: 10000 },
+    payday:     { type: 'integer', minimum: 1, maximum: 31, example: 15 }
+  },
+  additionalProperties: false
+},
+ShopResponse: {
+  type: 'object',
+  properties: {
+    id:         { type: 'integer', example: 1 },
+    name:       { type: 'string',  example: '홍사장분식' },
+    hourlyWage: { type: 'integer', example: 9860 },
+    payday:     { type: 'integer', example: 10 },
+    createdAt:  { type: 'string',  format: 'date-time' },
+    updatedAt:  { type: 'string',  format: 'date-time' }
+  }
+},
+ShopListResponse: {
+  type: 'object',
+  properties: {
+    items: {
+      type: 'array',
+      items: { $ref: '#/components/schemas/ShopResponse' }
+    }
+  }
+},
 
 // ───────────────── Payroll Overview (프리랜서 3.3% 반영) ─────────────────
 PayrollCycleLite: {
@@ -1383,15 +1422,112 @@ PayrollOverviewResponse: {
         }
       }
     },
+// swaggerDocument.paths 아래 교체/추가
+'/api/admin/shops': {
+  post: {
+    tags: ['Admin - Shops'],
+    summary: '가게 생성',
+    security: [{ bearerAuth: [] }],
+    requestBody: {
+      required: true,
+      content: {
+        'application/json': {
+          schema: { $ref: '#/components/schemas/ShopCreateRequest' },
+          examples: {
+            sample: {
+              value: { name: '홍사장분식', hourlyWage: 9860, payday: 10 }
+            }
+          }
+        }
+      }
+    },
+    responses: {
+      '201': {
+        description: 'Created',
+        content: {
+          'application/json': { schema: { $ref: '#/components/schemas/ShopResponse' } }
+        }
+      },
+      '400': { description: 'Invalid payload' },
+      '401': { description: 'Unauthorized' },
+      '409': { description: 'Shop name already exists' }
+    }
+  },
+  get: {
+    tags: ['Admin - Shops'],
+    summary: '내 가게 목록',
+    security: [{ bearerAuth: [] }],
+    responses: {
+      '200': {
+        description: 'OK',
+        content: {
+          'application/json': { schema: { $ref: '#/components/schemas/ShopListResponse' } }
+        }
+      },
+      '401': { description: 'Unauthorized' }
+    }
+  }
+},
 
-    '/api/admin/shops': {
-      get: { tags: ['Admin'], summary: '매장 목록', responses: { '200': { description: 'OK' } } },
-      post: { tags: ['Admin'], summary: '매장 생성', responses: { '201': { description: 'Created' }, '400': { description: 'Invalid payload' } } }
+'/api/admin/shops/{shopId}': {
+  get: {
+    tags: ['Admin - Shops'],
+    summary: '가게 상세',
+    security: [{ bearerAuth: [] }],
+    parameters: [
+      { name: 'shopId', in: 'path', required: true, schema: { type: 'integer' } }
+    ],
+    responses: {
+      '200': {
+        description: 'OK',
+        content: { 'application/json': { schema: { $ref: '#/components/schemas/ShopResponse' } } }
+      },
+      '401': { description: 'Unauthorized' },
+      '404': { description: 'Shop not found' }
+    }
+  },
+  put: {
+    tags: ['Admin - Shops'],
+    summary: '가게 수정',
+    security: [{ bearerAuth: [] }],
+    parameters: [
+      { name: 'shopId', in: 'path', required: true, schema: { type: 'integer' } }
+    ],
+    requestBody: {
+      required: true,
+      content: {
+        'application/json': { schema: { $ref: '#/components/schemas/ShopUpdateRequest' } }
+      }
     },
-    '/api/admin/shops/{shopId}': {
-      put:  { tags: ['Admin'], summary: '매장 수정', parameters: [{ name: 'shopId', in: 'path', required: true, schema: { type: 'integer' } }], responses: { '200': { description: 'OK' }, '404': { description: 'Not Found' } } },
-      delete: { tags: ['Admin'], summary: '매장 삭제', parameters: [{ name: 'shopId', in: 'path', required: true, schema: { type: 'integer' } }], responses: { '204': { description: 'No Content' } } }
-    },
+    responses: {
+      '200': {
+        description: 'OK',
+        content: { 'application/json': { schema: { $ref: '#/components/schemas/ShopResponse' } } }
+      },
+      '400': { description: 'Invalid payload' },
+      '401': { description: 'Unauthorized' },
+      '404': { description: 'Shop not found' },
+      '409': { description: 'Shop name already exists' }
+    }
+  },
+  delete: {
+    tags: ['Admin - Shops'],
+    summary: '가게 삭제',
+    security: [{ bearerAuth: [] }],
+    parameters: [
+      { name: 'shopId', in: 'path', required: true, schema: { type: 'integer' } }
+    ],
+    responses: {
+      '200': { description: 'OK', content: { 'application/json': { schema: {
+        type: 'object',
+        properties: { ok: { type: 'boolean', example: true } }
+      } } } },
+      '401': { description: 'Unauthorized' },
+      '404': { description: 'Shop not found' }
+    }
+  }
+},
+
 // swaggerDocument.paths 안에 추가
 '/api/admin/shops/{shopId}/employees': {
   post: {

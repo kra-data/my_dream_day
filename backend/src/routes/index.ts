@@ -13,15 +13,15 @@ const router = Router();
 router.get('/health', healthCheck);
 
 // 사장님
-router.post('/auth/register', auth.register);
-router.post('/auth/login', auth.login);
+router.post('/admin/auth/register', auth.register);
+router.post('/admin/auth/login', auth.login);
 
 router.post('/auth/refresh', auth.refresh);
 router.post('/auth/logout', auth.logout);
 
 
 // 직원
-router.post('/employee/login/:shopId', emp.employeeLogin);
+router.post('/employee/auth/login/:shopId', emp.employeeLogin);
 /* 🔐 역할 가드: AuthRequest 시그니처로 선언 (RequestHandler 사용 X) */
 const requireRoles =
   (...allowed: ReadonlyArray<UserRole>) =>
