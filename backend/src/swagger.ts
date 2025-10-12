@@ -1136,7 +1136,7 @@ PayrollOverviewResponse: {
       }
     },
 // ── [paths] 아래의 /api/auth/* 섹션을 다음으로 교체 ──
-'/api/auth/register': {
+'/api/admin/auth/register': {
   post: {
     tags: ['Auth (Owner)'],
     summary: '사장님 회원가입',
@@ -1152,7 +1152,7 @@ PayrollOverviewResponse: {
   }
 },
 
-'/api/auth/login': {
+'/api/admin/auth/login': {
   post: {
     tags: ['Auth (Owner)'],
     summary: '사장님 로그인(복수 매장일 경우 선택 흐름)',
@@ -1186,7 +1186,7 @@ PayrollOverviewResponse: {
   }
 },
 
-'/api/auth/refresh': {
+'/api/auth/token/refresh': {
   post: {
     tags: ['Auth (Common)'],
     summary: '리프레시 토큰으로 재발급',
@@ -1225,7 +1225,25 @@ PayrollOverviewResponse: {
     }
   }
 },
-
+// ── [paths]에 직원 로그인 엔드포인트 추가 (라우터: POST /employee/login/:shopId) ──
+'/api/employee/auth/login/{shopId}': {
+  post: {
+    tags: ['Auth (Employee)'],
+    summary: '직원 로그인(매장별)',
+    parameters: [
+      { name: 'shopId', in: 'path', required: true, schema: { type: 'integer' } }
+    ],
+    requestBody: {
+      required: true,
+      content: { 'application/json': { schema: { $ref: '#/components/schemas/EmployeeLoginRequest' } } }
+    },
+    responses: {
+      '200': { description: 'OK', content: { 'application/json': { schema: { $ref: '#/components/schemas/EmployeeLoginResponse' } } } },
+      '401': { description: 'Invalid credentials' },
+      '404': { description: 'Shop/Employee not found' }
+    }
+  }
+},
     '/api/attendance/me/status': {
       get: {
         tags: ['Attendance'],
