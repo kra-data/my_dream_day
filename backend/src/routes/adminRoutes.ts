@@ -1,30 +1,31 @@
 // routes/adminRouter.ts
-import { Router, NextFunction, Response } from 'express';
-import { authenticateJWT, AuthRequest } from '../middlewares/jwtMiddleware';
-import * as adminController from '../controllers/adminController';
+import { NextFunction, Response, Router } from 'express';
+// import * as adminController from '../controllers/adminController';
 import {
-  todaySummary,
   activeEmployees,
-  recentActivities
+  recentActivities,
+  todaySummary
 } from '../controllers/dashboardController';
-import { getShopQrPng } from '../controllers/qrController';
-import {
-  adminListShifts,
-  adminCreateShift,
-  adminUpdateShift,
-  adminDeleteShift,
-  adminListReviewShifts,
-  adminGetShiftDetail,
-  resolveReviewShiftScheduleOnly,
-    adminListUncheckedCompletedShiftsYesterday,
-  adminSetShiftChecked
-} from '../controllers/workShiftController';
-import { getEmployeeStatusList,getEmployeeStatusDetail,payrollOverview,exportPayrollXlsx,getSettlementSummary,settleEmployeeCycle,settleAllEmployeesCycle } from '../controllers/payrollController';
+// import { exportPayrollXlsx, getEmployeeStatusDetail, getEmployeeStatusList, getSettlementSummary, payrollOverview, settleAllEmployeesCycle, settleEmployeeCycle } from '../controllers/payrollController';
+// import { getShopQrPng } from '../controllers/qrController';
+import {selectShop,me} from '../controllers/authController';
+// import {
+//   adminCreateShift,
+//   adminDeleteShift,
+//   adminGetShiftDetail,
+//   adminListReviewShifts,
+//   adminListShifts,
+//   adminListUncheckedCompletedShiftsYesterday,
+//   adminSetShiftChecked,
+//   adminUpdateShift,
+//   resolveReviewShiftScheduleOnly
+// } from '../controllers/workShiftController';
+import { authenticateJWT, AuthRequest } from '../middlewares/jwtMiddleware';
 // ✅ 추가: 타입 안전 래퍼 & 정산 컨트롤러
-import { withUser, AuthRequiredRequest } from '../middlewares/requireUser';
-import {
-  getAttendanceRecords,
-} from '../controllers/attendanceController';
+// import {
+//   getAttendanceRecords,
+// } from '../controllers/attendanceController';
+import { withUser } from '../middlewares/requireUser';
 const router = Router();
 
 /* 관리자가 아닌 경우 거부 */
@@ -33,11 +34,11 @@ const requireAdmin = (
   res: Response,
   next: NextFunction
 ): void => {
-  if (req.user?.role !== 'admin') {
-    res.status(403).json({ error: 'Admin only' });
-    return;
+  console.log(req.user?.shopRole)
+  if (req.user?.shopRole == 'ADMIN' || req.user?.shopRole == 'OWNER') {
+     return next();
   }
-  next();
+  res.status(403).json({ error: 'Admin only' });
 };
 // ✅ 공통 파라미터 가드: shiftId는 숫자만 허용
 router.param('shiftId', (req, res, next, val) => {
@@ -53,43 +54,44 @@ router.use(requireAdmin);
 
 
 // ───────── WorkShift (Admin/Owner) ─────────
-router.get('/shops/:shopId/workshifts/review', withUser(adminListReviewShifts));
-router.get('/shops/:shopId/workshifts', withUser(adminListShifts));
-router.post('/shops/:shopId/employees/:employeeId/workshifts', withUser(adminCreateShift));
-router.get('/shops/:shopId/workshifts/:shiftId', withUser(adminGetShiftDetail));
-router.put('/shops/:shopId/workshifts/:shiftId', withUser(adminUpdateShift));
-router.delete('/shops/:shopId/workshifts/:shiftId', withUser(adminDeleteShift));
-router.post('/shops/:shopId/workshifts/:shiftId/review/resolve', withUser(resolveReviewShiftScheduleOnly));
-router.get('/shops/:shopId/qr', getShopQrPng);
-router.get('/shops/:shopId/attendance/records', withUser(getAttendanceRecords));
+// router.get('/shops/:shopId/workshifts/review', withUser(adminListReviewShifts));
+// router.get('/shops/:shopId/workshifts', withUser(adminListShifts));
+// router.post('/shops/:shopId/employees/:employeeId/workshifts', withUser(adminCreateShift));
+// router.get('/shops/:shopId/workshifts/:shiftId', withUser(adminGetShiftDetail));
+// router.put('/shops/:shopId/workshifts/:shiftId', withUser(adminUpdateShift));
+// router.delete('/shops/:shopId/workshifts/:shiftId', withUser(adminDeleteShift));
+// router.post('/shops/:shopId/workshifts/:shiftId/review/resolve', withUser(resolveReviewShiftScheduleOnly));
+// router.get('/shops/:shopId/qr', getShopQrPng);
+// router.get('/shops/:shopId/attendance/records', withUser(getAttendanceRecords));
 
 
 /* ───────── 매장 CRUD ───────── */
-router.get('/shops',                 adminController.getShops);
-router.post('/shops',                adminController.createShop);
-router.put('/shops/:shopId',        adminController.updateShop);
-router.delete('/shops/:shopId',     adminController.deleteShop);
+// router.get('/shops',                 adminController.getShops);
+// router.post('/shops',                adminController.createShop);
+// router.put('/shops/:shopId',        adminController.updateShop);
+// router.delete('/shops/:shopId',     adminController.deleteShop);
 
 /* ───────── 직원 CRUD ───────── */
-router.get('/shops/:shopId/employees',  adminController.getEmployees);
-router.post('/shops/:shopId/employees', adminController.createEmployee);
-router.put('/shops/:shopId/employees/:employeeId',        adminController.updateEmployee);
-router.delete('/shops/:shopId/employees/:employeeId',     adminController.deleteEmployee);
-
+// router.get('/shops/:shopId/employees',  adminController.getEmployees);
+// router.post('/shops/:shopId/employees', adminController.createEmployee);
+// router.put('/shops/:shopId/employees/:employeeId',        adminController.updateEmployee);
+// router.delete('/shops/:shopId/employees/:employeeId',     adminController.deleteEmployee);
+router.post('/auth/select-shop', withUser(selectShop));
+router.get('/auth/me', withUser(me));
 /* ───────── 🆕 대시보드 ───────── */
 router.get('/shops/:shopId/dashboard/today',   todaySummary);
 router.get('/shops/:shopId/dashboard/active',  activeEmployees);
 router.get('/shops/:shopId/dashboard/recent',  recentActivities);
 
 // 🆕 급여 개요
-router.get('/shops/:shopId/payroll/overview', withUser(payrollOverview));
-router.get('/shops/:shopId/payroll/export-xlsx', withUser(exportPayrollXlsx));
-router.get('/shops/:shopId/payroll/summary', withUser(getSettlementSummary));
-router.post('/shops/:shopId/payroll/employees/:employeeId', withUser(settleEmployeeCycle));
-router.get('/shops/:shopId/payroll/employees/:employeeId', withUser(getEmployeeStatusDetail));
-router.get('/shops/:shopId/payroll/employees', withUser(getEmployeeStatusList));
-router.post('/shops/:shopId/payroll/settlements', withUser(settleAllEmployeesCycle));
+// router.get('/shops/:shopId/payroll/overview', withUser(payrollOverview));
+// router.get('/shops/:shopId/payroll/export-xlsx', withUser(exportPayrollXlsx));
+// router.get('/shops/:shopId/payroll/summary', withUser(getSettlementSummary));
+// router.post('/shops/:shopId/payroll/employees/:employeeId', withUser(settleEmployeeCycle));
+// router.get('/shops/:shopId/payroll/employees/:employeeId', withUser(getEmployeeStatusDetail));
+// router.get('/shops/:shopId/payroll/employees', withUser(getEmployeeStatusList));
+// router.post('/shops/:shopId/payroll/settlements', withUser(settleAllEmployeesCycle));
 
-router.get('/shops/:shopId/shifts/yesterday/unchecked', withUser(adminListUncheckedCompletedShiftsYesterday));
-router.put('/shops/:shopId/shifts/:shiftId/admin-check', withUser(adminSetShiftChecked));
+// router.get('/shops/:shopId/shifts/yesterday/unchecked', withUser(adminListUncheckedCompletedShiftsYesterday));
+// router.put('/shops/:shopId/shifts/:shiftId/admin-check', withUser(adminSetShiftChecked));
 export default router;

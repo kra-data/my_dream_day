@@ -21,14 +21,6 @@ export const swaggerDocument: any = {
       }
     },
     schemas: {
-      LoginRequest: {
-        type: 'object',
-        required: ['name','phoneLastFour'],
-        properties: {
-          name: { type: 'string', example: '홍길동' },
-          phoneLastFour: { type: 'string', example: '1234' }
-        }
-      },
       TokenPair: {
         type: 'object',
         properties: {
@@ -123,7 +115,6 @@ WorkShift: {
     leftEarly:   { type: 'boolean', nullable: true, example: false },
 adminChecked: { type: 'boolean', example: false, description: '관리자 체크 여부' },
     // ✅ 산출값(OUT 시 저장)
-    actualMinutes: { type: 'integer', nullable: true, example: 505, description: '실제 근무 분' },
     workedMinutes: { type: 'integer', nullable: true, example: 480, description: '지급 인정 분(시프트 교집합)' },
 
     // ✅ 정산 연결
@@ -309,7 +300,6 @@ PayrollEmployeeShiftLog: {
     actualOutAt:   { type: ['string','null'], format: 'date-time', example: '2025-09-03T08:05:00.000Z' },
 status:        { $ref: '#/components/schemas/WorkShiftStatus' },
     workedMinutes: { type: ['integer','null'], example: 480, description: '지급 인정 분' },
-    actualMinutes: { type: ['integer','null'], example: 485, description: '실제 근무 분' },
     finalPayAmount:{ type: ['integer','null'], example: 96000, description: '시급제: 확정 금액, 월급제: null' },
     settlementId:  { type: ['integer','null'], example: null }
   }
@@ -352,7 +342,6 @@ PayrollEmployeeStatusDetailResponse: {
        clockInAt:  { type: 'string', format: 'date-time', nullable: true },
        clockOutAt: { type: 'string', format: 'date-time', nullable: true },
        workedMinutes:  { type: 'integer', nullable: true, description: '저장된 지급인정 분 (없으면 교집합 보조계산)' },
-       actualMinutes:  { type: 'integer', nullable: true, description: '저장된 실제 근무 분 (없으면 보조계산)' },
        finalPayAmount: { type: 'integer', nullable: true, description: '시급제 확정 금액(원). 월급/미확정은 null' },
        extraMinutes: { type: 'integer', example: 0 },
        paired: { type: 'boolean', example: true, description: 'OUT 기록 존재 여부' },
@@ -381,7 +370,6 @@ SettleEmployeeRequest: {
 WorkShiftUpdateSummary: {
   type: 'object',
   properties: {
-    actualMinutes: { type: 'integer', nullable: true, example: 505 },
     workedMinutes: { type: 'integer', nullable: true, example: 480 },
     late:          { type: 'boolean', nullable: true, example: false },
     leftEarly:     { type: 'boolean', nullable: true, example: false },
@@ -564,7 +552,7 @@ Employee: {
     section:       { $ref: '#/components/schemas/Section' },
     pay:           { type: 'integer', nullable: true },
     payUnit:       { $ref: '#/components/schemas/PayUnit', nullable: true },
-    role:          { type: 'string', example: 'employee' },
+    shopRole:          { type: 'string', example: 'employee' },
     personalColor: { type: 'string', nullable: true, pattern: '^#[0-9A-Fa-f]{6}$' },
     createdAt:     { type: 'string', format: 'date-time' },
     updatedAt:     { type: 'string', format: 'date-time' }
@@ -650,6 +638,115 @@ ErrorResponse: {
         }
       },
 // swaggerDocument.components.schemas 안에 추가
+// ── [components.schemas] 안에 다음을 교체/추가 ──
+
+// ✅ 공통
+AuthError: { type: 'object', properties: { error: { type: 'string' }, detail: { type: 'object', nullable: true } } },
+ShopLite: {
+  type: 'object',
+  properties: {
+    shopId:   { type: 'integer', example: 1 },
+    name:     { type: 'string',  example: '길동분식' },
+    shopRole: { type: 'string',  enum: ['OWNER'], example: 'OWNER' }
+  }
+},
+
+// ✅ 사장님(ADMIN/OWNER) 전용
+OwnerRegisterRequest: {
+  type: 'object',
+  required: ['loginId', 'password', 'name', 'phone', 'nationalId'],
+  properties: {
+    loginId:    { type: 'string', minLength: 1, example: 'boss01@gmail.com' },
+    password:   { type: 'string', minLength: 8, example: 'P@ssw0rd!' },
+    name:       { type: 'string', example: '홍길동' },
+
+  }
+},
+OwnerRegisterResponse: {
+  type: 'object',
+  properties: {
+    id:      { type: 'integer', example: 1 },
+    loginId: { type: 'string', example: 'boss01' },
+    phone:   { type: 'string', example: '01012345678' },
+    name:    { type: 'string', example: '홍길동' }
+  }
+},
+
+OwnerLoginRequest: {
+  type: 'object',
+  required: ['loginId', 'password'],
+  properties: {
+    loginId: { type: 'string', example: 'boss01' },
+    password:{ type: 'string', example: 'P@ssw0rd!' },
+    shopId:  { type: 'integer', nullable: true, example: 10, description: '소유 매장이 여러 개일 때 선택용(선택적)' }
+  }
+},
+OwnerLoginResponse: {
+  type: 'object',
+  properties: {
+    accessToken:      { type: ['string','null'] },
+    refreshToken:     { type: ['string','null'] },
+    selectedShopId:   { type: ['integer','null'] },
+    selectedShopRole: { type: ['string','null'], enum: ['OWNER', null] },
+    chooseRequired:   { type: 'boolean', example: false },
+    shops:            { type: 'array', items: { $ref: '#/components/schemas/ShopLite' } }
+  }
+},
+
+SelectShopRequest: {
+  type: 'object',
+  required: ['shopId'],
+  properties: { shopId: { type: 'integer', example: 10 } }
+},
+
+RefreshRequestV2: {
+  type: 'object',
+  required: ['refreshToken'],
+  properties: { refreshToken: { type: 'string' } }
+},
+RefreshResponseV2: {
+  type: 'object',
+  properties: {
+    accessToken: { type: 'string' },
+    refreshToken:{ type: 'string' },
+    shopId:      { type: ['integer','null'] },
+    shopRole:    { type: ['string','null'], enum: ['OWNER', 'EMPLOYEE', null] }
+  }
+},
+
+LogoutRequestV2: {
+  type: 'object',
+  required: ['refreshToken'],
+  properties: { refreshToken: { type: 'string' } }
+},
+
+MeResponse: {
+  type: 'object',
+  properties: {
+    id:      { type: 'integer', example: 1 },
+    loginId: { type: 'string',  example: 'boss01' },
+    name:    { type: 'string',  example: '홍길동' },
+    phone:   { type: 'string',  example: '01012345678' }
+  }
+},
+
+// ✅ 직원 전용
+EmployeeLoginRequest: {
+  type: 'object',
+  required: ['name','phoneLastFour'],
+  properties: {
+    name:          { type: 'string', example: '김직원' },
+    phoneLastFour: { type: 'string', minLength: 4, maxLength: 4, example: '1234' }
+  }
+},
+EmployeeLoginResponse: {
+  type: 'object',
+  properties: {
+    accessToken: { type: 'string' },
+    refreshToken:{ type: 'string' }
+  }
+},
+
 SettleEmployeeCycleRequest: {
   type: 'object',
   required: ['year','month'],
@@ -945,7 +1042,6 @@ PayrollOverviewResponse: {
           message: { type: 'string', example: '퇴근 완료' },
           clockOutAt: { type: 'string', format: 'date-time' },
           workedMinutes: { type: 'integer' },
-          actualMinutes: { type: 'integer' },
           shiftId: { type: 'integer', example: 456 },
           finalPayAmount: { type: 'integer', nullable: true, example: 96000 },
           memo: { type: 'string', nullable: true, example: '컨디션 저하' },
@@ -1039,69 +1135,97 @@ PayrollOverviewResponse: {
         }
       }
     },
-    '/api/auth/login': {
-      post: {
-        tags: ['Auth'],
-        summary: 'Login with name and phone last 4 digits',
-        requestBody: {
-          required: true,
-          content: {
-            'application/json': { schema: { $ref: '#/components/schemas/LoginRequest' } }
-          }
-        },
-        responses: {
-          '200': { description: 'Tokens returned', content: { 'application/json': { schema: { $ref: '#/components/schemas/TokenPair' } } } },
-          '401': {
-            description: 'Invalid credentials'
-          }
-        }
-      }
+// ── [paths] 아래의 /api/auth/* 섹션을 다음으로 교체 ──
+'/api/auth/register': {
+  post: {
+    tags: ['Auth (Owner)'],
+    summary: '사장님 회원가입',
+    requestBody: {
+      required: true,
+      content: { 'application/json': { schema: { $ref: '#/components/schemas/OwnerRegisterRequest' } } }
     },
+    responses: {
+      '201': { description: 'Created', content: { 'application/json': { schema: { $ref: '#/components/schemas/OwnerRegisterResponse' } } } },
+      '400': { description: 'Bad Request' },
+      '409': { description: 'Duplicate' }
+    }
+  }
+},
 
-    '/api/auth/refresh': {
-      post: {
-        tags: ['Auth'],
-        summary: 'Refresh access token',
-        requestBody: {
-          required: true,
-          content: {
-            'application/json': { schema: { $ref: '#/components/schemas/RefreshRequest' } }
-          }
-        },
-        responses: {
-          '200': { description: 'New access token' },
-          '403': { description: 'Invalid refresh token' }
-        }
-      }
+'/api/auth/login': {
+  post: {
+    tags: ['Auth (Owner)'],
+    summary: '사장님 로그인(복수 매장일 경우 선택 흐름)',
+    requestBody: {
+      required: true,
+      content: { 'application/json': { schema: { $ref: '#/components/schemas/OwnerLoginRequest' } } }
     },
-    '/api/auth/logout': {
-      post: {
-        tags: ['Auth'],
-        summary: 'Logout and invalidate refresh token',
-        requestBody: {
-          required: true,
-          content: {
-            'application/json': { schema: { $ref: '#/components/schemas/LogoutRequest' } }
-          }
-        },
-        responses: { '200': { description: 'Logged out' } }
-      }
+    responses: {
+      '200': { description: 'OK', content: { 'application/json': { schema: { $ref: '#/components/schemas/OwnerLoginResponse' } } } },
+      '400': { description: 'Bad Request' },
+      '401': { description: 'Invalid credentials' }
+    }
+  }
+},
+
+'/api/admin/auth/select-shop': {
+  post: {
+    tags: ['Auth (Owner)'],
+    summary: '소유 매장 선택(로그인 이후)',
+    security: [{ bearerAuth: [] }],
+    requestBody: {
+      required: true,
+      content: { 'application/json': { schema: { $ref: '#/components/schemas/SelectShopRequest' } } }
     },
-    '/api/auth/validate': {
-      get: {
-        tags: ['Auth'],
-        summary: 'Validate Bearer access token',
-        parameters: [
-          {
-            name: 'Authorization',
-            in: 'header',
-            required: true,
-            schema: { type: 'string', example: 'Bearer <token>' }
-          }
-        ],
-        responses: { '200': { description: 'Token info' }, '401': { description: 'Invalid' } }
-      }
+    responses: {
+      '200': { description: 'OK', content: { 'application/json': { schema: { $ref: '#/components/schemas/OwnerLoginResponse' } } } },
+      '400': { description: 'Bad Request' },
+      '401': { description: 'Unauthorized' },
+      '403': { description: 'Not an owner of the shop' }
+    }
+  }
+},
+
+'/api/auth/refresh': {
+  post: {
+    tags: ['Auth (Common)'],
+    summary: '리프레시 토큰으로 재발급',
+    requestBody: {
+      required: true,
+      content: { 'application/json': { schema: { $ref: '#/components/schemas/RefreshRequestV2' } } }
     },
+    responses: {
+      '200': { description: 'OK', content: { 'application/json': { schema: { $ref: '#/components/schemas/RefreshResponseV2' } } } },
+      '401': { description: 'Unauthorized' },
+      '403': { description: 'Invalid refresh token' }
+    }
+  }
+},
+
+'/api/auth/logout': {
+  post: {
+    tags: ['Auth (Common)'],
+    summary: '로그아웃(리프레시 토큰 철회)',
+    requestBody: {
+      required: true,
+      content: { 'application/json': { schema: { $ref: '#/components/schemas/LogoutRequestV2' } } }
+    },
+    responses: { '200': { description: 'OK' } }
+  }
+},
+
+'/api/admin/auth/me': {
+  get: {
+    tags: ['Auth (Owner)'],
+    summary: '내 정보 조회(사장님)',
+    security: [{ bearerAuth: [] }],
+    responses: {
+      '200': { description: 'OK', content: { 'application/json': { schema: { $ref: '#/components/schemas/MeResponse' } } } },
+      '401': { description: 'Unauthorized' }
+    }
+  }
+},
+
     '/api/attendance/me/status': {
       get: {
         tags: ['Attendance'],
@@ -1554,7 +1678,6 @@ examples: {
                         clockInAt: '2025-09-05T08:30:00.000Z',
                         clockOutAt:'2025-09-05T17:30:00.000Z',
                         workedMinutes: 480,
-                        actualMinutes: 485,
                         finalPayAmount: 96000,
                         extraMinutes: 0,
                         paired: true,
@@ -1723,7 +1846,6 @@ examples: {
                     actualOutAt: '2025-09-09T13:02:00.000Z',
                     late: true,
                     leftEarly: false,
-                    actualMinutes: 177,
                     workedMinutes: 175,
                     finalPayAmount: 35000,
                     memo: '종료 30분 보정',
@@ -1733,7 +1855,6 @@ examples: {
                   },
                   summary: {
                     status: 'COMPLETED',
-                    actualMinutes: 177,
                     workedMinutes: 175,
                     finalPayAmount: 35000
                   }
@@ -2169,7 +2290,7 @@ examples: {
                 },
                 examples: {
                   in:  { value: { ok:true, message:'출근 완료', clockInAt:'2025-09-05T08:30:00.000Z', shiftId:456 } },
-                  out: { value: { ok:true, message:'퇴근 완료', clockOutAt:'2025-09-05T13:00:00.000Z', workedMinutes:480, actualMinutes:505, planned:null, shiftId:456 } }
+                  out: { value: { ok:true, message:'퇴근 완료', clockOutAt:'2025-09-05T13:00:00.000Z', workedMinutes:480,planned:null, shiftId:456 } }
                 }
             }
           },
@@ -2219,7 +2340,6 @@ examples: {
                       actualOutAt:{ type: 'string', format: 'date-time', nullable: true },
                       late: { type: 'boolean', nullable: true },
                       leftEarly: { type: 'boolean', nullable: true },
-                      actualMinutes: { type: 'integer', nullable: true },
                       workedMinutes: { type: 'integer', nullable: true },
                       employee: {
                         type: 'object',
@@ -2402,11 +2522,10 @@ examples: {
                 status: 'COMPLETED',
                 actualInAt: '2025-09-01T02:58:00.000Z',
                 actualOutAt:'2025-09-01T11:07:00.000Z',
-                late: false, leftEarly: false,
-                actualMinutes: 489, workedMinutes: 480,
+                late: false, leftEarly: false, workedMinutes: 480,
                 settlementId: null
               },
-              summary: { actualMinutes: 489, workedMinutes: 480, late: false, leftEarly: false }
+              summary: { workedMinutes: 480, late: false, leftEarly: false }
             }
           }
         }
@@ -2465,7 +2584,6 @@ examples: {
                     actualOutAt: { type: 'string', format: 'date-time', nullable: true },
                     late:        { type: 'boolean', nullable: true },
                     leftEarly:   { type: 'boolean', nullable: true },
-                    actualMinutes: { type: 'integer', nullable: true },
                     workedMinutes: { type: 'integer', nullable: true },
                     reviewReason:  { $ref: '#/components/schemas/ShiftReviewReason', nullable: true },
                     memo:    { type: 'string', nullable: true },
@@ -2492,7 +2610,6 @@ examples: {
                   type: 'object',
                   properties: {
                     plannedMinutes: { type: 'integer' },
-                    actualMinutes:  { type: 'integer', nullable: true },
                     workedMinutes:  { type: 'integer', nullable: true },
                     late: { type: 'boolean', nullable: true },
                     leftEarly: { type: 'boolean', nullable: true },

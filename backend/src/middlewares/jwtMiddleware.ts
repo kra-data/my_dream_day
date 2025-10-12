@@ -4,13 +4,13 @@ import jwt from 'jsonwebtoken';
 const JWT_SECRET = process.env.JWT_SECRET || 'defaultsecret';
 
 /** 앱 전역에서 쓰는 롤 타입 */
-export type UserRole = 'admin' | 'owner' | 'employee';
+export type UserRole = 'ADMIN' | 'OWNER' | 'employee';
 
 /** JWT 페이로드 스키마 */
 export interface JwtPayload {
   userId: number;
   shopId: number;
-  role: UserRole;
+  shopRole: UserRole;
   iat?: number;
   exp?: number;
 }
@@ -21,7 +21,7 @@ export interface AuthRequest extends Request {
 }
 
 /** 관리자 권한 상수 세트 (includes에 안전하게 사용) */
-export const ADMIN_ROLES: ReadonlyArray<UserRole> = ['admin', 'owner'];
+export const ADMIN_ROLES: ReadonlyArray<UserRole> = ['ADMIN', 'OWNER'];
 
 /** 필수 인증 미들웨어 */
 export const authenticateJWT = (req: AuthRequest, res: Response, next: NextFunction): void => {

@@ -4,140 +4,149 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
+  // 반드시 mdd_v2 스키마로!
+  url      = env("DATABASE_URL") // postgresql://.../?schema=mdd_v2
 }
 
+/**
+ * ============= users =============
+ */
+model User {
+  id                    BigInt    @id @default(autoincrement())
+  loginId               String    @map("login_id")
+  passwordHash          String?   @map("password_hash")
+  name                  String?
+  phone                 String?   @unique
+  createdAt             DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt             DateTime  @default(now()) @map("updated_at") @db.Timestamptz
+  socialOnly            Boolean   @default(false) @map("social_only")
+  shopRole                  String?
+  requirePasswordChange Boolean   @default(false) @map("require_password_change")
+  passwordMigratedAt    DateTime? @map("password_migrated_at") @db.Timestamptz
+
+  // 1:N (User 1) <- (Shop N)
+  shops Shop[] @relation("OwnerToShops")
+
+  @@map("users")
+}
+
+/**
+ * ============= shops =============
+ */
 model Shop {
-  id                 Int                 @id @default(autoincrement())
-  name               String
-  hourlyWage         Int
-  payday             Int
-  qrSecret           String
-  createdAt          DateTime            @default(now())
-  updatedAt          DateTime            @updatedAt
-  employees          Employee[]
-  payrollSettlements PayrollSettlement[]
+  id          BigInt   @id @default(autoincrement())
+  name        String
+  ownerUserId BigInt   @map("owner_user_id")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime @default(now()) @map("updated_at") @db.Timestamptz
+  hourlyWage  Int?     @map("hourly_wage")
+  payday      Int?
+  qrSecret    String   @map("qr_secret")
+
+  owner User @relation("OwnerToShops", fields: [ownerUserId], references: [id])
+
+  employees          EmployeeMember[]
   workShifts         WorkShift[]
+  payrollSettlements PayrollSettlement[] @relation("ShopToSettlements")
+
+  @@unique([ownerUserId, name], name: "uq_shops_owner_name")
+  @@map("shops")
 }
 
-model Employee {
-  id                   Int                 @id @default(autoincrement())
-  shopId               Int
-  name                 String
-  accountNumber        String
-  phone                String
-  schedule             Json
-  role                 String              @default("employee")
-  createdAt            DateTime            @default(now())
-  updatedAt            DateTime            @updatedAt
-  bank                 String              @default("")
-  position             Position            @default(STAFF)
-  section              Section             @default(HALL)
-  pay                  Int
-  payUnit              PayUnit
-  nationalIdEnc        String?
-  nationalIdHash       String?             @db.VarChar(64)
-  nationalIdMasked     String?             @db.VarChar(32)
-  personalColor        String?             @default("#1F6FEB") @db.VarChar(7)
-  shop                 Shop                @relation(fields: [shopId], references: [id], onDelete: Cascade)
-  payrollSettlements   PayrollSettlement[] @relation("SettlementEmployee")
-  processedSettlements PayrollSettlement[] @relation("SettlementProcessedBy")
-  workShifts           WorkShift[]
+/**
+ * ============= employee_members =============
+ */
+model EmployeeMember {
+  id                    BigInt    @id @default(autoincrement())
+  shopId                BigInt    @map("shop_id")
+  name                  String
+  phone                 String
+  passwordHash          String    @map("password_hash") // DB NOT NULL
+  nationalIdEnc         String?   @map("national_id_enc")
+  nationalIdHash        String?   @map("national_id_hash")
+  nationalIdMasked      String?   @map("national_id_masked")
+  bankName              String?   @map("bank_name")
+  bankAccount           String?   @map("bank_account")
+  active                Boolean   @default(true)
+  createdAt             DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt             DateTime  @default(now()) @map("updated_at") @db.Timestamptz
+  position              String?
+  section               String?
+  pay                   Decimal   @db.Decimal(12, 2)
+  payUnit               String    @map("pay_unit")
+  shopRole              String    @default("EMPLOYEE") @map("shop_shopRole")
+  requirePasswordChange Boolean   @default(false) @map("require_password_change")
+  passwordMigratedAt    DateTime? @map("password_migrated_at") @db.Timestamptz
 
-  @@index([nationalIdHash], map: "idx_employee_nationalIdHash")
+  shop               Shop                @relation(fields: [shopId], references: [id])
+  workShifts         WorkShift[]
+  payrollSettlements PayrollSettlement[] @relation("EmpToSettlements")
+
+  @@unique([shopId, name, phone], name: "uq_emp_member_shop_name_phone")
+  @@map("employee_members")
 }
 
+/**
+ * ============= work_shifts =============
+ */
 model WorkShift {
-  id               Int                @id @default(autoincrement())
-  shopId           Int
-  employeeId       Int
-  startAt          DateTime
-  endAt            DateTime?
-  actualInAt       DateTime?
-  actualOutAt      DateTime?
-  late             Boolean?           @default(false)
-  leftEarly        Boolean?           @default(false)
-  createdAt        DateTime           @default(now())
-  createdBy        Int?
-  updatedAt        DateTime           @updatedAt
-  updatedBy        Int?
-  actualMinutes    Int?
-  settlementId     Int?
-  workedMinutes    Int?
-  status           WorkShiftStatus    @default(SCHEDULED)
-  reviewReason     ShiftReviewReason?
-  reviewResolvedAt DateTime?
-  reviewedBy       Int?
-  finalPayAmount   Int?
-  isSettled        Boolean            @default(false)
-  memo             String?
-  adminChecked     Boolean            @default(false)
-  employee         Employee           @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  settlement       PayrollSettlement? @relation(fields: [settlementId], references: [id])
-  shop             Shop               @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  id                  BigInt    @id @default(autoincrement())
+  shopId              BigInt    @map("shop_id")
+  employeeId          BigInt    @map("employee_id")
+  startAt             DateTime  @map("start_at") @db.Timestamptz
+  endAt               DateTime? @map("end_at") @db.Timestamptz
+  actualInAt          DateTime? @map("actual_in_at") @db.Timestamptz
+  actualOutAt         DateTime? @map("actual_out_at") @db.Timestamptz
+  late                Boolean?  @default(false) // DB DEFAULT false
+  earlyOut            Boolean?  @default(false) @map("early_out")
+  extended            Boolean?  @default(false)
+  settlementId        BigInt?   @map("settlement_id")
+  workedMinutes       Int?      @map("worked_minutes") // ★ 기존 컬럼과 매핑 (DROP 방지)
+  status              String    @default("SCHEDULED")
+  reviewReason        String?   @map("review_reason")
+  reviewResolvedAt    DateTime? @map("review_resolved_at") @db.Timestamptz
+  reviewedBy          BigInt?   @map("reviewed_by")
+  finalPayAmount      Int?      @map("final_pay_amount")
+  isSettled           Boolean   @default(false) @map("is_settled")
+  memo                String?
+  adminChecked        Boolean   @default(false) @map("admin_checked")
+  createdByUserId     BigInt?   @map("created_by_user_id")
+  createdByEmployeeId BigInt?   @map("created_by_employee_id")
+  updatedByUserId     BigInt?   @map("updated_by_user_id")
+  updatedByEmployeeId BigInt?   @map("updated_by_employee_id")
+  createdAt           DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt           DateTime  @default(now()) @map("updated_at") @db.Timestamptz
 
-  @@index([shopId, employeeId, startAt])
-  @@index([employeeId, status])
-  @@index([settlementId])
-  @@index([shopId, employeeId, isSettled])
+  shop       Shop               @relation(fields: [shopId], references: [id])
+  employee   EmployeeMember     @relation(fields: [employeeId], references: [id])
+  settlement PayrollSettlement? @relation("SettlementToShifts", fields: [settlementId], references: [id])
+
+  @@map("work_shifts")
 }
 
+/**
+ * ============= payroll_settlements =============
+ */
 model PayrollSettlement {
-  id              Int         @id @default(autoincrement())
-  shopId          Int
-  employeeId      Int
-  cycleStart      DateTime
-  cycleEnd        DateTime
-  workedMinutes   Int
-  basePay         Int
-  totalPay        Int
-  settledAt       DateTime    @default(now())
-  processedBy     Int?
-  note            String?
-  incomeTax       Int         @default(0)
-  localIncomeTax  Int         @default(0)
-  netPay          Int         @default(0)
-  otherTax        Int         @default(0)
-  employee        Employee    @relation("SettlementEmployee", fields: [employeeId], references: [id])
-  processedByUser Employee?   @relation("SettlementProcessedBy", fields: [processedBy], references: [id])
-  shop            Shop        @relation(fields: [shopId], references: [id])
-  workShifts      WorkShift[]
+  id             BigInt   @id @default(autoincrement())
+  shopId         BigInt   @map("shop_id")
+  employeeId     BigInt   @map("employee_id")
+  cycleStart     DateTime @map("cycle_start") @db.Timestamptz
+  cycleEnd       DateTime @map("cycle_end") @db.Timestamptz
+  workedMinutes  Int      @map("worked_minutes")
+  basePay        Int      @map("base_pay")
+  totalPay       Int      @map("total_pay")
+  settledAt      DateTime @map("settled_at") @db.Timestamptz
+  processedBy    BigInt?  @map("processed_by")
+  note           String?
+  incomeTax      Int      @default(0) @map("income_tax")
+  localIncomeTax Int      @default(0) @map("local_income_tax")
+  netPay         Int      @default(0) @map("net_pay")
+  otherTax       Int      @default(0) @map("other_tax")
 
-  @@unique([employeeId, cycleStart, cycleEnd])
-  @@index([shopId])
-  @@index([shopId, cycleStart, cycleEnd])
-  @@index([employeeId, cycleStart, cycleEnd])
-}
+  shop       Shop           @relation("ShopToSettlements", fields: [shopId], references: [id])
+  employee   EmployeeMember @relation("EmpToSettlements", fields: [employeeId], references: [id])
+  workShifts WorkShift[]    @relation("SettlementToShifts")
 
-enum Position {
-  OWNER
-  MANAGER
-  STAFF
-  PART_TIME
-}
-
-enum Section {
-  HALL
-  KITCHEN
-}
-
-enum PayUnit {
-  MONTHLY
-  HOURLY
-}
-
-enum ShiftReviewReason {
-  LATE_IN
-  EARLY_OUT
-  LATE_OUT
-  EXTENDED
-  NO_ATTENDANCE
-}
-
-enum WorkShiftStatus {
-  SCHEDULED
-  IN_PROGRESS
-  COMPLETED
-  CANCELED
-  REVIEW
+  @@map("payroll_settlements")
 }

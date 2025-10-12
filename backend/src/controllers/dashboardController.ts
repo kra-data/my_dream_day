@@ -91,7 +91,7 @@ export const activeEmployees = async (req: AuthRequest, res: Response) => {
   const shopId = Number(req.params.shopId);
 
   // 1) 직원 기본 정보
-  const employees = await prisma.employee.findMany({
+  const employees = await prisma.employeeMember.findMany({
     where: { shopId },
     select: { id: true, name: true, position: true, section: true }
   });

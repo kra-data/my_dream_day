@@ -6,7 +6,7 @@ import rateLimit from 'express-rate-limit';
 import morgan from 'morgan';
 import { swaggerServe, swaggerSetup,swaggerDocument } from './swagger';
 import type { ScheduledTask } from 'node-cron';
-import { registerSchedulers } from './scheduler';
+// import { registerSchedulers } from './scheduler';
 import { errorHandler, notFound } from './middlewares/errorHandler';
 import { prisma } from './db/prisma';
 
@@ -72,7 +72,7 @@ if (process.env.NODE_ENV !== 'test') {
   server = app.listen(3001, '0.0.0.0', () => {       // 컨테이너 내에서 외부 노출
     console.log(`🚀 Server is running on port ${PORT}`);
   });
-  cronTasks = registerSchedulers();
+  // cronTasks = registerSchedulers();
 
 }
 
