@@ -4,7 +4,7 @@ import jwt from 'jsonwebtoken';
 const JWT_SECRET = process.env.JWT_SECRET || 'defaultsecret';
 
 /** 앱 전역에서 쓰는 롤 타입 */
-export type UserRole = 'ADMIN' | 'OWNER' | 'employee';
+export type UserRole = 'ADMIN' | 'OWNER' | 'EMPLOYEE';
 
 /** JWT 페이로드 스키마 */
 export interface JwtPayload {

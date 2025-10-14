@@ -4,7 +4,7 @@ import * as emp from '../controllers/employeeAuthController';
 import { authenticateJWT, UserRole, AuthRequest } from '../middlewares/jwtMiddleware';
 import { healthCheck } from '../controllers/healthController';
 import adminRoutes from './adminRoutes';
-// import attendanceRoutes from './attendanceRoutes';
+import attendanceRoutes from './attendanceRoutes';
 import { requireUser, withUser } from '../middlewares/requireUser';
 // import myRoutes from './myRoutes';
 const router = Router();
@@ -48,7 +48,7 @@ router.get(
 
 /* Feature routes */
 router.use('/admin',      adminRoutes);
-// router.use('/attendance', attendanceRoutes);
+router.use('/attendance', attendanceRoutes);
 
 
 // router.use('/', myRoutes);
