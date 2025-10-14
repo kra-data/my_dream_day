@@ -15,17 +15,17 @@ import {
   deleteEmployee,
   listEmployees
 } from '../controllers/adminEmployeeController';
-// import {
-//   adminCreateShift,
-//   adminDeleteShift,
-//   adminGetShiftDetail,
-//   adminListReviewShifts,
-//   adminListShifts,
-//   adminListUncheckedCompletedShiftsYesterday,
-//   adminSetShiftChecked,
-//   adminUpdateShift,
-//   resolveReviewShiftScheduleOnly
-// } from '../controllers/workShiftController';
+import {
+  adminCreateShift,
+  adminDeleteShift,
+  adminGetShiftDetail,
+  adminListReviewShifts,
+  adminListShifts,
+  adminListUncheckedCompletedShiftsYesterday,
+  adminSetShiftChecked,
+  adminUpdateShift,
+  resolveReviewShiftScheduleOnly
+} from '../controllers/workShiftController';
 import { authenticateJWT, AuthRequest } from '../middlewares/jwtMiddleware';
 // ✅ 추가: 타입 안전 래퍼 & 정산 컨트롤러
 // import {
@@ -60,13 +60,13 @@ router.use(requireAdmin);
 
 
 // ───────── WorkShift (Admin/Owner) ─────────
-// router.get('/shops/:shopId/workshifts/review', withUser(adminListReviewShifts));
-// router.get('/shops/:shopId/workshifts', withUser(adminListShifts));
-// router.post('/shops/:shopId/employees/:employeeId/workshifts', withUser(adminCreateShift));
-// router.get('/shops/:shopId/workshifts/:shiftId', withUser(adminGetShiftDetail));
-// router.put('/shops/:shopId/workshifts/:shiftId', withUser(adminUpdateShift));
-// router.delete('/shops/:shopId/workshifts/:shiftId', withUser(adminDeleteShift));
-// router.post('/shops/:shopId/workshifts/:shiftId/review/resolve', withUser(resolveReviewShiftScheduleOnly));
+router.get('/shops/:shopId/workshifts/review', withUser(adminListReviewShifts));
+router.get('/shops/:shopId/workshifts', withUser(adminListShifts));
+router.post('/shops/:shopId/employees/:employeeId/workshifts', withUser(adminCreateShift));
+router.get('/shops/:shopId/workshifts/:shiftId', withUser(adminGetShiftDetail));
+router.put('/shops/:shopId/workshifts/:shiftId', withUser(adminUpdateShift));
+router.delete('/shops/:shopId/workshifts/:shiftId', withUser(adminDeleteShift));
+router.post('/shops/:shopId/workshifts/:shiftId/review/resolve', withUser(resolveReviewShiftScheduleOnly));
 // router.get('/shops/:shopId/qr', getShopQrPng);
 // router.get('/shops/:shopId/attendance/records', withUser(getAttendanceRecords));
 router.post('/auth/select-shop', withUser(selectShop));
@@ -98,6 +98,6 @@ router.get('/shops/:shopId/dashboard/recent',  recentActivities);
 // router.get('/shops/:shopId/payroll/employees', withUser(getEmployeeStatusList));
 // router.post('/shops/:shopId/payroll/settlements', withUser(settleAllEmployeesCycle));
 
-// router.get('/shops/:shopId/shifts/yesterday/unchecked', withUser(adminListUncheckedCompletedShiftsYesterday));
-// router.put('/shops/:shopId/shifts/:shiftId/admin-check', withUser(adminSetShiftChecked));
+router.get('/shops/:shopId/shifts/yesterday/unchecked', withUser(adminListUncheckedCompletedShiftsYesterday));
+router.put('/shops/:shopId/shifts/:shiftId/admin-check', withUser(adminSetShiftChecked));
 export default router;

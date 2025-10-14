@@ -4,29 +4,29 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  // 반드시 mdd_v2 스키마로!
-  url      = env("DATABASE_URL") // postgresql://.../?schema=mdd_v2
+  // 반드시 mdd_v2 스키마!
+  url = env("DATABASE_URL") // e.g. postgresql://user:pass@host:5432/db?schema=mdd_v2
 }
 
 /**
  * ============= users =============
  */
 model User {
-  id                    BigInt    @id @default(autoincrement())
-  loginId               String    @map("login_id")
-  passwordHash          String?   @map("password_hash")
-  name                  String?
-  phone                 String?   @unique
-  createdAt             DateTime  @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt             DateTime  @default(now()) @map("updated_at") @db.Timestamptz
-  socialOnly            Boolean   @default(false) @map("social_only")
-  role                  String?
-  requirePasswordChange Boolean   @default(false) @map("require_password_change")
-  passwordMigratedAt    DateTime? @map("password_migrated_at") @db.Timestamptz
+  id           BigInt    @id @default(autoincrement())
+  loginId      String    @map("login_id") @db.VarChar(100)
+  passwordHash String?   @map("password_hash") @db.VarChar(200)
+  name         String?   @db.VarChar(100)
+  phone        String?   @unique @db.VarChar(30)
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime  @default(now()) @map("updated_at") @db.Timestamptz(6)
+  socialOnly   Boolean   @default(false) @map("social_only")
+  role         String?   @db.VarChar(20)
 
-  // 1:N (User 1) <- (Shop N)
-  shops Shop[] @relation("OwnerToShops")
+  refresh_tokens  refresh_tokens[]
+  shops           Shop[]           @relation("OwnerToShops")
+  social_accounts social_accounts[]
 
+  @@unique([name, phone], map: "uq_users_name_phone")
   @@map("users")
 }
 
@@ -35,21 +35,23 @@ model User {
  */
 model Shop {
   id          BigInt   @id @default(autoincrement())
-  name        String
+  name        String   @db.VarChar(100)
   ownerUserId BigInt   @map("owner_user_id")
-  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt   DateTime @default(now()) @map("updated_at") @db.Timestamptz
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
   hourlyWage  Int?     @map("hourly_wage")
   payday      Int?
-  qrSecret    String   @map("qr_secret")
+  qrSecret    String   @map("qr_secret") @db.VarChar(64)
 
-  owner User @relation("OwnerToShops", fields: [ownerUserId], references: [id])
+  owner User @relation("OwnerToShops", fields: [ownerUserId], references: [id], onUpdate: NoAction, map: "fk_shops_owner")
 
+  // ★ 추가된 관계들
   employees          EmployeeMember[]
   workShifts         WorkShift[]
   payrollSettlements PayrollSettlement[] @relation("ShopToSettlements")
 
-  @@unique([ownerUserId, name], name: "uq_shops_owner_name")
+  @@unique([ownerUserId, name], name: "uq_shops_owner_name", map: "uq_shops_owner_name")
+  @@index([ownerUserId], map: "idx_shops_owner")
   @@map("shops")
 }
 
@@ -57,32 +59,37 @@ model Shop {
  * ============= employee_members =============
  */
 model EmployeeMember {
-  id                    BigInt    @id @default(autoincrement())
-  shopId                BigInt    @map("shop_id")
-  name                  String
-  phone                 String
-  passwordHash          String    @map("password_hash") // DB NOT NULL
-  nationalIdEnc         String?   @map("national_id_enc")
-  nationalIdHash        String?   @map("national_id_hash")
-  nationalIdMasked      String?   @map("national_id_masked")
-  bankName              String?   @map("bank_name")
-  bankAccount           String?   @map("bank_account")
-  active                Boolean   @default(true)
-  createdAt             DateTime  @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt             DateTime  @default(now()) @map("updated_at") @db.Timestamptz
-  position              String?
-  section               String?
-  pay                   Decimal   @db.Decimal(12, 2)
-  payUnit               String    @map("pay_unit")
-  shopRole              String    @default("EMPLOYEE") @map("shop_role")
-  requirePasswordChange Boolean   @default(false) @map("require_password_change")
-  passwordMigratedAt    DateTime? @map("password_migrated_at") @db.Timestamptz
+  id               BigInt    @id @default(autoincrement())
+  shopId           BigInt    @map("shop_id")
+  name             String    @db.VarChar(100)
+  phone            String    @db.VarChar(30)
+  passwordHash     String    @map("password_hash") @db.VarChar(200)
+  nationalIdEnc    String?   @map("national_id_enc")
+  nationalIdHash   String?   @map("national_id_hash") @db.Char(64)
+  nationalIdMasked String?   @map("national_id_masked") @db.VarChar(20)
+  bankName         String?   @map("bank_name") @db.VarChar(50)
+  bankAccount      String?   @map("bank_account") @db.VarChar(50)
+  active           Boolean   @default(true)
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime  @default(now()) @map("updated_at") @db.Timestamptz(6)
+  position         String?   @db.VarChar(50)
+  section          String?   @db.VarChar(50)
+  pay              Decimal   @db.Decimal(12, 2)
+  payUnit          String    @map("pay_unit") @db.VarChar(20)
+  shopRole         String    @default("EMPLOYEE") @map("shop_role") @db.VarChar(20)
 
+  // ★ 추가된 개인 색상
+  personalColor    String?   @db.VarChar(20)
+
+  // ★ 추가된 관계들
   shop               Shop                @relation(fields: [shopId], references: [id])
   workShifts         WorkShift[]
   payrollSettlements PayrollSettlement[] @relation("EmpToSettlements")
 
-  @@unique([shopId, name, phone], name: "uq_emp_member_shop_name_phone")
+  @@unique([shopId, name, phone], name: "uq_emp_member_shop_name_phone", map: "uq_emp_member_shop_name_phone")
+  @@index([phone], map: "idx_emp_member_phone")
+  @@index([shopId], map: "idx_emp_member_shop")
+  @@index([shopId, shopRole], map: "idx_emp_member_shop_role")
   @@map("employee_members")
 }
 
@@ -93,34 +100,40 @@ model WorkShift {
   id                  BigInt    @id @default(autoincrement())
   shopId              BigInt    @map("shop_id")
   employeeId          BigInt    @map("employee_id")
-  startAt             DateTime  @map("start_at") @db.Timestamptz
-  endAt               DateTime? @map("end_at") @db.Timestamptz
-  actualInAt          DateTime? @map("actual_in_at") @db.Timestamptz
-  actualOutAt         DateTime? @map("actual_out_at") @db.Timestamptz
-  late                Boolean?  @default(false) // DB DEFAULT false
+  startAt             DateTime  @map("start_at") @db.Timestamptz(6)
+  endAt               DateTime? @map("end_at") @db.Timestamptz(6)
+  actualInAt          DateTime? @map("actual_in_at") @db.Timestamptz(6)
+  actualOutAt         DateTime? @map("actual_out_at") @db.Timestamptz(6)
+  late                Boolean?  @default(false)
   earlyOut            Boolean?  @default(false) @map("early_out")
   extended            Boolean?  @default(false)
   settlementId        BigInt?   @map("settlement_id")
-  workedMinutes       Int?      @map("worked_minutes") // ★ 기존 컬럼과 매핑 (DROP 방지)
-  status              String    @default("SCHEDULED")
-  reviewReason        String?   @map("review_reason")
-  reviewResolvedAt    DateTime? @map("review_resolved_at") @db.Timestamptz
+  workedMinutes       Int?      @map("worked_minutes")
+  status              String    @default("SCHEDULED") @db.VarChar(20)
+  reviewReason        String?   @map("review_reason") @db.VarChar(20)
+  reviewResolvedAt    DateTime? @map("review_resolved_at") @db.Timestamptz(6)
   reviewedBy          BigInt?   @map("reviewed_by")
   finalPayAmount      Int?      @map("final_pay_amount")
   isSettled           Boolean   @default(false) @map("is_settled")
-  memo                String?
+  memo                String?   @db.VarChar(2000)
   adminChecked        Boolean   @default(false) @map("admin_checked")
   createdByUserId     BigInt?   @map("created_by_user_id")
   createdByEmployeeId BigInt?   @map("created_by_employee_id")
   updatedByUserId     BigInt?   @map("updated_by_user_id")
   updatedByEmployeeId BigInt?   @map("updated_by_employee_id")
-  createdAt           DateTime  @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt           DateTime  @default(now()) @map("updated_at") @db.Timestamptz
+  createdAt           DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime  @default(now()) @map("updated_at") @db.Timestamptz(6)
 
+  // ★ 추가된 관계들
   shop       Shop               @relation(fields: [shopId], references: [id])
   employee   EmployeeMember     @relation(fields: [employeeId], references: [id])
   settlement PayrollSettlement? @relation("SettlementToShifts", fields: [settlementId], references: [id])
 
+  @@index([employeeId, status], map: "idx_ws_employee_status")
+  @@index([id(sort: Desc)], map: "idx_ws_id_desc")
+  @@index([settlementId], map: "idx_ws_settlement")
+  @@index([shopId, employeeId, isSettled], map: "idx_ws_shop_emp_settled")
+  @@index([shopId, employeeId, startAt], map: "idx_ws_shop_emp_start")
   @@map("work_shifts")
 }
 
@@ -131,22 +144,63 @@ model PayrollSettlement {
   id             BigInt   @id @default(autoincrement())
   shopId         BigInt   @map("shop_id")
   employeeId     BigInt   @map("employee_id")
-  cycleStart     DateTime @map("cycle_start") @db.Timestamptz
-  cycleEnd       DateTime @map("cycle_end") @db.Timestamptz
+  cycleStart     DateTime @map("cycle_start") @db.Timestamptz(6)
+  cycleEnd       DateTime @map("cycle_end") @db.Timestamptz(6)
   workedMinutes  Int      @map("worked_minutes")
   basePay        Int      @map("base_pay")
   totalPay       Int      @map("total_pay")
-  settledAt      DateTime @map("settled_at") @db.Timestamptz
+  settledAt      DateTime @default(now()) @map("settled_at") @db.Timestamptz(6)
   processedBy    BigInt?  @map("processed_by")
   note           String?
   incomeTax      Int      @default(0) @map("income_tax")
   localIncomeTax Int      @default(0) @map("local_income_tax")
   netPay         Int      @default(0) @map("net_pay")
   otherTax       Int      @default(0) @map("other_tax")
+  created_at     DateTime @default(now()) @db.Timestamptz(6)
+  updated_at     DateTime @default(now()) @db.Timestamptz(6)
 
+  // ★ 추가된 관계들
   shop       Shop           @relation("ShopToSettlements", fields: [shopId], references: [id])
   employee   EmployeeMember @relation("EmpToSettlements", fields: [employeeId], references: [id])
   workShifts WorkShift[]    @relation("SettlementToShifts")
 
+  @@index([employeeId, cycleStart, cycleEnd], map: "idx_ps_employee_cycle")
+  @@index([settledAt], map: "idx_ps_settled_at")
+  @@index([shopId, cycleStart, cycleEnd], map: "idx_ps_shop_cycle")
   @@map("payroll_settlements")
+}
+
+/**
+ * ============= 기타 ( 남겨둘 경우 ) =============
+ */
+model refresh_tokens {
+  id          BigInt   @id @default(autoincrement())
+  user_id     BigInt
+  token_hash  String   @db.Char(64)
+  issued_at   DateTime @default(now()) @db.Timestamptz(6)
+  expires_at  DateTime @db.Timestamptz(6)
+  revoked     Boolean  @default(false)
+  replaced_by BigInt?
+  user_agent  String?  @db.VarChar(300)
+  ip_address  String?  @db.Inet
+  users       User     @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([token_hash], map: "idx_refresh_tokens_hash")
+  @@index([user_id], map: "idx_refresh_tokens_user")
+}
+
+model social_accounts {
+  id               BigInt   @id @default(autoincrement())
+  user_id          BigInt
+  provider         String   @db.VarChar(20)
+  provider_user_id String   @db.VarChar(200)
+  email            String?  @db.VarChar(200)
+  display_name     String?  @db.VarChar(200)
+  created_at       DateTime @default(now()) @db.Timestamptz(6)
+  users            User     @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([provider, provider_user_id])
+  @@index([created_at], map: "idx_social_accounts_created_at")
+  @@index([provider], map: "idx_social_accounts_provider")
+  @@index([user_id], map: "idx_social_accounts_user_id")
 }

@@ -18,3 +18,14 @@ export const toJSONSafe = <T>(data: T): any => {
     )
   );
 };
+
+export const asBigInt = (v: number | string | bigint | undefined | null, name = 'id'): bigint => {
+  if (v === undefined || v === null) throw new Error(`${name} required`);
+  if (typeof v === 'bigint') return v;
+  if (typeof v === 'number') {
+    if (!Number.isFinite(v)) throw new Error(`${name} must be finite number`);
+    return BigInt(v);
+  }
+  if (/^\d+$/.test(v)) return BigInt(v);
+  throw new Error(`${name} must be numeric`);
+};

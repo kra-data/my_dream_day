@@ -6,7 +6,7 @@ import { healthCheck } from '../controllers/healthController';
 import adminRoutes from './adminRoutes';
 import attendanceRoutes from './attendanceRoutes';
 import { requireUser, withUser } from '../middlewares/requireUser';
-// import myRoutes from './myRoutes';
+import myRoutes from './myRoutes';
 const router = Router();
 
 /* Health */
@@ -51,7 +51,7 @@ router.use('/admin',      adminRoutes);
 router.use('/attendance', attendanceRoutes);
 
 
-// router.use('/', myRoutes);
+router.use('/', myRoutes);
 
 
 export default router;
