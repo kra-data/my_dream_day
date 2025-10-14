@@ -37,21 +37,21 @@ router.post(
   '/my/workshifts',
   authenticateJWT,
   requireUser,
-  requireRoles('EMPLOYEE'),
+  requireRoles('employee'),
   withUser((req: AuthRequiredRequest, res, _next) => myCreateShift(req, res))
 );
 router.put(
   '/my/workshifts/:shiftId',
   authenticateJWT,
   requireUser,
-  requireRoles('EMPLOYEE'),
+  requireRoles('employee'),
   withUser((req: AuthRequiredRequest, res) => myUpdateShift(req, res))
 );
 router.get(
   '/my/workshifts',
   authenticateJWT,
   requireUser,
-  requireRoles('EMPLOYEE'),
+  requireRoles('employee'),
   withUser((req: AuthRequiredRequest, res, _next) => myListShifts(req, res))
 );
 // (직원) 오늘 내 근무일정
@@ -59,7 +59,7 @@ router.get(
   '/my/workshifts/today',
   authenticateJWT,
   requireUser,
-  requireRoles('EMPLOYEE'),
+  requireRoles('employee'),
   withUser((req: AuthRequiredRequest, res) => getMyTodayWorkshifts(req, res))
 );
 // (직원) 내 정보/급여 개요
@@ -67,7 +67,7 @@ router.get(
   '/my/overview',
   authenticateJWT,
   requireUser,
-  requireRoles('EMPLOYEE'),
+  requireRoles('employee'),
   withUser((req: AuthRequiredRequest, res) => getMyProfileOverview(req, res))
 );
 
@@ -75,7 +75,7 @@ router.delete(
   '/my/workshifts/:shiftId',
   authenticateJWT,
   requireUser,
-  requireRoles('EMPLOYEE'),
+  requireRoles('employee'),
   withUser((req: AuthRequiredRequest, res) => myDeleteShift(req, res))
 );
 export default router;

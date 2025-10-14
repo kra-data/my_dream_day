@@ -15,7 +15,7 @@ const requireOwnerOrManager = (req: AuthRequest): { userId: bigint; ok: boolean 
   const uid = req.user?.userId;
   const role = req.user?.shopRole;
   if (uid == null) return { ok: false, userId: 0n };
-  if (!role || (role !== 'OWNER' && role !== 'ADMIN')) {
+  if (!role || (role !== 'admin' && role !== 'admin')) {
     return { ok: false, userId: 0n };
   }
   return { ok: true, userId: BigInt(uid) };
@@ -65,7 +65,7 @@ import {
  *  - 전화번호는 숫자만 저장, 초기 비밀번호 = 휴대폰 뒤 4자리(bcrypt hash)
  *  - (shopId, name, phone) 중복이면 409
  *  - 주민번호가 오면 13자리 숫자 검증 후 enc/hash/masked 저장
- *  - 응답: { id, name, phone, role: 'EMPLOYEE' }
+ *  - 응답: { id, name, phone, role: 'employee' }
  *  (Spring: AdminEmployeeApi.createEmployee)  */
 export const createEmployee = async (req: AuthRequest, res: Response) => {
   const auth = requireOwnerOrManager(req);
@@ -116,7 +116,7 @@ const requestedPayUnit = parsed.data.payUnit ?? 'HOURLY';
     data: {
       shopId,
       name,
-      shopRole:'EMPLOYEE',
+      shopRole:'employee',
       phone: phoneDigits,
       passwordHash,
       bankName: parsed.data.bankName?.trim() ?? null,
@@ -130,7 +130,7 @@ const requestedPayUnit = parsed.data.payUnit ?? 'HOURLY';
     select: { id: true, name: true, phone: true },
   });
 
-  res.status(201).json(toPlain({ id: saved.id, name: saved.name, phone: saved.phone, role: 'EMPLOYEE' }));
+  res.status(201).json(toPlain({ id: saved.id, name: saved.name, phone: saved.phone, role: 'employee' }));
 };
 
 /** ─────────────────────────────────────────────────────────
@@ -139,7 +139,7 @@ const requestedPayUnit = parsed.data.payUnit ?? 'HOURLY';
  *  - phone 변경 시 뒤4자리 재해시 → passwordHash 동기화
  *  - (shopId, name, phone) 중복(본인 제외) 409
  *  - nationalId: "" 이면 해제(null), 값 있으면 13자리 검증 후 enc/hash/masked 재설정
- *  - 응답: { id, name, phone, role: 'EMPLOYEE' }
+ *  - 응답: { id, name, phone, role: 'employee' }
  *  (Spring: AdminEmployeeApi.updateEmployee / AdminEmployeeService.updateEmployee)  */
 export const updateEmployee = async (req: AuthRequest, res: Response) => {
   const auth = requireOwnerOrManager(req);
@@ -212,7 +212,7 @@ const empId = parseId(empRaw);
     select: { id: true, name: true, phone: true },
   });
 
-  res.json(toPlain({ id: saved.id, name: saved.name, phone: saved.phone, role: 'EMPLOYEE' }));
+  res.json(toPlain({ id: saved.id, name: saved.name, phone: saved.phone, role: 'employee' }));
 };
 
 /** ─────────────────────────────────────────────────────────
@@ -272,7 +272,7 @@ const list = items.map(i => ({
   id: Number(i.id),      // ← BigInt → number 변환
   name: i.name,
   phone: i.phone,
-  role: 'EMPLOYEE' as const
+  role: 'employee' as const
 }));
 
 const nextCursor = list.length > 0 ? list[list.length - 1].id : null;

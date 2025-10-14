@@ -47,13 +47,13 @@ export const register = async (req: Request, res: Response): Promise<void> => {
 
   const passwordHash = await bcrypt.hash(password, 12);
 
-  // Role.ADMIN(=사장) 로직: role 컬럼은 문자열, 스프링에선 Role.ADMIN 사용
+  // Role.admin(=사장) 로직: role 컬럼은 문자열, 스프링에선 Role.admin 사용
   const user = await prisma.user.create({
     data: {
       loginId,
       passwordHash,
       name,
-      role: 'ADMIN',
+      role: 'admin',
     },
   });
 
@@ -96,7 +96,7 @@ const u = await prisma.user.findFirst({
   const shopCandidates = owned.map((s) => ({
     shopId: Number(s.id),
     name: s.name,
-    shopRole: 'ADMIN',
+    shopRole: 'admin',
   }));
 
   // 선택 로직 (스프링과 동일)
@@ -121,7 +121,7 @@ const u = await prisma.user.findFirst({
   }
 
   const chosenShopId = chosen ? Number(chosen.id) : null;
-  const chosenShopRole = 'ADMIN'
+  const chosenShopRole = 'admin'
 
   const accessToken = signToken(
     {
@@ -175,7 +175,7 @@ export const selectShop = async (req: AuthRequiredRequest, res: Response) : Prom
       userId: Number(u.id),
       loginId: u.loginId,
       shopId: Number(shop.id),
-      shopRole: 'OWNER',
+      shopRole: 'admin',
     },
     { expiresIn: '1h' }
   );
@@ -184,7 +184,7 @@ export const selectShop = async (req: AuthRequiredRequest, res: Response) : Prom
       userId: Number(u.id),
       loginId: u.loginId,
       shopId: Number(shop.id),
-      shopRole: 'OWNER',
+      shopRole: 'admin',
     },
     { expiresIn: '14d' }
   );
@@ -193,7 +193,7 @@ export const selectShop = async (req: AuthRequiredRequest, res: Response) : Prom
     accessToken,
     refreshToken,
     selectedShopId: Number(shop.id),
-    selectedShopRole: 'OWNER',
+    selectedShopRole: 'admin',
     chooseRequired: false,
     shops: [],
   });
