@@ -564,7 +564,7 @@ DayShift: {
 
 Position: {
   type: 'string',
-enum: ['OWNER','MANAGER','STAFF','PART_TIME'],
+enum: ['admin','MANAGER','STAFF','PART_TIME'],
   description: '직급(기본값: STAFF)'
 },
 
@@ -612,11 +612,11 @@ ShopLite: {
   properties: {
     shopId:   { type: 'integer', example: 1 },
     name:     { type: 'string',  example: '길동분식' },
-    shopRole: { type: 'string',  enum: ['OWNER'], example: 'OWNER' }
+    shopRole: { type: 'string',  enum: ['admin'], example: 'admin' }
   }
 },
 
-// ✅ 사장님(ADMIN/OWNER) 전용
+// ✅ 사장님(admin/admin) 전용
 OwnerRegisterRequest: {
   type: 'object',
   required: ['loginId', 'password', 'name', 'phone', 'nationalId'],
@@ -652,7 +652,7 @@ OwnerLoginResponse: {
     accessToken:      { type: ['string','null'] },
     refreshToken:     { type: ['string','null'] },
     selectedShopId:   { type: ['integer','null'] },
-    selectedShopRole: { type: ['string','null'], enum: ['OWNER', null] },
+    selectedShopRole: { type: ['string','null'], enum: ['admin', null] },
     chooseRequired:   { type: 'boolean', example: false },
     shops:            { type: 'array', items: { $ref: '#/components/schemas/ShopLite' } }
   }
@@ -675,7 +675,7 @@ RefreshResponseV2: {
     accessToken: { type: 'string' },
     refreshToken:{ type: 'string' },
     shopId:      { type: ['integer','null'] },
-    shopRole:    { type: ['string','null'], enum: ['OWNER', 'EMPLOYEE', null] }
+    shopRole:    { type: ['string','null'], enum: ['admin', 'employee', null] }
   }
 },
 

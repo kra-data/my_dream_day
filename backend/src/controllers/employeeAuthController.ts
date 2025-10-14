@@ -44,7 +44,7 @@ export const employeeLogin = async (req: Request, res: Response): Promise<void> 
     {
       userId: Number(emp.id), // 스프링은 employeeId로 subject를 쓰지만, 여기선 payload내에 포함
       shopId: Number(emp.shopId),
-      shopRole: emp.shopRole, // "EMPLOYEE" 등
+      shopRole: emp.shopRole, // "employee" 등
     },
     { expiresIn: '1h' }
   );
