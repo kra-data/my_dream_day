@@ -1,81 +1,81 @@
-// // routes/myRoutes.ts
-// import { Router } from 'express';
-// import {
-//   authenticateJWT,
-//   UserRole,
-//   AuthRequest
-// } from '../middlewares/jwtMiddleware';
+// routes/myRoutes.ts
+import { Router } from 'express';
+import {
+  authenticateJWT,
+  UserRole,
+  AuthRequest
+} from '../middlewares/jwtMiddleware';
 
-// import {
-//   requireUser,
-//   withUser,
-//   AuthRequiredRequest
-// } from '../middlewares/requireUser';
-// import {
-//   myCreateShift,
-//   myListShifts,
-//   getMyTodayWorkshifts,
-//   myUpdateShift,
-//   myDeleteShift
-// } from '../controllers/workShiftController';
-// import { getMyProfileOverview } from '../controllers/meController';
-// const router = Router();
+import {
+  requireUser,
+  withUser,
+  AuthRequiredRequest
+} from '../middlewares/requireUser';
+import {
+  myCreateShift,
+  myListShifts,
+  getMyTodayWorkshifts,
+  myUpdateShift,
+  myDeleteShift
+} from '../controllers/workShiftController';
+import { getMyProfileOverview } from '../controllers/meController';
+const router = Router();
 
-// /** 공통 역할 가드: 허용된 역할만 통과 (attendanceRoutes.ts와 동일 패턴) */
-// const requireRoles =
-//   (...allowed: ReadonlyArray<UserRole>) =>
-//   (req: AuthRequest, res: any, next: any) => {
-//     const shopRole = req.user?.shopRole as UserRole | undefined;
-//     if (!shopRole || !allowed.includes(shopRole)) {
-//       res.status(403).json({ error: '권한이 필요합니다.' });
-//       return;
-//     }
-//     next();
-//   };
+/** 공통 역할 가드: 허용된 역할만 통과 (attendanceRoutes.ts와 동일 패턴) */
+const requireRoles =
+  (...allowed: ReadonlyArray<UserRole>) =>
+  (req: AuthRequest, res: any, next: any) => {
+    const shopRole = req.user?.shopRole as UserRole | undefined;
+    if (!shopRole || !allowed.includes(shopRole)) {
+      res.status(403).json({ error: '권한이 필요합니다.' });
+      return;
+    }
+    next();
+  };
 
-// router.post(
-//   '/my/workshifts',
-//   authenticateJWT,
-//   requireUser,
-//   requireRoles('employee'),
-//   withUser((req: AuthRequiredRequest, res, _next) => myCreateShift(req, res))
-// );
-// router.put(
-//   '/my/workshifts/:shiftId',
-//   authenticateJWT,
-//   requireUser,
-//   requireRoles('employee'),
-//   withUser((req: AuthRequiredRequest, res) => myUpdateShift(req, res))
-// );
-// router.get(
-//   '/my/workshifts',
-//   authenticateJWT,
-//   requireUser,
-//   requireRoles('employee'),
-//   withUser((req: AuthRequiredRequest, res, _next) => myListShifts(req, res))
-// );
-// // (직원) 오늘 내 근무일정
-// router.get(
-//   '/my/workshifts/today',
-//   authenticateJWT,
-//   requireUser,
-//   requireRoles('employee'),
-//   withUser((req: AuthRequiredRequest, res) => getMyTodayWorkshifts(req, res))
-// );
-// // (직원) 내 정보/급여 개요
-// router.get(
-//   '/my/overview',
-//   authenticateJWT,
-//   requireUser,
-//   requireRoles('employee'),
-//   withUser((req: AuthRequiredRequest, res) => getMyProfileOverview(req, res))
-// );
+router.post(
+  '/my/workshifts',
+  authenticateJWT,
+  requireUser,
+  requireRoles('EMPLOYEE'),
+  withUser((req: AuthRequiredRequest, res, _next) => myCreateShift(req, res))
+);
+router.put(
+  '/my/workshifts/:shiftId',
+  authenticateJWT,
+  requireUser,
+  requireRoles('EMPLOYEE'),
+  withUser((req: AuthRequiredRequest, res) => myUpdateShift(req, res))
+);
+router.get(
+  '/my/workshifts',
+  authenticateJWT,
+  requireUser,
+  requireRoles('EMPLOYEE'),
+  withUser((req: AuthRequiredRequest, res, _next) => myListShifts(req, res))
+);
+// (직원) 오늘 내 근무일정
+router.get(
+  '/my/workshifts/today',
+  authenticateJWT,
+  requireUser,
+  requireRoles('EMPLOYEE'),
+  withUser((req: AuthRequiredRequest, res) => getMyTodayWorkshifts(req, res))
+);
+// (직원) 내 정보/급여 개요
+router.get(
+  '/my/overview',
+  authenticateJWT,
+  requireUser,
+  requireRoles('EMPLOYEE'),
+  withUser((req: AuthRequiredRequest, res) => getMyProfileOverview(req, res))
+);
 
-// router.delete(
-//   '/my/workshifts/:shiftId',
-//   authenticateJWT,
-//   requireUser,
-//   requireRoles('employee'),
-//   withUser((req: AuthRequiredRequest, res) => myDeleteShift(req, res))
-// );
-// export default router;
+router.delete(
+  '/my/workshifts/:shiftId',
+  authenticateJWT,
+  requireUser,
+  requireRoles('EMPLOYEE'),
+  withUser((req: AuthRequiredRequest, res) => myDeleteShift(req, res))
+);
+export default router;
