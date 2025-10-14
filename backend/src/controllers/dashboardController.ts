@@ -1,9 +1,9 @@
-// src/controllers/dashboardController.ts  (파일명이 다르면 기존 파일 교체)
+// src/controllers/dashboardController.ts
 import { Response } from 'express';
 import { prisma } from '../db/prisma';
 import { AuthRequest } from '../middlewares/jwtMiddleware';
 import { z } from 'zod';
-
+import { toJSONSafe, asBigInt } from '../utils/serialize';
 /* ───────── KST 유틸 ───────── */
 const toKst = (d: Date) => new Date(d.getTime() + 9 * 60 * 60 * 1000);
 const fromKstParts = (y: number, m1: number, d: number, hh = 0, mm = 0, ss = 0, ms = 0) =>
@@ -17,6 +17,7 @@ const endOfKstDay = (anchor: Date) => {
   return fromKstParts(k.getUTCFullYear(), k.getUTCMonth(), k.getUTCDate(), 23, 59, 59, 999);
 };
 const maxDate = (a: Date, b: Date) => (a > b ? a : b);
+
 /* ───────── 분 계산 유틸 ───────── */
 const diffMinutes = (a: Date, b: Date) => Math.max(0, Math.floor((b.getTime() - a.getTime()) / 60000));
 const intersectMinutes = (a0: Date, a1: Date, b0: Date, b1: Date) => {
@@ -42,12 +43,16 @@ export const todaySummary = async (req: AuthRequest, res: Response) => {
   const now = new Date();
 
   // 오늘(KST)과 교집합 있는, 취소되지 않은 시프트만 집계
+  // ✅ endAt = null (open-ended) 도 포함
   const shifts = await prisma.workShift.findMany({
     where: {
       shopId,
       status: { not: 'CANCELED' as any },
       startAt: { lt: end },
-      endAt:   { gt: start },
+      OR: [
+        { endAt: null },
+        { endAt: { gt: start } },
+      ],
     },
     select: {
       id: true,
@@ -67,7 +72,7 @@ export const todaySummary = async (req: AuthRequest, res: Response) => {
     !s.actualInAt && now >= s.startAt && (s.endAt ? now <= s.endAt : true)
   ).length;
 
-  // 결근: 아직 출근 안 했고, 시프트 종료가 이미 지난 경우
+  // 결근: 아직 출근 안 했고, 시프트 종료가 이미 지난 경우(종료가 있어야 결근 판정)
   const absent = shifts.filter(s =>
     !s.actualInAt && (s.endAt ? now > s.endAt : false)
   ).length;
@@ -91,20 +96,20 @@ export const activeEmployees = async (req: AuthRequest, res: Response) => {
   const shopId = Number(req.params.shopId);
 
   // 1) 직원 기본 정보
-  const employees = await prisma.employee.findMany({
+  const employees = await prisma.employeeMember.findMany({
     where: { shopId },
-    select: { id: true, name: true, position: true, section: true }
+    select: { id: true, name: true, position: true, section: true, personalColor: true }
   });
 
-  // 2) 출근중(실시간 IN, 미-OUT)
+  // 2) 출근중(실시간 IN, 미-OUT). 상태는 IN_PROGRESS가 일반적이므로 함께 필터
   const onDuty = await prisma.workShift.findMany({
-    where: { shopId, actualInAt: { not: null }, actualOutAt: null,status: 'IN_PROGRESS'  },
+    where: { shopId, actualInAt: { not: null }, actualOutAt: null, status: 'IN_PROGRESS' as any },
     select: { employeeId: true },
   });
 
   // 3) 리뷰 상태(미해결 REVIEW)
   const reviews = await prisma.workShift.findMany({
-    where: { shopId, status: 'REVIEW', reviewResolvedAt: null },
+    where: { shopId, status: 'REVIEW' as any, reviewResolvedAt: null },
     select: { employeeId: true },
   });
 
@@ -122,10 +127,11 @@ export const activeEmployees = async (req: AuthRequest, res: Response) => {
                              '퇴근';
 
     return {
-      employeeId: emp.id,
-      name:       emp.name,
-      position:   emp.position,
-      section:    emp.section,
+      employeeId:   emp.id,
+      name:         emp.name,
+      position:     emp.position,
+      section:      emp.section,
+      personalColor: emp.personalColor ?? null,
       status,         // 'ON_DUTY' | 'REVIEW' | 'OFF'
       statusLabel,    // '출근중' | '리뷰상태' | '퇴근'
     };
@@ -134,13 +140,15 @@ export const activeEmployees = async (req: AuthRequest, res: Response) => {
   // 출근중 → 리뷰상태 → 퇴근, 이후 이름순
   const order: Record<StatusCode, number> = { ON_DUTY: 0, REVIEW: 1, OFF: 2 };
   items.sort((a, b) => {
-    const d = order[a.status as StatusCode] - order[b.status as StatusCode];
+    const d = order[a.status] - order[b.status];
     if (d !== 0) return d;
     return a.name.localeCompare(b.name, 'ko');
   });
 
-  res.json(items);
+  res.json(toJSONSafe(items));
 };
+
+
 /* ───────────────────────────────────────────
  *  3) 최근 출‧퇴근 활동
  *     GET /api/admin/shops/:shopId/dashboard/recent?limit=30
@@ -151,7 +159,7 @@ export const recentActivities = async (req: AuthRequest, res: Response) => {
   const shopId = Number(req.params.shopId);
   const parsed = recentQuerySchema.safeParse(req.query);
   if (!parsed.success) { res.status(400).json({ error: 'Invalid limit' }); return; }
-  const take   = Math.min(Number(parsed.data.limit ?? 30), 100);
+  const take = Math.min(Number(parsed.data.limit ?? 30), 100);
 
   // 시프트 단위 최근 활동: OUT이 있으면 OUT 우선, 없으면 IN 기준으로 최신 정렬
   const logs = await prisma.workShift.findMany({
@@ -165,18 +173,18 @@ export const recentActivities = async (req: AuthRequest, res: Response) => {
       { startAt: 'desc' }
     ],
     take,
-    include: { employee: { select: { name: true, position: true, section: true } } }
+    include: {
+      employee: { select: { name: true, position: true, section: true, personalColor: true } }
+    }
   });
 
   const items = logs.map(l => {
     const type: 'IN' | 'OUT' = l.actualOutAt ? 'OUT' : 'IN';
     const workedMinutes =
-l.actualInAt && l.actualOutAt
+      l.actualInAt && l.actualOutAt
         ? (
-            // endAt 이 있는 경우: 기존 교집합 계산
             l.endAt
               ? intersectMinutes(l.actualInAt, l.actualOutAt, l.startAt, l.endAt)
-              // endAt 이 없는 경우: [in~out] ∩ [start~∞] = max(in,start) ~ out
               : diffMinutes(maxDate(l.actualInAt, l.startAt), l.actualOutAt)
           )
         : null;
@@ -188,11 +196,12 @@ l.actualInAt && l.actualOutAt
       name:          l.employee.name,
       position:      l.employee.position,
       section:       l.employee.section,
+      personalColor: l.employee.personalColor ?? null,
       clockInAt:     l.actualInAt,
       clockOutAt:    l.actualOutAt,
       workedMinutes
     };
   });
 
-  res.json(items);
+  res.json(toJSONSafe(items));
 };

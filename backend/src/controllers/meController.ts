@@ -1,13 +1,13 @@
-
 import { Response } from 'express';
 import { prisma } from '../db/prisma';
 import { AuthRequiredRequest } from '../middlewares/requireUser';
-
+import { toJSONSafe, asBigInt } from '../utils/serialize';
 // ───────── KST 보조 유틸 ─────────
 const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
 const toKST = (d: Date) => new Date(d.getTime() + KST_OFFSET_MS);
-const fromKstParts = (y: number, m1: number, d: number, hh = 0, mm = 0, ss = 0, ms = 0) =>
-  new Date(Date.UTC(y, m1, d, hh - 9, mm, ss, ms));
+const fromKstParts = (
+  y: number, m1: number, d: number, hh = 0, mm = 0, ss = 0, ms = 0
+) => new Date(Date.UTC(y, m1, d, hh - 9, mm, ss, ms));
 const startOfKstMonth = (anchor: Date) => {
   const k = toKST(anchor);
   return fromKstParts(k.getUTCFullYear(), k.getUTCMonth(), 1, 0, 0, 0, 0);
@@ -23,31 +23,35 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
 
 /** 직원 본인 개요 조회 */
 export const getMyProfileOverview = async (req: AuthRequiredRequest, res: Response) => {
-  const userId = req.user.userId;
+  const employeeId = req.user.userId; // = EmployeeMember.id
   const now = new Date();
   const thisMonthStart = startOfKstMonth(now);
   const thisMonthEnd   = endOfKstMonth(now);
+
   const prev = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 15));
   const prevMonthStart = startOfKstMonth(prev);
   const prevMonthEnd   = endOfKstMonth(prev);
 
-  // 직원 + 매장(payday) 가져오기
-  const me = await prisma.employee.findUnique({
-    where: { id: userId },
+  // 직원 기본 정보
+  const me = await prisma.employeeMember.findUnique({
+    where: { id: employeeId },
     select: {
       id: true,
       name: true,
       section: true,
       position: true,
-      pay: true,
-      payUnit: true,
+      pay: true,          // Decimal
+      payUnit: true,      // 'HOURLY' | 'MONTHLY' (string)
       phone: true,
-      accountNumber: true,
-      bank: true,
+      bankAccount: true,  // ✅ 스키마 필드명
+      bankName: true,     // ✅ 스키마 필드명
       shopId: true
     }
   });
   if (!me) { res.status(404).json({ error: 'Employee not found' }); return; }
+
+  // Decimal -> number (null/undefined 방어)
+  const payNumber = me.pay != null ? Number(me.pay) : 0;
 
   // 저번달(달력 기준) 정산 스냅샷(있으면)
   const lastSettlement = await prisma.payrollSettlement.findFirst({
@@ -57,37 +61,45 @@ export const getMyProfileOverview = async (req: AuthRequiredRequest, res: Respon
       cycleEnd:   { lte: prevMonthEnd }
     },
     orderBy: { cycleEnd: 'desc' },
-    select: { id: true, basePay: true, totalPay: true, netPay: true, incomeTax: true, localIncomeTax: true, otherTax: true }
+    select: {
+      id: true,
+      basePay: true,
+      totalPay: true,
+      netPay: true,
+      incomeTax: true,
+      localIncomeTax: true,
+      otherTax: true
+    }
   });
 
-  // 이번달 확정 근무(달력 기준) 집계
+  // 이번달 확정 근무(달력 기준) 집계 (COMPLETED & 이번달에 종료된 것만)
   const monthShifts = await prisma.workShift.findMany({
     where: {
       employeeId: me.id,
       status: 'COMPLETED',
-      // 이번달 내에서 마감된 건만 집계(중복 방지)
       endAt: { gte: thisMonthStart, lte: thisMonthEnd }
     },
     select: { workedMinutes: true, finalPayAmount: true }
   });
 
-  const workedMinutesThisMonth = monthShifts.reduce((acc, s) => acc + (s.workedMinutes ?? 0), 0);
+  const workedMinutesThisMonth = monthShifts.reduce(
+    (acc, s) => acc + (s.workedMinutes ?? 0), 0
+  );
 
-  // 예상 총 급여(달력 기준):
-  //  - HOURLY: finalPayAmount 합(없으면 workedMinutes*시급 보정)
+  // 예상 총 급여:
+  //  - HOURLY: finalPayAmount 합(없으면 workedMinutes*시급)
   //  - MONTHLY: 월급(pay)
   let expectedTotal = 0;
   if (me.payUnit === 'HOURLY') {
     const fallbackPerShift = (wm?: number | null) =>
-      wm && me.pay ? Math.round((wm / 60) * me.pay) : 0;
+      wm ? Math.round((wm / 60) * payNumber) : 0;
     expectedTotal = monthShifts.reduce(
       (acc, s) => acc + (s.finalPayAmount ?? fallbackPerShift(s.workedMinutes)),
       0
     );
   } else if (me.payUnit === 'MONTHLY') {
-    expectedTotal = me.pay ?? 0;
+    expectedTotal = payNumber;
   } else {
-    // 미지정/레거시 안전장치
     expectedTotal = 0;
   }
 
@@ -96,18 +108,18 @@ export const getMyProfileOverview = async (req: AuthRequiredRequest, res: Respon
   const deduction = Math.round(expectedTotal * WITHHOLDING_RATE);
   const expectedNet = expectedTotal - deduction;
 
-  res.json({
+  res.json(toJSONSafe({
     id: me.id,
     name: me.name,
     section: me.section,
     position: me.position,
-    pay: me.pay,
+    pay: payNumber,
     payUnit: me.payUnit,
     phone: me.phone,
-    accountNumber: me.accountNumber,
-    bank: me.bank,
+    bankAccount: me.bankAccount ?? null,
+    bank: me.bankName ?? null,
 
-    lastMonthSettlementAmount: lastSettlement?.netPay ?? null, // 정산 실지급 기준
+    lastMonthSettlementAmount: lastSettlement?.netPay ?? null,
 
     thisMonth: {
       workedMinutes: workedMinutesThisMonth,
@@ -116,5 +128,5 @@ export const getMyProfileOverview = async (req: AuthRequiredRequest, res: Respon
     expectedTotalPay: expectedTotal,
     deductionAmount: deduction,
     expectedNetPay: expectedNet
-  });
+  }));
 };

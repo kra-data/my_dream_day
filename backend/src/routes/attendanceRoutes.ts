@@ -24,8 +24,9 @@ const router = Router();
 const requireRoles =
   (...allowed: ReadonlyArray<UserRole>) =>
   (req: AuthRequest, res: any, next: any) => {
-    const role = req.user?.role as UserRole | undefined;
-    if (!role || !allowed.includes(role)) {
+    const shopRole = req.user?.shopRole as UserRole | undefined;
+    console.log(shopRole)
+    if (!shopRole || !allowed.includes(shopRole)) {
       res.status(403).json({ error: '권한이 필요합니다.' });
       return;
     }
@@ -39,7 +40,7 @@ router.post(
   '/',
   authenticateJWT,
   requireUser,                  // req.user 보장
-  requireRoles('employee'),     // 직원만
+  requireRoles('EMPLOYEE'),     // 직원만
   withUser((req: AuthRequiredRequest, res) => recordAttendance(req, res))
 );
 /** QR 스캔 시간 기반 제안(미리보기): IN은 shiftId 선택, OUT은 필수 */
@@ -47,7 +48,7 @@ router.post(
   '/preview',
   authenticateJWT,
   requireUser,
-  requireRoles('employee'),
+  requireRoles('EMPLOYEE'),
   withUser((req: AuthRequiredRequest, res) => previewAttendanceTime(req, res))
 );
 
@@ -56,7 +57,7 @@ router.get(
   '/me/status',
   authenticateJWT,
   requireUser,
-  requireRoles('employee'),
+  requireRoles('EMPLOYEE'),
   withUser((req: AuthRequiredRequest, res) => getMyCurrentStatus(req, res))
 );
 
@@ -65,13 +66,13 @@ router.get(
 /** 가게의 출퇴근 기록 조회(커서 기반)
  *  내부적으로 WorkShift를 조회해 AttendanceRecord 형태로 매핑해서 반환
  */
-router.get(
-  '/admin/shops/:shopId/attendance',
-  authenticateJWT,
-  requireUser,
-  requireRoles('admin', 'owner'),   // 점주(owner) 허용
-  withUser((req: AuthRequiredRequest, res) => getAttendanceRecords(req, res))
-);
+// router.get(
+//   '/admin/shops/:shopId/attendance',
+//   authenticateJWT,
+//   requireUser,
+//   requireRoles('admin', 'owner'),   // 점주(owner) 허용
+//   withUser((req: AuthRequiredRequest, res) => getAttendanceRecords(req, res))
+// );
 
 
 

@@ -25,8 +25,8 @@ const router = Router();
 const requireRoles =
   (...allowed: ReadonlyArray<UserRole>) =>
   (req: AuthRequest, res: any, next: any) => {
-    const role = req.user?.role as UserRole | undefined;
-    if (!role || !allowed.includes(role)) {
+    const shopRole = req.user?.shopRole as UserRole | undefined;
+    if (!shopRole || !allowed.includes(shopRole)) {
       res.status(403).json({ error: '권한이 필요합니다.' });
       return;
     }
@@ -37,21 +37,21 @@ router.post(
   '/my/workshifts',
   authenticateJWT,
   requireUser,
-  requireRoles('employee'),
+  requireRoles('EMPLOYEE'),
   withUser((req: AuthRequiredRequest, res, _next) => myCreateShift(req, res))
 );
 router.put(
   '/my/workshifts/:shiftId',
   authenticateJWT,
   requireUser,
-  requireRoles('employee'),
+  requireRoles('EMPLOYEE'),
   withUser((req: AuthRequiredRequest, res) => myUpdateShift(req, res))
 );
 router.get(
   '/my/workshifts',
   authenticateJWT,
   requireUser,
-  requireRoles('employee'),
+  requireRoles('EMPLOYEE'),
   withUser((req: AuthRequiredRequest, res, _next) => myListShifts(req, res))
 );
 // (직원) 오늘 내 근무일정
@@ -59,7 +59,7 @@ router.get(
   '/my/workshifts/today',
   authenticateJWT,
   requireUser,
-  requireRoles('employee'),
+  requireRoles('EMPLOYEE'),
   withUser((req: AuthRequiredRequest, res) => getMyTodayWorkshifts(req, res))
 );
 // (직원) 내 정보/급여 개요
@@ -67,7 +67,7 @@ router.get(
   '/my/overview',
   authenticateJWT,
   requireUser,
-  requireRoles('employee'),
+  requireRoles('EMPLOYEE'),
   withUser((req: AuthRequiredRequest, res) => getMyProfileOverview(req, res))
 );
 
@@ -75,7 +75,7 @@ router.delete(
   '/my/workshifts/:shiftId',
   authenticateJWT,
   requireUser,
-  requireRoles('employee'),
+  requireRoles('EMPLOYEE'),
   withUser((req: AuthRequiredRequest, res) => myDeleteShift(req, res))
 );
 export default router;

@@ -40,7 +40,7 @@ function hmacSha256Base64(plain: string): string {
 /** ───────── 메인 ───────── */
 async function main() {
   // 1) 백필 대상 조회: 아직 암호화 안 되었고, nationalId가 빈 문자열이 아닌 것만
-  const targets = await prisma.employee.findMany({
+  const targets = await prisma.employeeMember.findMany({
     where: {
       nationalIdEnc: null,        // 아직 미백필
       NOT: { nationalId: '' },    // 빈 문자열 제외 (nullable 아님)
@@ -62,7 +62,7 @@ async function main() {
       const hash = hmacSha256Base64(plain);
       const masked = maskNationalId(plain);
 
-      return prisma.employee.update({
+      return prisma.employeeMember.update({
         where: { id: row.id },
         data: {
           nationalIdEnc: enc,

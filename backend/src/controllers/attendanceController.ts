@@ -4,7 +4,7 @@ import { prisma } from '../db/prisma';
 import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { AuthRequiredRequest } from '../middlewares/requireUser';
-
+import {toJSONSafe} from '../utils/serialize'
 /* ───────── KST 유틸 ───────── */
 const toKst = (d: Date) => new Date(d.getTime() + 9 * 60 * 60 * 1000);
 const fromKstParts = (y: number, m1: number, d: number, hh = 0, mm = 0, ss = 0, ms = 0) =>
@@ -137,7 +137,7 @@ const adminListQuerySchema = z.object({
   start: dateStr.optional(),
   end: dateStr.optional(),
   employeeId: z.coerce.number().int().positive().optional(),
-  cursor: z.coerce.number().int().positive().optional(),
+cursor: z.string().regex(/^\d+$/).optional(),
   limit: z.coerce.number().int().min(1).max(50).optional().default(10),
 });
 
@@ -164,7 +164,7 @@ const overdueListQuery = z.object({
   from: z.string().datetime().optional(),
   to:   z.string().datetime().optional(),
   employeeId: z.coerce.number().int().positive().optional(), // admin용
-  cursor: z.coerce.number().int().positive().optional(),
+cursor: z.string().regex(/^\d+$/).optional(),
   limit:  z.coerce.number().int().min(1).max(50).optional().default(20),
 });
 type ShiftWithEmployee = Prisma.WorkShiftGetPayload<{
@@ -215,13 +215,13 @@ if (type === 'IN') {
         memo: memo ?? undefined,
       }
     });
-    res.json({
+    res.json(toJSONSafe({
       ok: true,
       message: '출근 완료',
       clockInAt: at,          // 계획 시각 반환 (OUT과 대칭)
       memo,
       shiftId: created.id
-    });
+    }));
     return;
   }
 
@@ -243,13 +243,13 @@ if (type === 'IN') {
     },
   });
 
-  res.json({
+  res.json(toJSONSafe({
     ok: true,
     message: '출근 완료',
     clockInAt: at,         // 계획 시각 반환
     memo,
     shiftId
-  });
+  }));
   return;
 }
 if (type === 'OUT') {
@@ -293,10 +293,14 @@ if (type === 'OUT') {
   );
 
   // 5) 금액: 시급제만 계산
-  const hourlyAmount =
-    s.employee.payUnit === 'HOURLY'
-      ? Math.round((payable / 60) * (s.employee.pay ?? 0))
-      : null;
+  const payPerHour =
+  s.employee.payUnit === 'HOURLY'
+    ? Number((s.employee.pay as unknown as Prisma.Decimal).toNumber?.() ?? s.employee.pay ?? 0)
+    : 0;
+const hourlyAmount =
+  s.employee.payUnit === 'HOURLY'
+    ? Math.round((payable / 60) * payPerHour)
+    : null;
 
   // 6) 업데이트
   await prisma.workShift.update({
@@ -307,25 +311,23 @@ if (type === 'OUT') {
       endAt: at,
       // 실제 퇴근은 now로 기록
       actualOutAt: now,
-      leftEarly: false,                 // 조퇴 플래그 미사용
+      earlyOut: false,                 // 조퇴 플래그 미사용
       memo: memo ?? undefined,
-      actualMinutes: actual,            // 참고용
       workedMinutes: payable,           // 급여 산정 분
       finalPayAmount: hourlyAmount,
     },
   });
 
   // 7) 응답: clockOutAt은 사용자가 선택한 at(계획 종료시각)을 돌려줌
-  res.json({
+  res.json(toJSONSafe({
     ok: true,
     message: '퇴근 완료',
     clockOutAt: at,
     workedMinutes: payable,
-    actualMinutes: actual,
     finalPayAmount: hourlyAmount,
     planned: { startAt: s.startAt, endAt: at },
     shiftId,
-  });
+  }));
   return;
 }
 
@@ -462,7 +464,7 @@ export const getAttendanceRecords = async (req: AuthRequiredRequest, res: Respon
   const rows = await prisma.workShift.findMany({
     where,
     orderBy: [{ id: 'desc' }],
-    ...(cursor ? { cursor: { id: Number(cursor) }, skip: 1 } : {}),
+    ...(cursor ? { cursor: { id: BigInt(cursor) }, skip: 1 } : {}),
     take: limit ?? 10,
   });
 
@@ -479,7 +481,6 @@ export const getAttendanceRecords = async (req: AuthRequiredRequest, res: Respon
       (inAt && outAt) ? diffMinutes(inAt, outAt) : null;
 
     const workedMinutes  = s.workedMinutes  ?? fallbackWorked;
-    const actualMinutes  = s.actualMinutes  ?? fallbackActual;
     const finalPayAmount = s.finalPayAmount ?? null;
 
     return {
@@ -493,7 +494,6 @@ export const getAttendanceRecords = async (req: AuthRequiredRequest, res: Respon
 
       // 저장 스냅샷 기준으로 응답
       workedMinutes,
-      actualMinutes,
       finalPayAmount,
 
       // 기존 호환 필드
@@ -507,8 +507,8 @@ export const getAttendanceRecords = async (req: AuthRequiredRequest, res: Respon
     };
   });
 
-  res.json({
+  res.json(toJSONSafe({
     items,
     nextCursor: rows.length === (limit ?? 10) ? rows[rows.length - 1].id : null
-  });
+  }));
 };

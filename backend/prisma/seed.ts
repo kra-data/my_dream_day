@@ -20,7 +20,7 @@ async function main() {
   });
 
   /* 2️⃣ 관리자(매니저) 계정 — 월급제 */
-  await prisma.employee.create({
+  await prisma.employeeMember.create({
     data: {
       shopId:       shop.id,
       name:         '홍길동',
@@ -36,12 +36,12 @@ async function main() {
       section:      Section.HALL,
       pay:          2_800_000,            // 월급(원)
       payUnit:      PayUnit.MONTHLY,
-      role:         'admin'
+      shopRole:         'admin'
     }
   });
 
   /* 3️⃣ 일반 직원 계정 — 월급제 */
-  await prisma.employee.create({
+  await prisma.employeeMember.create({
     data: {
       shopId:       shop.id,
       name:         '김철수',
@@ -57,7 +57,7 @@ async function main() {
       section:      Section.KITCHEN,
       pay:          2_300_000,            // 월급(원)
       payUnit:      PayUnit.MONTHLY,
-      role:         'employee'
+      shopRole:         'employee'
     }
   });
 
