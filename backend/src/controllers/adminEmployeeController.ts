@@ -15,7 +15,7 @@ const requireOwnerOrManager = (req: AuthRequest): { userId: bigint; ok: boolean 
   const uid = req.user?.userId;
   const role = req.user?.shopRole;
   if (uid == null) return { ok: false, userId: 0n };
-  if (!role || (role !== 'admin' && role !== 'admin')) {
+  if (!role || (role !== 'admin' && role !== 'owner')) {
     return { ok: false, userId: 0n };
   }
   return { ok: true, userId: BigInt(uid) };

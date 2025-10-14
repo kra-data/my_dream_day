@@ -41,7 +41,7 @@ const requireAdmin = (
   next: NextFunction
 ): void => {
   console.log(req.user?.shopRole)
-  if (req.user?.shopRole == 'admin' || req.user?.shopRole == 'admin') {
+  if (req.user?.shopRole == 'admin' || req.user?.shopRole == 'owner') {
      return next();
   }
   res.status(403).json({ error: 'Admin only' });
