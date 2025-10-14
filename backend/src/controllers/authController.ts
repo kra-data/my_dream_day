@@ -73,7 +73,14 @@ export const login = async (req: Request, res: Response): Promise<void> => {
 
   const { loginId, password, shopId } = parsed.data;
 
-  const u = await prisma.user.findFirst({ where: { loginId } });
+const u = await prisma.user.findFirst({
+  where: { loginId },
+  select: {
+    id: true,
+    loginId: true,
+    passwordHash: true
+  },
+});
   if (!u) {res.status(400).json({ message: '존재하지 않는 사용자입니다.' }); return;}
   if (!u.passwordHash || !(await bcrypt.compare(password, u.passwordHash))) {
     res.status(400).json({ message: '로그인 정보가 올바르지 않습니다.' });
@@ -89,7 +96,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
   const shopCandidates = owned.map((s) => ({
     shopId: Number(s.id),
     name: s.name,
-    shopRole: 'OWNER',
+    shopRole: 'ADMIN',
   }));
 
   // 선택 로직 (스프링과 동일)
@@ -114,7 +121,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
   }
 
   const chosenShopId = chosen ? Number(chosen.id) : null;
-  const chosenShopRole = chosen ? 'OWNER' : null;
+  const chosenShopRole = 'ADMIN'
 
   const accessToken = signToken(
     {

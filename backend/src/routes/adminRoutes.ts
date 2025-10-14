@@ -9,6 +9,12 @@ import {
 // import { exportPayrollXlsx, getEmployeeStatusDetail, getEmployeeStatusList, getSettlementSummary, payrollOverview, settleAllEmployeesCycle, settleEmployeeCycle } from '../controllers/payrollController';
 // import { getShopQrPng } from '../controllers/qrController';
 import {selectShop,me} from '../controllers/authController';
+import {
+  createEmployee,
+  updateEmployee,
+  deleteEmployee,
+  listEmployees
+} from '../controllers/adminEmployeeController';
 // import {
 //   adminCreateShift,
 //   adminDeleteShift,
@@ -63,7 +69,8 @@ router.use(requireAdmin);
 // router.post('/shops/:shopId/workshifts/:shiftId/review/resolve', withUser(resolveReviewShiftScheduleOnly));
 // router.get('/shops/:shopId/qr', getShopQrPng);
 // router.get('/shops/:shopId/attendance/records', withUser(getAttendanceRecords));
-
+router.post('/auth/select-shop', withUser(selectShop));
+router.get('/auth/me', withUser(me));
 
 /* ───────── 매장 CRUD ───────── */
 router.get('/shops',                 withUser(adminController.getShops));
@@ -72,12 +79,11 @@ router.put('/shops/:shopId',        withUser(adminController.updateShop));
 router.delete('/shops/:shopId',     withUser(adminController.deleteShop));
 router.get('/shops/:shopId',        withUser(adminController.getShopById));
 /* ───────── 직원 CRUD ───────── */
-// router.get('/shops/:shopId/employees',  adminController.getEmployees);
-// router.post('/shops/:shopId/employees', adminController.createEmployee);
-// router.put('/shops/:shopId/employees/:employeeId',        adminController.updateEmployee);
-// router.delete('/shops/:shopId/employees/:employeeId',     adminController.deleteEmployee);
-router.post('/auth/select-shop', withUser(selectShop));
-router.get('/auth/me', withUser(me));
+router.get('/shops/:shopId/employees', withUser(listEmployees));
+router.post('/shops/:shopId/employees', withUser(createEmployee));
+router.put('/shops/:shopId/employees/:employeeId',  withUser(updateEmployee));
+router.delete('/shops/:shopId/employees/:employeeId',     withUser(deleteEmployee));
+
 /* ───────── 🆕 대시보드 ───────── */
 router.get('/shops/:shopId/dashboard/today',   todaySummary);
 router.get('/shops/:shopId/dashboard/active',  activeEmployees);

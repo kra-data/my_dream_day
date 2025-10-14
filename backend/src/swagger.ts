@@ -462,7 +462,7 @@ ActiveEmployee: {
 /** ✅ 생성 전용 요청 스키마 (nationalId 포함) */
 EmployeeCreateRequest: {
   type: 'object',
-  required: ['name','accountNumber','nationalId','bank','phone'],
+required: ['name','accountNumber','nationalId','bank','phone','pay','payUnit'],
   properties: {
     name:          { type: 'string', minLength: 1 },
     accountNumber: { type: 'string', minLength: 1, description: '계좌번호' },
@@ -474,24 +474,10 @@ EmployeeCreateRequest: {
     },
     bank:          { type: 'string', minLength: 1 },
     phone:         { type: 'string', minLength: 1, example: '010-1234-5678' },
-    /** schedule은 any이지만, 권장 포맷을 명시하기 위해 oneOf 사용 */
-    schedule: {
-      description: '권장: WeeklySchedule. (서버는 any 허용)',
-      oneOf: [
-        { $ref: '#/components/schemas/WeeklySchedule' },
-        { type: 'object', additionalProperties: true }
-      ]
-    },
     position:      { $ref: '#/components/schemas/Position' },
     section:       { $ref: '#/components/schemas/Section' },
-    pay:           { type: 'number', minimum: 0, nullable: true },
-    payUnit:       { $ref: '#/components/schemas/PayUnit', nullable: true },
-    personalColor: {
-      type: 'string',
-      nullable: true,
-      pattern: '^#[0-9A-Fa-f]{6}$',
-      description: 'HEX 색상. 미지정 시 서버 기본값/NULL'
-    }
+    pay:           { type: 'number', minimum: 1 },
+    payUnit:       { $ref: '#/components/schemas/PayUnit' },
   }
 },
 
@@ -504,13 +490,6 @@ EmployeeUpdateRequest: {
     accountNumber: { type: 'string', minLength: 1 },
     bank:          { type: 'string', minLength: 1 },
     phone:         { type: 'string', minLength: 1 },
-    schedule: {
-      description: '권장 포맷 WeeklySchedule (서버는 any 허용)',
-      oneOf: [
-        { $ref: '#/components/schemas/WeeklySchedule' },
-        { type: 'object', additionalProperties: true }
-      ]
-    },
        nationalId: {
          type: 'string',
          pattern: '^\\d{6}-?\\d{7}$',
@@ -519,14 +498,8 @@ EmployeeUpdateRequest: {
        },
     position:      { $ref: '#/components/schemas/Position' },
     section:       { $ref: '#/components/schemas/Section' },
-    pay:           { type: 'number', minimum: 0 },
+    pay:           { type: 'number', minimum: 1 },
     payUnit:       { $ref: '#/components/schemas/PayUnit' },
-    personalColor: {
-      type: 'string',
-      nullable: true,
-      pattern: '^#[0-9A-Fa-f]{6}$',
-      example: '#A7F3D0'
-    }
   },
   additionalProperties: false
 },
@@ -541,19 +514,11 @@ Employee: {
     accountNumber: { type: 'string' },
     bank:          { type: 'string' },
     phone:         { type: 'string' },
-    schedule: {
-      description: '저장된 스케줄(JSON). 서버는 any를 저장하지만 일반적으로 WeeklySchedule 형태',
-      oneOf: [
-        { $ref: '#/components/schemas/WeeklySchedule' },
-        { type: 'object', additionalProperties: true }
-      ]
-    },
     position:      { $ref: '#/components/schemas/Position' },
     section:       { $ref: '#/components/schemas/Section' },
-    pay:           { type: 'integer', nullable: true },
-    payUnit:       { $ref: '#/components/schemas/PayUnit', nullable: true },
+    pay:           { type: 'integer' },
+    payUnit:       { $ref: '#/components/schemas/PayUnit' },
     shopRole:          { type: 'string', example: 'employee' },
-    personalColor: { type: 'string', nullable: true, pattern: '^#[0-9A-Fa-f]{6}$' },
     createdAt:     { type: 'string', format: 'date-time' },
     updatedAt:     { type: 'string', format: 'date-time' }
   }
@@ -1562,11 +1527,6 @@ examples: {
       position: 'PART_TIME',
       section: 'HALL',
       personalColor: '#FDE68A',
-      schedule: {
-        mon: { start: '09:00', end: '13:00' },
-        wed: { start: '14:00', end: '22:00' },
-        fri: { start: '18:00', end: '23:00' }
-      }
     }
   },
   monthly: {
@@ -1582,13 +1542,6 @@ examples: {
       position: 'STAFF',
       section: 'KITCHEN',
       personalColor: '#C7D2FE',
-      schedule: {
-        mon: { start: '09:00', end: '18:00' },
-        tue: { start: '09:00', end: '18:00' },
-        wed: { start: '09:00', end: '18:00' },
-        thu: { start: '09:00', end: '18:00' },
-        fri: { start: '09:00', end: '18:00' }
-      }
     }
   }
 }
@@ -1668,13 +1621,6 @@ examples: {
             bank: '카카오뱅크',
             nationalId: "900101-1234567",
             phone: '010-1111-2222',
-            schedule: {
-              mon: { start: '10:00', end: '19:00' },
-              tue: { start: '10:00', end: '19:00' },
-              wed: { start: '10:00', end: '19:00' },
-              thu: { start: '10:00', end: '19:00' },
-              fri: { start: '10:00', end: '19:00' }
-            },
             position: 'PART_TIME',
             section: 'HALL',
             payUnit: 'HOURLY',

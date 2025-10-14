@@ -16,7 +16,7 @@ router.get('/health', healthCheck);
 router.post('/admin/auth/register', auth.register);
 router.post('/admin/auth/login', auth.login);
 
-router.post('/auth/refresh', auth.refresh);
+router.post('/auth/token/refresh', auth.refresh);
 router.post('/auth/logout', auth.logout);
 
 
