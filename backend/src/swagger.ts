@@ -812,6 +812,31 @@ SettleAllEmployeesCycleResponse: {
     }
   }
 },
+// swaggerDocument.components.schemas 안에 추가
+QrScanNeedLoginResponse: {
+  type: 'object',
+  properties: {
+    needLogin: { type: 'boolean', example: true },
+    loginUrl:  { type: 'string', format: 'uri', example: 'https://mydreamday.shop/employee/qr/login' },
+    shopId:    { type: 'integer', example: 10 }
+  }
+},
+QrScanOkResponse: {
+  type: 'object',
+  properties: {
+    ok:      { type: 'boolean', example: true },
+    shopId:  { type: 'integer', example: 10 },
+    qrToken: { type: 'string', description: '검증된 QR 토큰(프론트가 후속 API 호출 시 첨부 가능)' }
+  }
+},
+QrScanQuery: {
+  type: 'object',
+  required: ['token'],
+  properties: {
+    token: { type: 'string', description: 'QR에 인코딩된 서명 토큰' }
+  }
+},
+
 // swaggerDocument.components.schemas 안에 추가/교체
 ShopCreateRequest: {
   type: 'object',
@@ -1168,6 +1193,83 @@ PayrollOverviewResponse: {
       '200': { description: 'OK', content: { 'application/json': { schema: { $ref: '#/components/schemas/OwnerLoginResponse' } } } },
       '400': { description: 'Bad Request' },
       '401': { description: 'Invalid credentials' }
+    }
+  }
+},
+// swaggerDocument.paths 안에 추가
+'/api/qr/scan': {
+  get: {
+    tags: ['QR'],
+    summary: 'QR 스캔 진입점(직원 출·퇴근용)',
+    description:
+      'QR 스캔 이후 백엔드 진입점입니다.\n' +
+      '- 토큰이 유효하면 로그인 여부에 따라 분기합니다.\n' +
+      '- **미로그인(401)**: 공용 로그인 페이지 URL을 반환합니다(`loginUrl`).\n' +
+      '- **로그인(200)**: shopId 일치 여부 확인 후 OK 응답과 `qrToken`을 반환합니다.',
+    parameters: [
+      {
+        name: 'token',
+        in: 'query',
+        required: true,
+        schema: { type: 'string' },
+        description: 'QR에 서명되어 담긴 토큰'
+      }
+    ],
+    // 이 엔드포인트 자체는 공개 호출(미로그인 허용)이므로 security 없음
+    responses: {
+      '200': {
+        description: '로그인 상태: 스캔 성공',
+        content: {
+          'application/json': {
+            schema: { $ref: '#/components/schemas/QrScanOkResponse' },
+            examples: {
+              ok: {
+                value: { ok: true, shopId: 10, qrToken: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...' }
+              }
+            }
+          }
+        }
+      },
+      '401': {
+        description: '미로그인: 로그인 페이지로 유도',
+        content: {
+          'application/json': {
+            schema: { $ref: '#/components/schemas/QrScanNeedLoginResponse' },
+            examples: {
+              needLogin: {
+                value: {
+                  needLogin: true,
+                  loginUrl: 'https://mydreamday.shop/employee/qr/login',
+                  shopId: 10
+                }
+              }
+            }
+          }
+        }
+      },
+      '400': {
+        description: '토큰 누락/서명 불일치/만료 등',
+        content: {
+          'application/json': {
+            schema: { $ref: '#/components/schemas/ErrorResponse' },
+            examples: {
+              invalidToken: { value: { error: 'invalid_or_expired_token' } },
+              badClaims:    { value: { error: 'invalid_claims' } }
+            }
+          }
+        }
+      },
+      '403': {
+        description: '로그인했지만 소속 매장이 QR의 shopId와 다름',
+        content: {
+          'application/json': {
+            schema: { $ref: '#/components/schemas/ErrorResponse' },
+            examples: {
+              mismatch: { value: { error: 'shop_mismatch', expected: 10, actual: 12 } }
+            }
+          }
+        }
+      }
     }
   }
 },

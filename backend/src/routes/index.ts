@@ -7,6 +7,7 @@ import adminRoutes from './adminRoutes';
 import attendanceRoutes from './attendanceRoutes';
 import { requireUser, withUser } from '../middlewares/requireUser';
 import myRoutes from './myRoutes';
+import qrRoutes from './qrRoutes';
 const router = Router();
 
 /* Health */
@@ -49,9 +50,9 @@ router.get(
 /* Feature routes */
 router.use('/admin',      adminRoutes);
 router.use('/attendance', attendanceRoutes);
-
-
 router.use('/', myRoutes);
+
+router.use('/qr', qrRoutes);
 
 
 export default router;
