@@ -11,13 +11,22 @@ export interface QrClaims {
   exp?: number;
   /** 버전 등 추후 확장 */
   v?: number;
+    loginUrl?: string;
 }
 
 /** QR 토큰 생성 (기본: 영구토큰 / expSeconds 주면 만료 부여) */
-export function signQrToken(shopId: number, purpose: QrPurpose = 'attendance', expSeconds?: number): string {
+export function signQrToken(
+  shopId: number,
+  purpose: QrPurpose = 'attendance',
+  expSeconds?: number,
+  loginUrl?: string,
+): string {
   const claims: QrClaims = { purpose, shopId, v: 1 };
+  if (loginUrl) claims.loginUrl = loginUrl;
+
   const options: jwt.SignOptions = {};
   if (expSeconds && expSeconds > 0) options.expiresIn = expSeconds;
+
   return jwt.sign(claims, QR_SECRET, options);
 }
 

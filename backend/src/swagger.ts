@@ -812,31 +812,89 @@ SettleAllEmployeesCycleResponse: {
     }
   }
 },
-// swaggerDocument.components.schemas 안에 추가
-QrScanNeedLoginResponse: {
-  type: 'object',
-  properties: {
-    needLogin: { type: 'boolean', example: true },
-    loginUrl:  { type: 'string', format: 'uri', example: 'https://mydreamday.shop/employee/qr/login' },
-    shopId:    { type: 'integer', example: 10 }
-  }
+// ── QR Scan (components.schemas) ──
+QrScanPurpose: {
+  type: 'string',
+  enum: ['login','attendance']
 },
-QrScanOkResponse: {
+QrScanSuccessResponse: {
   type: 'object',
   properties: {
     ok:      { type: 'boolean', example: true },
-    shopId:  { type: 'integer', example: 10 },
-    qrToken: { type: 'string', description: '검증된 QR 토큰(프론트가 후속 API 호출 시 첨부 가능)' }
-  }
+    purpose: { $ref: '#/components/schemas/QrScanPurpose' }, // 'attendance'
+    shopId:  { type: 'integer', example: 1 },
+    qrToken: { type: 'string', description: '서버가 서명한 QR 토큰(출퇴근 API에 그대로 사용 가능)' }
+  },
+  example: { ok: true, purpose: 'attendance', shopId: 1, qrToken: 'eyJhbGciOiJI...' }
 },
-QrScanQuery: {
+// ✅ 교체: nextAttendance(optional) 추가
+QrScanNeedLoginResponse: {
   type: 'object',
-  required: ['token'],
   properties: {
-    token: { type: 'string', description: 'QR에 인코딩된 서명 토큰' }
+    purpose:        { $ref: '#/components/schemas/QrScanPurpose' }, // 'login'
+    needLogin:      { type: 'boolean', example: true },
+    loginUrl:       { type: 'string', example: 'https://mydreamday.shop/employee/qr/login' },
+    shopId:         { type: ['integer','null'], example: 1 },
+    nextAttendance: {
+      type: 'boolean',
+      nullable: true,
+      description: '유효한 토큰이 있었으며 로그인 후 출퇴근 플로우로 이어지도록 안내할지 여부',
+      example: true
+    }
+  },
+  example: {
+    purpose: 'login',
+    needLogin: true,
+    loginUrl: 'https://mydreamday.shop/employee/qr/login',
+    shopId: 1,
+    nextAttendance: true
   }
 },
-
+QrScanShopMismatchResponse: {
+  type: 'object',
+  properties: {
+    purpose:  { $ref: '#/components/schemas/QrScanPurpose' }, // 'login'
+    error:    { type: 'string', example: 'shop_mismatch' },
+    expected: { type: 'integer', example: 10 },
+    actual:   { type: 'integer', example: 20 },
+    loginUrl: { type: 'string', example: 'https://mydreamday.shop/employee/qr/login' }
+  },
+  example: {
+    purpose: 'login',
+    error: 'shop_mismatch',
+    expected: 10,
+    actual: 20,
+    loginUrl: 'https://mydreamday.shop/employee/qr/login'
+  }
+},
+QrScanInvalidTokenResponse: {
+  type: 'object',
+  properties: {
+    purpose: { $ref: '#/components/schemas/QrScanPurpose' }, // 'login'
+    error:   { type: 'string', example: 'invalid_or_expired_token' },
+    loginUrl:{ type: 'string', example: 'https://mydreamday.shop/employee/qr/login' },
+    shopId:  { type: ['integer','null'], example: null }
+  },
+  example: {
+    purpose: 'login',
+    error: 'invalid_or_expired_token',
+    loginUrl: 'https://mydreamday.shop/employee/qr/login',
+    shopId: null
+  }
+},
+QrScanInvalidClaimsResponse: {
+  type: 'object',
+  properties: {
+    purpose: { $ref: '#/components/schemas/QrScanPurpose' }, // 'login'
+    error:   { type: 'string', example: 'invalid_claims' },
+    loginUrl:{ type: 'string', example: 'https://mydreamday.shop/employee/qr/login' }
+  },
+  example: {
+    purpose: 'login',
+    error: 'invalid_claims',
+    loginUrl: 'https://mydreamday.shop/employee/qr/login'
+  }
+},
 // swaggerDocument.components.schemas 안에 추가/교체
 ShopCreateRequest: {
   type: 'object',
@@ -1196,83 +1254,69 @@ PayrollOverviewResponse: {
     }
   }
 },
-// swaggerDocument.paths 안에 추가
+// ── QR Scan (paths) ──
 '/api/qr/scan': {
   get: {
     tags: ['QR'],
-    summary: 'QR 스캔 진입점(직원 출·퇴근용)',
+    summary: 'QR 스캔 진입점',
     description:
-      'QR 스캔 이후 백엔드 진입점입니다.\n' +
-      '- 토큰이 유효하면 로그인 여부에 따라 분기합니다.\n' +
-      '- **미로그인(401)**: 공용 로그인 페이지 URL을 반환합니다(`loginUrl`).\n' +
-      '- **로그인(200)**: shopId 일치 여부 확인 후 OK 응답과 `qrToken`을 반환합니다.',
+      'QR 토큰을 검증해 다음 동작 목적을 반환합니다.\n' +
+      '- **정상 & 권한 일치**: `200` + `{ purpose: "attendance", shopId, qrToken }`\n' +
+      '- **미로그인(유효 토큰)**: `401` + `{ purpose: "login", needLogin: true, loginUrl, shopId, nextAttendance: true }`\n' +
+      '- **미로그인(토큰 없음/오류)**: `401` + `{ purpose: "login", needLogin: true, loginUrl, shopId: null, error? }`\n' +
+      '- **권한/매장 불일치**: `403` + `{ purpose: "login", error: "shop_mismatch", expected, actual, loginUrl }`\n' +
+      '- **클레임 오류**: `400` + `{ purpose: "login", error: "invalid_claims", loginUrl }`',
     parameters: [
       {
         name: 'token',
         in: 'query',
-        required: true,
+        required: false,
         schema: { type: 'string' },
-        description: 'QR에 서명되어 담긴 토큰'
+        description: 'QR 서명 토큰(JWT). 없거나 만료/손상 시 로그인 유도 응답을 반환합니다.'
       }
     ],
-    // 이 엔드포인트 자체는 공개 호출(미로그인 허용)이므로 security 없음
     responses: {
       '200': {
-        description: '로그인 상태: 스캔 성공',
+        description: '정상: 출퇴근 플로우로 진행',
         content: {
           'application/json': {
-            schema: { $ref: '#/components/schemas/QrScanOkResponse' },
-            examples: {
-              ok: {
-                value: { ok: true, shopId: 10, qrToken: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...' }
-              }
-            }
+            schema: { $ref: '#/components/schemas/QrScanSuccessResponse' }
           }
         }
       },
       '401': {
-        description: '미로그인: 로그인 페이지로 유도',
+        description: '미로그인 또는 토큰 오류 → 로그인 유도(유효 토큰이면 nextAttendance=true 포함)',
         content: {
           'application/json': {
-            schema: { $ref: '#/components/schemas/QrScanNeedLoginResponse' },
-            examples: {
-              needLogin: {
-                value: {
-                  needLogin: true,
-                  loginUrl: 'https://mydreamday.shop/employee/qr/login',
-                  shopId: 10
-                }
-              }
-            }
-          }
-        }
-      },
-      '400': {
-        description: '토큰 누락/서명 불일치/만료 등',
-        content: {
-          'application/json': {
-            schema: { $ref: '#/components/schemas/ErrorResponse' },
-            examples: {
-              invalidToken: { value: { error: 'invalid_or_expired_token' } },
-              badClaims:    { value: { error: 'invalid_claims' } }
+            schema: {
+              oneOf: [
+                { $ref: '#/components/schemas/QrScanNeedLoginResponse' },
+                { $ref: '#/components/schemas/QrScanInvalidTokenResponse' }
+              ]
             }
           }
         }
       },
       '403': {
-        description: '로그인했지만 소속 매장이 QR의 shopId와 다름',
+        description: '권한/매장 불일치 → 로그인(재선택) 유도',
         content: {
           'application/json': {
-            schema: { $ref: '#/components/schemas/ErrorResponse' },
-            examples: {
-              mismatch: { value: { error: 'shop_mismatch', expected: 10, actual: 12 } }
-            }
+            schema: { $ref: '#/components/schemas/QrScanShopMismatchResponse' }
+          }
+        }
+      },
+      '400': {
+        description: '클레임 오류',
+        content: {
+          'application/json': {
+            schema: { $ref: '#/components/schemas/QrScanInvalidClaimsResponse' }
           }
         }
       }
     }
   }
 },
+
 
 '/api/admin/auth/select-shop': {
   post: {

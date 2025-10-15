@@ -20,13 +20,14 @@ export const getShopQrPng = async (req: AuthRequest, res: Response) => {
     res.status(400).json({ error: 'invalid shopId' });
     return;
   }
+    // 스캔시 열릴 URL (프런트 경로로 고정)
+  const base = (FRONTEND || API_BASE).replace(/\/$/, '');
 
+
+const loginUrl = `${base}/employee/qr/login`;
   // 영구 또는 TTL 설정 가능(?ttl=초)
   const ttl = req.query.ttl ? Number(req.query.ttl) : undefined;
-  const token = signQrToken(shopId, 'attendance', ttl);
-
-  // 스캔시 열릴 URL (프런트 경로로 고정)
-  const base = (FRONTEND || API_BASE).replace(/\/$/, '');
+  const token = signQrToken(shopId, 'attendance', ttl,loginUrl);
   const url  = `${base}/qr/scan?token=${encodeURIComponent(token)}`;
 
   res.setHeader('Content-Type', 'image/png');
@@ -38,10 +39,15 @@ export const getShopQrPng = async (req: AuthRequest, res: Response) => {
  * - 미로그인: 401 + loginUrl (공용 로그인 페이지로, shopId 파라미터 없이 redirect만 부여)
  * - 로그인: 200 + { ok: true, shopId, qrToken }
  */
+// controllers/qrController.ts (발췌)
 export const scanQr = async (req: AuthRequest, res: Response) => {
   const token = String(req.query.token || '');
+
+  // 토큰 없거나 형식 오류 → 로그인 유도
   if (!token) {
-    res.status(400).json({ error: 'token required' });
+    const base = (FRONTEND || API_BASE).replace(/\/$/, '');
+    const loginUrl = `${base}/employee/qr/login`;
+    res.status(401).json({ purpose: 'login', needLogin: true, loginUrl, shopId: null });
     return;
   }
 
@@ -49,32 +55,53 @@ export const scanQr = async (req: AuthRequest, res: Response) => {
   try {
     claims = verifyQrToken(token);
   } catch {
-    res.status(400).json({ error: 'invalid_or_expired_token' });
+    const base = (FRONTEND || API_BASE).replace(/\/$/, '');
+    const loginUrl = `${base}/employee/qr/login`;
+    res.status(401).json({ purpose: 'login', needLogin: true, loginUrl, shopId: null, error: 'invalid_or_expired_token' });
     return;
   }
 
   if (claims.purpose !== 'attendance' || !Number.isFinite(claims.shopId)) {
-    res.status(400).json({ error: 'invalid_claims' });
-    return;
-  }
-
-  // 미로그인 → 공용 로그인 페이지로. shopId는 안 넘기고 redirect만 전달
-  if (!req.user) {
     const base = (FRONTEND || API_BASE).replace(/\/$/, '');
     const loginUrl = `${base}/employee/qr/login`;
-    res.status(401).json({ needLogin: true, loginUrl, shopId: claims.shopId });
+    res.status(400).json({ purpose: 'login', error: 'invalid_claims', loginUrl });
     return;
   }
 
-  // 로그인 사용자인데 소속 매장이 다르면 차단(정책 유지)
+  // 미로그인 → 로그인 유도 (클레임에 loginUrl 있으면 우선 사용)
+  if (!req.user) {
+    const base = (FRONTEND || API_BASE).replace(/\/$/, '');
+    const fallbackLogin = `${base}/employee/qr/login`;
+    const loginUrl = claims.loginUrl || fallbackLogin;
+    // (선택) 로그인 후 돌아오도록 next 파라미터 추가
+    const next = encodeURIComponent(`${base}/qr/scan?token=${encodeURIComponent(token)}`);
+    const loginWithNext = `${loginUrl}`;
+
+    res
+      .status(401)
+      .json({ purpose: 'login', needLogin: true, loginUrl: loginWithNext,nextAttendance:true, shopId: claims.shopId });
+    return;
+  }
+
+  // 로그인 사용자인데 소속 매장이 다르면 → 로그인(재선택) 유도
   if (req.user.shopId !== claims.shopId) {
-    res.status(403).json({ error: 'shop_mismatch', expected: claims.shopId, actual: req.user.shopId });
+    const base = (FRONTEND || API_BASE).replace(/\/$/, '');
+    const loginUrl = (claims as any).loginUrl || `${base}/employee/qr/login`;
+    res.status(403).json({
+      purpose: 'login',
+      error: 'shop_mismatch',
+      expected: claims.shopId,
+      actual: req.user.shopId,
+      loginUrl
+    });
     return;
   }
 
+  // ✅ 정상: 출퇴근 플로우로
   res.json({
     ok: true,
+    purpose: 'attendance',
     shopId: claims.shopId,
-    qrToken: token, // 프론트가 그대로 /api/attendance 호출 시 첨부할 수 있음(선택)
+    qrToken: token
   });
 };
