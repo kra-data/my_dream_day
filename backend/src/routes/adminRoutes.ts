@@ -6,7 +6,7 @@ import {
   recentActivities,
   todaySummary
 } from '../controllers/dashboardController';
-// import { exportPayrollXlsx, getEmployeeStatusDetail, getEmployeeStatusList, getSettlementSummary, payrollOverview, settleAllEmployeesCycle, settleEmployeeCycle } from '../controllers/payrollController';
+import { exportPayrollXlsx, getEmployeeStatusDetail, getEmployeeStatusList, getSettlementSummary, payrollOverview, settleAllEmployeesCycle, settleEmployeeCycle } from '../controllers/payrollController';
 // import { getShopQrPng } from '../controllers/qrController';
 import {selectShop,me} from '../controllers/authController';
 import {
@@ -90,13 +90,13 @@ router.get('/shops/:shopId/dashboard/active',  activeEmployees);
 router.get('/shops/:shopId/dashboard/recent',  recentActivities);
 
 // 🆕 급여 개요
-// router.get('/shops/:shopId/payroll/overview', withUser(payrollOverview));
-// router.get('/shops/:shopId/payroll/export-xlsx', withUser(exportPayrollXlsx));
-// router.get('/shops/:shopId/payroll/summary', withUser(getSettlementSummary));
-// router.post('/shops/:shopId/payroll/employees/:employeeId', withUser(settleEmployeeCycle));
-// router.get('/shops/:shopId/payroll/employees/:employeeId', withUser(getEmployeeStatusDetail));
-// router.get('/shops/:shopId/payroll/employees', withUser(getEmployeeStatusList));
-// router.post('/shops/:shopId/payroll/settlements', withUser(settleAllEmployeesCycle));
+router.get('/shops/:shopId/payroll/overview', withUser(payrollOverview));
+router.get('/shops/:shopId/payroll/export-xlsx', withUser(exportPayrollXlsx));
+router.get('/shops/:shopId/payroll/summary', withUser(getSettlementSummary));
+router.post('/shops/:shopId/payroll/employees/:employeeId', withUser(settleEmployeeCycle));
+router.get('/shops/:shopId/payroll/employees/:employeeId', withUser(getEmployeeStatusDetail));
+router.get('/shops/:shopId/payroll/employees', withUser(getEmployeeStatusList));
+router.post('/shops/:shopId/payroll/settlements', withUser(settleAllEmployeesCycle));
 
 router.get('/shops/:shopId/shifts/yesterday/unchecked', withUser(adminListUncheckedCompletedShiftsYesterday));
 router.put('/shops/:shopId/shifts/:shiftId/admin-check', withUser(adminSetShiftChecked));
