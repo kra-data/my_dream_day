@@ -69,8 +69,8 @@ export const getShopById = async (req: AuthRequest, res: Response) => {
 
 const createShopSchema = z.object({
   name: z.string().min(1),
-  hourlyWage: z.number().int().positive(),
-  payday: z.number().int().min(1).max(31),
+  hourlyWage: z.number().int().positive().optional(),
+  payday: z.number().int().min(1).max(31).optional(),
 });
 
 export const createShop = async (req: AuthRequest, res: Response) => {
