@@ -149,7 +149,7 @@ const u = await prisma.user.findFirst({
     refreshToken,
     selectedShopId: chosenShopId,
     selectedShopRole: chosenShopRole,
-    chooseRequired: false,
+    chooseRequired: chosenShopId == null?true:false,
     shops: chosenShopId == null ? shopCandidates : [],
   });
 };
