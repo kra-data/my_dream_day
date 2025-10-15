@@ -4,6 +4,7 @@ import bcrypt from 'bcryptjs';
 import { prisma } from '../db/prisma';
 import { AuthRequest } from '../middlewares/jwtMiddleware';
 import { Prisma } from '@prisma/client';
+import { asBigInt, toJSONSafe } from '../utils/serialize';
 /** ───────── 공통 유틸 ───────── */
 const toPlain = <T>(o: T): T =>
   JSON.parse(JSON.stringify(o, (_, v) => (typeof v === 'bigint' ? Number(v) : v)));
@@ -244,38 +245,79 @@ const empId = parseId(empRaw);
  *  - size 1..50
  *  - 응답: { items:[{id,name,phone,role}], nextCursor:number|null }
  *  (Spring: AdminEmployeeApi.listEmployees / AdminEmployeeService.list)  */
+// controllers/employeeController.ts (예시 위치)
 export const listEmployees = async (req: AuthRequest, res: Response) => {
+  // 권한
   const auth = requireOwnerOrManager(req);
   if (!auth.ok) { res.status(403).json({ error: 'Forbidden' }); return; }
 
-  const shopId = parseId(req.params.shopId);
-  if (shopId == null) { res.status(400).json({ error: 'shopId must be numeric' }); return; }
+  // shopId → BigInt
+  const shopIdParam = req.params.shopId;
+  if (!shopIdParam || !/^\d+$/.test(String(shopIdParam))) {
+    res.status(400).json({ error: 'shopId must be numeric' });
+    return;
+  }
+  const shopId = asBigInt(shopIdParam, 'shopId');
 
+  // 검색/페이지 파라미터
   const name = (req.query.name ? String(req.query.name) : undefined)?.trim();
   const phoneNorm = req.query.phone ? numStr(String(req.query.phone)) : undefined;
-  const cursor = req.query.cursor ? parseId(req.query.cursor) : null;
+
+  const cursor = req.query.cursor
+    ? asBigInt(String(req.query.cursor), 'cursor')
+    : null;
+
   const sizeRaw = req.query.size ? Number(req.query.size) : 20;
   const size = Number.isFinite(sizeRaw) ? Math.min(Math.max(sizeRaw, 1), 50) : 20;
 
+  // where 조건
   const where: any = { shopId };
   if (name) where.name = { contains: name };
-  if (phoneNorm) where.phone = { contains: phoneNorm };
+  if (phoneNorm) where.phone = { contains: phoneNorm }; // 전화번호는 DB에 저장된 포맷 기준 부분검색
 
+  // 조회 (id desc 커서 기반 페이지네이션)
   const items = await prisma.employeeMember.findMany({
     where: cursor ? { ...where, id: { lt: cursor } } : where,
     orderBy: { id: 'desc' },
     take: size,
-    select: { id: true, name: true, phone: true },
+    select: {
+      id: true,
+      shopId: true,
+      name: true,
+      bankAccount: true,
+      bankName: true,
+      phone: true,
+      position: true,
+      section: true,
+      pay: true,          // Decimal(12,2)
+      payUnit: true,      // 'HOURLY' | 'MONTHLY' | ...
+      shopRole: true,     // 'EMPLOYEE' 등
+      createdAt: true,
+      updatedAt: true,
+    },
   });
 
-const list = items.map(i => ({
-  id: Number(i.id),      // ← BigInt → number 변환
-  name: i.name,
-  phone: i.phone,
-  role: 'employee' as const
-}));
+  // 응답 스펙에 맞춰 변환
+  const list = items.map((i) => ({
+    id: Number(i.id),               // BigInt → number
+    shopId: Number(i.shopId),       // BigInt → number
+    name: i.name,
+    bankAccount: i.bankAccount ?? '',
+    bankName: i.bankName ?? '',
+    phone: i.phone ?? '',
+    position: i.position ?? '',
+    section: i.section ?? '',
+    pay: i.pay != null ? Number(i.pay) : 0,  // Decimal → number
+    payUnit: i.payUnit ?? null,
+    shopRole: i.shopRole ?? 'employee',
+    createdAt: i.createdAt,
+    updatedAt: i.updatedAt,
+  }));
 
-const nextCursor = list.length > 0 ? list[list.length - 1].id : null;
+  // nextCursor (마지막 아이템 id, number로 전달)
+  const nextCursor = list.length > 0 ? list[list.length - 1].id : null;
 
-res.json({ items: list, nextCursor });
+  // 안전 직렬화(여기서는 BigInt를 모두 number로 변환했지만 일관성 위해 감쌈)
+  res.json(toJSONSafe({ items: list, nextCursor }));
 };
+
