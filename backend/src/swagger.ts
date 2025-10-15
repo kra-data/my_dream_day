@@ -815,10 +815,10 @@ SettleAllEmployeesCycleResponse: {
 // swaggerDocument.components.schemas 안에 추가/교체
 ShopCreateRequest: {
   type: 'object',
-  required: ['name','hourlyWage','payday'],
+  required: ['name'],
   properties: {
     name:       { type: 'string', minLength: 1, example: '홍사장분식' },
-    hourlyWage: { type: 'integer', minimum: 1, example: 9860 },
+    hourlyWage: { type: 'integer', minimum: 1, example: 9860},
     payday:     { type: 'integer', minimum: 1, maximum: 31, example: 10 }
   }
 },
