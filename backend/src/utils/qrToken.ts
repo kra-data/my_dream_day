@@ -7,8 +7,6 @@ export type QrPurpose = 'attendance';
 export interface QrClaims {
   purpose: QrPurpose;
   shopId: number;
-  /** 선택: 만료(UNIX sec). exp 없으면 영구 토큰 */
-  exp?: number;
   /** 버전 등 추후 확장 */
   v?: number;
     loginUrl?: string;
@@ -18,14 +16,12 @@ export interface QrClaims {
 export function signQrToken(
   shopId: number,
   purpose: QrPurpose = 'attendance',
-  expSeconds?: number,
   loginUrl?: string,
 ): string {
   const claims: QrClaims = { purpose, shopId, v: 1 };
   if (loginUrl) claims.loginUrl = loginUrl;
 
   const options: jwt.SignOptions = {};
-  if (expSeconds && expSeconds > 0) options.expiresIn = expSeconds;
 
   return jwt.sign(claims, QR_SECRET, options);
 }

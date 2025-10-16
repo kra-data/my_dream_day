@@ -26,8 +26,7 @@ export const getShopQrPng = async (req: AuthRequest, res: Response) => {
 
 const loginUrl = `${base}/employee/qr/login`;
   // 영구 또는 TTL 설정 가능(?ttl=초)
-  const ttl = req.query.ttl ? Number(req.query.ttl) : undefined;
-  const token = signQrToken(shopId, 'attendance', ttl,loginUrl);
+  const token = signQrToken(shopId, 'attendance', loginUrl);
   const url  = `${base}/qr/scan?token=${encodeURIComponent(token)}`;
 
   res.setHeader('Content-Type', 'image/png');
