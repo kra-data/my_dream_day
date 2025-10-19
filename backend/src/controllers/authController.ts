@@ -108,20 +108,12 @@ const u = await prisma.user.findFirst({
     chosen = owned[0];
   } else if (owned.length === 0) {
     chosen = null;
-  } else {
-    // 여러 개 → 선택 요구
-    res.json({
-      accessToken: null,
-      refreshToken: null,
-      selectedShopId: null,
-      selectedShopRole: null,
-      chooseRequired: true,
-      shops: shopCandidates,
-    });
   }
 
   const chosenShopId = chosen ? Number(chosen.id) : null;
   const chosenShopRole = 'admin'
+
+  console.log(u)
 
   const accessToken = signToken(
     {
