@@ -1430,7 +1430,7 @@ PayrollOverviewResponse: {
 },
     '/api/attendance/me/status': {
       get: {
-        tags: ['Attendance'],
+        tags: ['5. Attendance'],
         summary: '내 현재 출근 상태',
         responses: { '200': { description: 'OK' } }
       }
@@ -2507,7 +2507,7 @@ examples: {
     },
     '/api/attendance/preview': {
       post: {
-        tags: ['Attendance'],
+        tags: ['5. Attendance'],
         summary: 'QR 스캔 시 출/퇴근 시간 제안(미리보기)',
         description:
           'QR 스캔 이후 모달에 표시할 제안 시간을 계산합니다. \n' +
@@ -2541,7 +2541,7 @@ examples: {
     },
     '/api/attendance': {
       post: {
-        tags: ['Attendance'],
+        tags: ['5. Attendance'],
         summary: '출퇴근 기록 생성/마감 (모달에서 선택한 시간 저장)',
         security: [{ bearerAuth: [] }],
         requestBody: {

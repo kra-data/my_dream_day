@@ -29,8 +29,32 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-
-
+  spring_api:
+      image: jifrozen0110/attendance-spring:stage
+      environment:
+        SPRING_PROFILES_ACTIVE: stage
+        # DB는 compose 네트워크에서 서비스명으로 접근
+        DATABASE_URL: jdbc:postgresql://postgres:5432/attendance_stage?currentSchema=mdd_v2
+        DB_USER: ${DB_USER}
+        DB_PASS: ${DB_PASS}
+        # (권장) Dialect 명시해두면 연결 실패 시에도 에러로그가 깔끔
+        SPRING_JPA_DATABASE_PLATFORM: org.hibernate.dialect.PostgreSQLDialect
+        # 필요시 JPA 설정
+        # SPRING_JPA_HIBERNATE_DDL_AUTO: validate
+      depends_on:
+        postgres:
+          condition: service_healthy
+      healthcheck:
+        test: ["CMD", "wget", "-qO-", "http://localhost:8080/actuator/health"]
+        interval: 10s
+        timeout: 3s
+        retries: 10
+        start_period: 20s
+      restart: unless-stopped
+      env_file:
+        - ./.env
+      expose:
+        - "8080"    # 내부에서만 사용 (Caddy가 붙음)
   caddy:
     image: caddy:2-alpine
     container_name: employee_caddy

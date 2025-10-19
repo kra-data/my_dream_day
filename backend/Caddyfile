@@ -6,6 +6,23 @@ http://api.mydreamday.shop {
 # API 오리진
 https://api.mydreamday.shop {
   encode gzip
+  # ----- Spring으로 넘길 경로들만 정확히 지정 -----
+  @springAuthCommon  path /auth/token/refresh /auth/logout
+  @springAuthAdmin   path /admin/auth/select-shop /admin/auth/register /admin/auth/login
+  @springAuthEmp     path_regexp empLogin ^/employee/auth/login/(\d+)$
+  @springAttendance  path /attendance /attendance/preview /attendance/me/records
+  @springAdminShops  path /admin/shops /admin/shops/*
+
+  # 필요 시 더 추가:
+  # @springDashboard path /api/admin/shops/*/dashboard/today /api/admin/shops/*/dashboard/active /api/admin/shops/*/dashboard/recent
+  # @springShifts    path /api/admin/shops/*/workshifts /api/my/workshifts /api/my/workshifts/* ...
+
+  # Spring routes
+  reverse_proxy @springAuthCommon  spring_api:8080
+  reverse_proxy @springAuthAdmin   spring_api:8080
+  reverse_proxy @springAuthEmp     spring_api:8080
+  reverse_proxy @springAttendance  spring_api:8080
+  reverse_proxy @springAdminShops  spring_api:8080
 
   @api path /api/*
   # 로컬 프로세스면 employee_backend:3001, Docker-Compose 서비스명이면 backend:3001
