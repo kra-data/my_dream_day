@@ -1,4 +1,4 @@
-# HTTP → HTTPS
+# HTTP → HTTPS 리다이렉트
 http://api.mydreamday.shop {
   redir https://{host}{uri}
 }
@@ -6,33 +6,79 @@ http://api.mydreamday.shop {
 # API 오리진
 https://api.mydreamday.shop {
   encode gzip
-  # ----- Spring으로 넘길 경로들만 정확히 지정 -----
-  @springAuthCommon  path /auth/token/refresh /auth/logout
-  @springAuthAdmin   path /admin/auth/select-shop /admin/auth/register /admin/auth/login
-  @springAuthEmp     path_regexp empLogin ^/employee/auth/login/(\d+)$
-  @springAttendance  path /attendance /attendance/preview /attendance/me/records
-  @springAdminShops  path /admin/shops /admin/shops/*
 
-  # 필요 시 더 추가:
-  # @springDashboard path /api/admin/shops/*/dashboard/today /api/admin/shops/*/dashboard/active /api/admin/shops/*/dashboard/recent
-  # @springShifts    path /api/admin/shops/*/workshifts /api/my/workshifts /api/my/workshifts/* ...
+  # ──────────────────────────────────────────────────────────
+  # Spring으로 넘길 라우트 (프리픽스 /api 없음)
+  # ──────────────────────────────────────────────────────────
+  @springActuator   path /actuator* /actuator/*
 
-  # Spring routes
-  reverse_proxy @springAuthCommon  spring_api:8080
-  reverse_proxy @springAuthAdmin   spring_api:8080
-  reverse_proxy @springAuthEmp     spring_api:8080
-  reverse_proxy @springAttendance  spring_api:8080
-  reverse_proxy @springAdminShops  spring_api:8080
+  @springAuthCommon path /auth/token/refresh /auth/logout
+  @springAuthAdmin  path /admin/auth/select-shop /admin/auth/register /admin/auth/login
+  # /employee/auth/login/{shopId}  (숫자 shopId만 허용)
+  @springAuthEmp    path_regexp empLogin ^/employee/auth/login/([0-9]+)$
 
-  @api path /api/*
-  # 로컬 프로세스면 employee_backend:3001, Docker-Compose 서비스명이면 backend:3001
-  reverse_proxy @api employee_backend:3001
+  @springAttendance path /attendance /attendance/preview /attendance/me/records
+  @springAdminShops path /admin/shops /admin/shops/*
 
-  # 보안 헤더
+  # 필요시 향후 추가 (예시)
+  # @springDashboard path /admin/shops/*/dashboard/today /admin/shops/*/dashboard/active /admin/shops/*/dashboard/recent
+  # @springShifts    path /admin/shops/*/workshifts /admin/shops/*/workshifts/* /my/workshifts /my/workshifts/*
+
+  # ── Spring으로 프록시
+  reverse_proxy @springActuator spring_api:8080 {
+    header_up Host {host}
+    header_up X-Forwarded-Host {host}
+    header_up X-Forwarded-Proto {scheme}
+    header_up X-Forwarded-For {remote_host}
+  }
+  reverse_proxy @springAuthCommon spring_api:8080 {
+    header_up Host {host}
+    header_up X-Forwarded-Host {host}
+    header_up X-Forwarded-Proto {scheme}
+    header_up X-Forwarded-For {remote_host}
+  }
+  reverse_proxy @springAuthAdmin spring_api:8080 {
+    header_up Host {host}
+    header_up X-Forwarded-Host {host}
+    header_up X-Forwarded-Proto {scheme}
+    header_up X-Forwarded-For {remote_host}
+  }
+  reverse_proxy @springAuthEmp spring_api:8080 {
+    header_up Host {host}
+    header_up X-Forwarded-Host {host}
+    header_up X-Forwarded-Proto {scheme}
+    header_up X-Forwarded-For {remote_host}
+  }
+  reverse_proxy @springAttendance spring_api:8080 {
+    header_up Host {host}
+    header_up X-Forwarded-Host {host}
+    header_up X-Forwarded-Proto {scheme}
+    header_up X-Forwarded-For {remote_host}
+  }
+  reverse_proxy @springAdminShops spring_api:8080 {
+    header_up Host {host}
+    header_up X-Forwarded-Host {host}
+    header_up X-Forwarded-Proto {scheme}
+    header_up X-Forwarded-For {remote_host}
+  }
+
+  # ──────────────────────────────────────────────────────────
+  # 기존 Node(Express) 백엔드: /api/* 만
+  # ──────────────────────────────────────────────────────────
+  @nodeAPI path /api/*
+  reverse_proxy @nodeAPI employee_backend:3001 {
+    header_up Host {host}
+    header_up X-Forwarded-Host {host}
+    header_up X-Forwarded-Proto {scheme}
+    header_up X-Forwarded-For {remote_host}
+  }
+
+  # ──────────────────────────────────────────────────────────
+  # 공통 보안 헤더
+  # ──────────────────────────────────────────────────────────
   header {
     Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
     X-Content-Type-Options "nosniff"
     Referrer-Policy "no-referrer-when-downgrade"
   }
-
 }
