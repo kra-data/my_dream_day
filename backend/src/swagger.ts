@@ -813,6 +813,10 @@ SettleAllEmployeesCycleResponse: {
   }
 },
 // ── QR Scan (components.schemas) ──
+QrScanMode: {
+  type: 'string',
+  enum: ['clock_in','clock_out']
+},
 QrScanPurpose: {
   type: 'string',
   enum: ['login','attendance']
@@ -823,9 +827,18 @@ QrScanSuccessResponse: {
     ok:      { type: 'boolean', example: true },
     purpose: { $ref: '#/components/schemas/QrScanPurpose' }, // 'attendance'
     shopId:  { type: 'integer', example: 1 },
-    qrToken: { type: 'string', description: '서버가 서명한 QR 토큰(출퇴근 API에 그대로 사용 가능)' }
+    qrToken: { type: 'string', description: '서버가 서명한 QR 토큰(출퇴근 API에 그대로 사용 가능)' },
+    mode:    { $ref: '#/components/schemas/QrScanMode' },
+    shiftId: { type: 'integer', nullable: true, description: 'mode=clock_out일 때만 포함' }
   },
-  example: { ok: true, purpose: 'attendance', shopId: 1, qrToken: 'eyJhbGciOiJI...' }
+  example: {
+    ok: true,
+    purpose: 'attendance',
+    shopId: 1,
+    qrToken: 'eyJhbGciOiJI...',
+    mode: 'clock_out',
+    shiftId: 456
+  }
 },
 // ✅ 교체: nextAttendance(optional) 추가
 QrScanNeedLoginResponse: {
@@ -1225,7 +1238,7 @@ PayrollOverviewResponse: {
 // ── [paths] 아래의 /api/auth/* 섹션을 다음으로 교체 ──
 '/api/admin/auth/register': {
   post: {
-    tags: ['Auth (Owner)'],
+    tags: ['1. Auth - Admin'],
     summary: '사장님 회원가입',
     requestBody: {
       required: true,
@@ -1241,7 +1254,7 @@ PayrollOverviewResponse: {
 
 '/api/admin/auth/login': {
   post: {
-    tags: ['Auth (Owner)'],
+    tags: ['1. Auth - Admin'],
     summary: '사장님 로그인(복수 매장일 경우 선택 흐름)',
     requestBody: {
       required: true,
@@ -1280,7 +1293,28 @@ PayrollOverviewResponse: {
         description: '정상: 출퇴근 플로우로 진행',
         content: {
           'application/json': {
-            schema: { $ref: '#/components/schemas/QrScanSuccessResponse' }
+            schema: { $ref: '#/components/schemas/QrScanSuccessResponse' },
+            examples: {
+        clockIn: {
+          value: {
+            ok: true,
+            purpose: 'attendance',
+            shopId: 1,
+            qrToken: 'eyJhbGciOiJI...',
+            mode: 'clock_in'
+          }
+        },
+        clockOut: {
+          value: {
+            ok: true,
+            purpose: 'attendance',
+            shopId: 1,
+            qrToken: 'eyJhbGciOiJI...',
+            mode: 'clock_out',
+            shiftId: 456
+          }
+        }
+      }
           }
         }
       },
@@ -1320,7 +1354,7 @@ PayrollOverviewResponse: {
 
 '/api/admin/auth/select-shop': {
   post: {
-    tags: ['Auth (Owner)'],
+    tags: ['1. Auth - Admin'],
     summary: '소유 매장 선택(로그인 이후)',
     security: [{ bearerAuth: [] }],
     requestBody: {
@@ -1338,7 +1372,7 @@ PayrollOverviewResponse: {
 
 '/api/auth/token/refresh': {
   post: {
-    tags: ['Auth (Common)'],
+    tags: ['0. Auth - Common'],
     summary: '리프레시 토큰으로 재발급',
     requestBody: {
       required: true,
@@ -1354,7 +1388,7 @@ PayrollOverviewResponse: {
 
 '/api/auth/logout': {
   post: {
-    tags: ['Auth (Common)'],
+    tags: ['0. Auth - Common'],
     summary: '로그아웃(리프레시 토큰 철회)',
     requestBody: {
       required: true,
@@ -1366,7 +1400,7 @@ PayrollOverviewResponse: {
 
 '/api/admin/auth/me': {
   get: {
-    tags: ['Auth (Owner)'],
+    tags: ['1. Auth - Admin'],
     summary: '내 정보 조회(사장님)',
     security: [{ bearerAuth: [] }],
     responses: {
@@ -1378,7 +1412,7 @@ PayrollOverviewResponse: {
 // ── [paths]에 직원 로그인 엔드포인트 추가 (라우터: POST /employee/login/:shopId) ──
 '/api/employee/auth/login/{shopId}': {
   post: {
-    tags: ['Auth (Employee)'],
+    tags: ['2. Auth - Employee'],
     summary: '직원 로그인(매장별)',
     parameters: [
       { name: 'shopId', in: 'path', required: true, schema: { type: 'integer' } }
@@ -1536,7 +1570,7 @@ PayrollOverviewResponse: {
 // swaggerDocument.paths 아래 교체/추가
 '/api/admin/shops': {
   post: {
-    tags: ['Admin - Shops'],
+    tags: ['3. Admin - Shops'],
     summary: '가게 생성',
     security: [{ bearerAuth: [] }],
     requestBody: {
@@ -1565,7 +1599,7 @@ PayrollOverviewResponse: {
     }
   },
   get: {
-    tags: ['Admin - Shops'],
+    tags: ['3. Admin - Shops'],
     summary: '내 가게 목록',
     security: [{ bearerAuth: [] }],
     responses: {
@@ -1582,7 +1616,7 @@ PayrollOverviewResponse: {
 
 '/api/admin/shops/{shopId}': {
   get: {
-    tags: ['Admin - Shops'],
+    tags: ['3. Admin - Shops'],
     summary: '가게 상세',
     security: [{ bearerAuth: [] }],
     parameters: [
@@ -1598,7 +1632,7 @@ PayrollOverviewResponse: {
     }
   },
   put: {
-    tags: ['Admin - Shops'],
+    tags: ['3. Admin - Shops'],
     summary: '가게 수정',
     security: [{ bearerAuth: [] }],
     parameters: [
@@ -1622,7 +1656,7 @@ PayrollOverviewResponse: {
     }
   },
   delete: {
-    tags: ['Admin - Shops'],
+    tags: ['3. Admin - Shops'],
     summary: '가게 삭제',
     security: [{ bearerAuth: [] }],
     parameters: [
@@ -1642,7 +1676,7 @@ PayrollOverviewResponse: {
 // swaggerDocument.paths 안에 추가
 '/api/admin/shops/{shopId}/employees': {
   post: {
-    tags: ['Employees'],
+    tags: ['4. Admin - Employees'],
     summary: '직원 생성',
     description:
       '해당 매장(`shopId`)에 직원을 생성합니다.\n' +
@@ -1712,7 +1746,7 @@ examples: {
     }
   },
   get: {
-    tags: ['Employees'],
+    tags: ['4. Admin - Employees'],
     summary: '직원 목록',
     description:
       '해당 매장(`shopId`)의 직원 목록을 조회합니다.\n' +
@@ -1742,7 +1776,7 @@ examples: {
 
 '/api/admin/shops/{shopId}/employees/{employeeId}': {
   put: {
-    tags: ['Employees'],
+    tags: ['4. Admin - Employees'],
     summary: '직원 수정',
     description:
       '직원 정보를 수정합니다. 부분 업데이트를 지원합니다.\n' +
@@ -1808,7 +1842,7 @@ examples: {
     }
   },
   delete: {
-    tags: ['Employees'],
+    tags: ['4. Admin - Employees'],
     summary: '직원 삭제',
     description:
       '직원을 삭제합니다. 참조 무결성 제약(정산/시프트 등)으로 인해 즉시 삭제가 불가할 수 있습니다.',
