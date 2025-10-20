@@ -34,7 +34,7 @@ services:
       environment:
         SPRING_PROFILES_ACTIVE: stage
         # DB는 compose 네트워크에서 서비스명으로 접근
-        DATABASE_URL: jdbc:postgresql://mydreamday:mydreamday0503%21@127.0.0.1:5432/attendance_stage?schema=mdd_v2
+        DATABASE_URL: jdbc:postgresql://mydreamday:mydreamday0503%21@postgres:5432/attendance_stage?schema=mdd_v2
         DB_USER: ${DB_USER}
         DB_PASS: ${DB_PASS}
         # (권장) Dialect 명시해두면 연결 실패 시에도 에러로그가 깔끔
