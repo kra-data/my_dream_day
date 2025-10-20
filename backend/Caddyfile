@@ -1,4 +1,3 @@
-# HTTP → HTTPS 리다이렉트
 http://api.mydreamday.shop {
   redir https://{host}{uri}
 }
@@ -7,43 +6,49 @@ http://api.mydreamday.shop {
 https://api.mydreamday.shop {
   encode gzip
 
-  # ──────────────────────────────────────────────────────────
-  # Spring으로 넘길 라우트 (/api 프리픽스 있음)
-  # ──────────────────────────────────────────────────────────
-  @springActuator    path /api/actuator* /api/actuator/*
-  @springAuthCommon  path /api/auth/token/refresh /api/auth/logout
-  @springAuthAdmin   path /api/admin/auth/select-shop /api/admin/auth/register /api/admin/auth/login
-  # /api/employee/auth/login/{shopId} (숫자 shopId만 허용)
-  @springAuthEmp     path_regexp empLogin ^/api/employee/auth/login/([0-9]+)$
-  @springAttendance  path /api/attendance /api/attendance/preview /api/attendance/me/records
-  @springAdminShops  path /api/admin/shops /api/admin/shops/*
+  # ── Spring으로 넘길 라우트 (/api 프리픽스)
+  @springActuator   path /api/actuator* /api/actuator/*
+  @springAuthCommon path /api/auth/token/refresh /api/auth/logout
+  @springAuthAdmin  path /api/admin/auth/select-shop /api/admin/auth/register /api/admin/auth/login
+  @springAuthEmp    path_regexp empLogin ^/api/employee/auth/login/([0-9]+)$
+  @springAttendance path /api/attendance /api/attendance/preview /api/attendance/me/records
+  @springAdminShops path /api/admin/shops /api/admin/shops/*
 
-  # 필요 시 점진적으로 스프링 라우트 확대
-  # @springDashboard  path /api/admin/shops/*/dashboard/today /api/admin/shops/*/dashboard/active /api/admin/shops/*/dashboard/recent
-  # @springShifts     path /api/admin/shops/*/workshifts /api/admin/shops/*/workshifts/* /api/my/workshifts /api/my/workshifts/*
+  route {
+    reverse_proxy @springActuator spring_api:8080 {
+      header_down X-Upstream "spring"
+    }
+    reverse_proxy @springAuthCommon spring_api:8080 {
+      header_down X-Upstream "spring"
+    }
+    reverse_proxy @springAuthAdmin spring_api:8080 {
+      header_down X-Upstream "spring"
+    }
+    reverse_proxy @springAuthEmp spring_api:8080 {
+      header_down X-Upstream "spring"
+    }
+    reverse_proxy @springAttendance spring_api:8080 {
+      header_down X-Upstream "spring"
+    }
+    reverse_proxy @springAdminShops spring_api:8080 {
+      header_down X-Upstream "spring"
+    }
 
-  # ── Spring proxy (Host만 pass-through)
-  reverse_proxy @springActuator   spring_api:8080 { header_up Host {host} }
-  reverse_proxy @springAuthCommon spring_api:8080 { header_up Host {host} }
-  reverse_proxy @springAuthAdmin  spring_api:8080 { header_up Host {host} }
-  reverse_proxy @springAuthEmp    spring_api:8080 { header_up Host {host} }
-  reverse_proxy @springAttendance spring_api:8080 { header_up Host {host} }
-  reverse_proxy @springAdminShops spring_api:8080 { header_up Host {host} }
-  # reverse_proxy @springDashboard spring_api:8080 { header_up Host {host} }
-  # reverse_proxy @springShifts    spring_api:8080 { header_up Host {host} }
+    # 나머지 /api/* → Node(Express)
+    @nodeAPI path /api/*
+    reverse_proxy @nodeAPI employee_backend:3001 {
+      header_down X-Upstream "node"
+    }
+  }
 
-  # ──────────────────────────────────────────────────────────
-  # Node(Express): 스프링이 아닌 나머지 /api/* 전부
-  # ──────────────────────────────────────────────────────────
-  @nodeAPI path /api/*
-  reverse_proxy @nodeAPI employee_backend:3001 { header_up Host {host} }
-
-  # ──────────────────────────────────────────────────────────
-  # 공통 보안 헤더
-  # ──────────────────────────────────────────────────────────
   header {
     Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
     X-Content-Type-Options "nosniff"
     Referrer-Policy "no-referrer-when-downgrade"
+  }
+
+  log {
+    output stdout
+    format json
   }
 }
