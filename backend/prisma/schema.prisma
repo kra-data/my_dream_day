@@ -5,25 +5,25 @@ generator client {
 datasource db {
   provider = "postgresql"
   // 반드시 mdd_v2 스키마!
-  url = env("DATABASE_URL") // e.g. postgresql://user:pass@host:5432/db?schema=mdd_v2
+  url      = env("DATABASE_URL") // e.g. postgresql://user:pass@host:5432/db?schema=mdd_v2
 }
 
 /**
  * ============= users =============
  */
 model User {
-  id           BigInt    @id @default(autoincrement())
-  loginId      String    @map("login_id") @db.VarChar(100)
-  passwordHash String?   @map("password_hash") @db.VarChar(200)
-  name         String?   @db.VarChar(100)
-  phone        String?   @unique @db.VarChar(30)
-  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt    DateTime  @default(now()) @map("updated_at") @db.Timestamptz(6)
-  socialOnly   Boolean   @default(false) @map("social_only")
-  role         String?   @db.VarChar(20)
+  id           BigInt   @id @default(autoincrement())
+  loginId      String   @map("login_id") @db.VarChar(100)
+  passwordHash String?  @map("password_hash") @db.VarChar(200)
+  name         String?  @db.VarChar(100)
+  phone        String?  @unique @db.VarChar(30)
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+  socialOnly   Boolean  @default(false) @map("social_only")
+  role         String?  @db.VarChar(20)
 
   refresh_tokens  refresh_tokens[]
-  shops           Shop[]           @relation("OwnerToShops")
+  shops           Shop[]            @relation("OwnerToShops")
   social_accounts social_accounts[]
 
   @@unique([name, phone], map: "uq_users_name_phone")
@@ -59,27 +59,27 @@ model Shop {
  * ============= employee_members =============
  */
 model EmployeeMember {
-  id               BigInt    @id @default(autoincrement())
-  shopId           BigInt    @map("shop_id")
-  name             String    @db.VarChar(100)
-  phone            String    @db.VarChar(30)
-  passwordHash     String    @map("password_hash") @db.VarChar(200)
-  nationalIdEnc    String?   @map("national_id_enc")
-  nationalIdHash   String?   @map("national_id_hash") @db.Char(64)
-  nationalIdMasked String?   @map("national_id_masked") @db.VarChar(20)
-  bankName         String?   @map("bank_name") @db.VarChar(50)
-  bankAccount      String?   @map("bank_account") @db.VarChar(50)
-  active           Boolean   @default(true)
-  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt        DateTime  @default(now()) @map("updated_at") @db.Timestamptz(6)
-  position         String?   @db.VarChar(50)
-  section          String?   @db.VarChar(50)
-  pay              Decimal   @db.Decimal(12, 2)
-  payUnit          String    @map("pay_unit") @db.VarChar(20)
-  shopRole         String    @default("employee") @map("shop_role") @db.VarChar(20)
+  id               BigInt   @id @default(autoincrement())
+  shopId           BigInt   @map("shop_id")
+  name             String   @db.VarChar(100)
+  phone            String   @db.VarChar(30)
+  passwordHash     String   @map("password_hash") @db.VarChar(200)
+  nationalIdEnc    String?  @map("national_id_enc")
+  nationalIdHash   String?  @map("national_id_hash") @db.Char(64)
+  nationalIdMasked String?  @map("national_id_masked") @db.VarChar(20)
+  bankName         String?  @map("bank_name") @db.VarChar(50)
+  bankAccount      String?  @map("bank_account") @db.VarChar(50)
+  active           Boolean  @default(true)
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+  position         String?  @db.VarChar(50)
+  section          String?  @db.VarChar(50)
+  pay              Decimal  @db.Decimal(12, 2)
+  payUnit          String   @map("pay_unit") @db.VarChar(20)
+  shopRole         String   @default("employee") @map("shop_role") @db.VarChar(20)
 
   // ★ 추가된 개인 색상
-  personalColor    String?   @db.VarChar(20)
+  personalColor String? @map("personal_color") @db.VarChar(20)
 
   // ★ 추가된 관계들
   shop               Shop                @relation(fields: [shopId], references: [id])
