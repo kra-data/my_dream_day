@@ -4,7 +4,7 @@ import { prisma } from '../db/prisma';
 import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { AuthRequiredRequest } from '../middlewares/requireUser';
-import {toJSONSafe} from '../utils/serialize'
+import { asBigInt, toJSONSafe } from '../utils/serialize';
 /* ───────── KST 유틸 ───────── */
 const toKst = (d: Date) => new Date(d.getTime() + 9 * 60 * 60 * 1000);
 const fromKstParts = (y: number, m1: number, d: number, hh = 0, mm = 0, ss = 0, ms = 0) =>
@@ -178,7 +178,7 @@ export const recordAttendance = async (req: AuthRequiredRequest, res: Response) 
   const { shopId, shiftId, type, memo, at } = parsed.data;
 
   if (req.user.shopId !== shopId) { res.status(403).json({ error: '다른 가게 QR입니다.' }); return; }
-  const employeeId = req.user.userId;
+  const employeeId = req.user.empId!!;
   const now = new Date();
   const effectiveAt = at ?? new Date();
   // 요청한 shift가 본인/해당 매장 소속인지 검증(shiftId가 있는 경우만)
