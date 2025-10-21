@@ -25,7 +25,6 @@ const requireRoles =
   (...allowed: ReadonlyArray<UserRole>) =>
   (req: AuthRequest, res: any, next: any) => {
     const shopRole = req.user?.shopRole as UserRole | undefined;
-    console.log(shopRole)
     if (!shopRole || !allowed.includes(shopRole)) {
       res.status(403).json({ error: '권한이 필요합니다.' });
       return;

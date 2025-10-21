@@ -2,7 +2,11 @@
 import { Request, Response } from 'express';
 import { z } from 'zod';
 import { prisma } from '../db/prisma';
-import { signToken, verifyToken } from '../utils/jwt';
+import {
+  signAdminAccessToken,
+  signAdminRefreshToken,
+  verifyRefreshToken
+} from '../utils/jwt';
 import bcrypt from 'bcryptjs';
 import { AuthRequiredRequest } from '../middlewares/requireUser';
 // ===== Zod Schemas (스프링 DTO와 동일 필드) =====
@@ -113,27 +117,18 @@ const u = await prisma.user.findFirst({
   const chosenShopId = chosen ? Number(chosen.id) : null;
   const chosenShopRole = 'admin'
 
-  console.log(u)
-
-  const accessToken = signToken(
-    {
-      userId: Number(u.id),
-      loginId: u.loginId,
-      shopId: chosenShopId ?? undefined,
-      shopRole: chosenShopRole ?? undefined,
-    },
-    { expiresIn: '1h' } // 스프링은 3600초. utils/jwt에서 맞춰놨다면 그대로 사용
-  );
-
-  const refreshToken = signToken(
-    {
-      userId: Number(u.id),
-      loginId: u.loginId,
-      shopId: chosenShopId ?? undefined,
-      shopRole: chosenShopRole ?? undefined,
-    },
-    { expiresIn: '14d' } // 스프링은 14일
-  );
+  const accessToken = signAdminAccessToken({
+    userId: Number(u.id),
+    loginId: u.loginId,
+    shopId: chosenShopId ?? undefined,
+    shopRole: chosenShopRole
+  });
+  const refreshToken = signAdminRefreshToken({
+    userId: Number(u.id),
+    loginId: u.loginId,
+    shopId: chosenShopId ?? undefined,
+    shopRole: chosenShopRole
+  });
 
   // LoginResponse
   res.json({
@@ -162,24 +157,18 @@ export const selectShop = async (req: AuthRequiredRequest, res: Response) : Prom
   if (!shop) {res.status(404).json({ message: '존재하지 않는 가게' }); return;}
   if (shop.ownerUserId !== u.id) {res.status(403).json({ message: '가게 소유자가 아닙니다.' }); return;}
 
-  const accessToken = signToken(
-    {
-      userId: Number(u.id),
-      loginId: u.loginId,
-      shopId: Number(shop.id),
-      shopRole: 'admin',
-    },
-    { expiresIn: '1h' }
-  );
-  const refreshToken = signToken(
-    {
-      userId: Number(u.id),
-      loginId: u.loginId,
-      shopId: Number(shop.id),
-      shopRole: 'admin',
-    },
-    { expiresIn: '14d' }
-  );
+  const accessToken = signAdminAccessToken({
+    userId: Number(u.id),
+    loginId: u.loginId,
+    shopId: Number(shop.id),
+    shopRole: 'admin',
+  });
+  const refreshToken = signAdminRefreshToken({
+    userId: Number(u.id),
+    loginId: u.loginId,
+    shopId: Number(shop.id),
+    shopRole: 'admin',
+  });
 
   res.json({
     accessToken,
@@ -197,20 +186,15 @@ export const refresh = async (req: Request, res: Response) : Promise<void>=> {
   if (!parsed.success) {res.status(400).json({ message: '잘못된 요청' }); return}
 
   try {
-    const decoded = verifyToken(parsed.data.refreshToken) as any;
+    const decoded = verifyRefreshToken(parsed.data.refreshToken) as any;
     const userId = Number(decoded.userId);
     const loginId = decoded.loginId as string;
     const shopId = decoded.shopId as number | undefined;
     const shopRole = decoded.shopRole as string | undefined;
 
-    const accessToken = signToken(
-      { userId, loginId, shopId, shopRole },
-      { expiresIn: '1h' }
-    );
-    const refreshToken = signToken(
-      { userId, loginId, shopId, shopRole },
-      { expiresIn: '14d' }
-    );
+    const accessToken = signAdminAccessToken({ userId, loginId, shopId, shopRole });
+    const refreshToken = signAdminRefreshToken({ userId, loginId, shopId, shopRole });
+
 
     res.json({
       accessToken,

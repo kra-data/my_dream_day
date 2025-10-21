@@ -2,7 +2,10 @@
 import { Request, Response } from 'express';
 import { z } from 'zod';
 import { prisma } from '../db/prisma';
-import { signToken } from '../utils/jwt';
+import {
+  signEmployeeAccessToken,
+  signEmployeeRefreshToken,
+} from '../utils/jwt';
 import bcrypt from 'bcryptjs';
 
 const EmployeeLoginRequest = z.object({
@@ -40,19 +43,18 @@ export const employeeLogin = async (req: Request, res: Response): Promise<void> 
     res.status(401).json({ message: '로그인 정보가 올바르지 않습니다.' }); return;
   }
 
-  const accessToken = signToken(
-    {
-      userId: Number(emp.id), // 스프링은 employeeId로 subject를 쓰지만, 여기선 payload내에 포함
-      shopId: Number(emp.shopId),
-      shopRole: emp.shopRole, // "employee" 등
-    },
-    { expiresIn: '1h' }
-  );
-
-  const refreshToken = signToken(
-    { userId: Number(emp.id), shopId: Number(emp.shopId), shopRole: emp.shopRole },
-    { expiresIn: '14d' }
-  );
+  const accessToken = signEmployeeAccessToken({
+    empId: Number(emp.id),
+    shopId: Number(emp.shopId),
+    empName: emp.name,
+    shopRole: emp.shopRole ?? 'employee',
+  });
+  const refreshToken = signEmployeeRefreshToken({
+    empId: Number(emp.id),
+    shopId: Number(emp.shopId),
+    empName: emp.name,
+    shopRole: emp.shopRole ?? 'employee',
+  });
 
   // EmployeeLoginResponse
   res.json({

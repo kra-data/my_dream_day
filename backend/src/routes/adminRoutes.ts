@@ -40,7 +40,6 @@ const requireAdmin = (
   res: Response,
   next: NextFunction
 ): void => {
-  console.log(req.user?.shopRole)
   if (req.user?.shopRole == 'admin' || req.user?.shopRole == 'owner') {
      return next();
   }

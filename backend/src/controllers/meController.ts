@@ -23,7 +23,8 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
 
 /** 직원 본인 개요 조회 */
 export const getMyProfileOverview = async (req: AuthRequiredRequest, res: Response) => {
-  const employeeId = req.user.userId; // = EmployeeMember.id
+  if (!req.user?.empId) { return res.status(403).json({ error: '직원 전용 엔드포인트입니다.' }); }
+  const employeeIdBI = asBigInt(req.user.empId);
   const now = new Date();
   const thisMonthStart = startOfKstMonth(now);
   const thisMonthEnd   = endOfKstMonth(now);
@@ -34,7 +35,7 @@ export const getMyProfileOverview = async (req: AuthRequiredRequest, res: Respon
 
   // 직원 기본 정보
   const me = await prisma.employeeMember.findUnique({
-    where: { id: employeeId },
+    where: { id: employeeIdBI },
     select: {
       id: true,
       name: true,

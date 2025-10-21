@@ -179,7 +179,6 @@ export const recordAttendance = async (req: AuthRequiredRequest, res: Response) 
 
   if (req.user.shopId !== shopId) { res.status(403).json({ error: '다른 가게 QR입니다.' }); return; }
   // 1) 직원 토큰인지, empId가 있는지 보장
-  console.log(req.user)
   if (!req.user.userId) { res.status(403).json({ error: '직원 권한이 필요합니다.' }); return; }
   const employeeId = req.user.userId;
   // BigInt 변환 유틸 사용 (Prisma 모델이 BigInt이므로)

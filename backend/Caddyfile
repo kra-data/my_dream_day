@@ -7,32 +7,32 @@ https://api.mydreamday.shop {
   encode gzip
 
   # ── Spring으로 넘길 라우트 (/api 프리픽스)
-  # @springActuator   path /api/actuator* /api/actuator/*
-  # @springAuthCommon path /api/auth/token/refresh /api/auth/logout
-  # @springAuthAdmin  path /api/admin/auth/select-shop /api/admin/auth/register /api/admin/auth/login
-  # @springAuthEmp    path_regexp empLogin ^/api/employee/auth/login/([0-9]+)$
-  # @springAttendance path /api/attendance /api/attendance/preview /api/attendance/me/records
-  # @springAdminShops path /api/admin/shops /api/admin/shops/*
+  @springActuator   path /api/actuator* /api/actuator/*
+  @springAuthCommon path /api/auth/token/refresh /api/auth/logout
+  @springAuthAdmin  path /api/admin/auth/select-shop /api/admin/auth/register /api/admin/auth/login
+  @springAuthEmp    path_regexp empLogin ^/api/employee/auth/login/([0-9]+)$
+  @springAttendance path /api/attendance /api/attendance/preview /api/attendance/me/records
+  @springAdminShops path /api/admin/shops /api/admin/shops/*
 
   route {
-    # reverse_proxy @springActuator spring_api:8080 {
-    #   header_down X-Upstream "spring"
-    # }
-    # reverse_proxy @springAuthCommon spring_api:8080 {
-    #   header_down X-Upstream "spring"
-    # }
-    # reverse_proxy @springAuthAdmin spring_api:8080 {
-    #   header_down X-Upstream "spring"
-    # }
-    # reverse_proxy @springAuthEmp spring_api:8080 {
-    #   header_down X-Upstream "spring"
-    # }
-    # reverse_proxy @springAttendance spring_api:8080 {
-    #   header_down X-Upstream "spring"
-    # }
-    # reverse_proxy @springAdminShops spring_api:8080 {
-    #   header_down X-Upstream "spring"
-    # }
+    reverse_proxy @springActuator spring_api:8080 {
+      header_down X-Upstream "spring"
+    }
+    reverse_proxy @springAuthCommon spring_api:8080 {
+      header_down X-Upstream "spring"
+    }
+    reverse_proxy @springAuthAdmin spring_api:8080 {
+      header_down X-Upstream "spring"
+    }
+    reverse_proxy @springAuthEmp spring_api:8080 {
+      header_down X-Upstream "spring"
+    }
+    reverse_proxy @springAttendance spring_api:8080 {
+      header_down X-Upstream "spring"
+    }
+    reverse_proxy @springAdminShops spring_api:8080 {
+      header_down X-Upstream "spring"
+    }
 
     # 나머지 /api/* → Node(Express)
     @nodeAPI path /api/*

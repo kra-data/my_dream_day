@@ -51,6 +51,7 @@ function tryVerifySpring(token: string): JwtPayload | null {
       ...(SPRING_ISS ? { issuer: SPRING_ISS } : {}),
     }) as any;
 
+
     const roleRaw = String(decoded.role ?? '').toLowerCase();
     const isEmployee = roleRaw === 'employee';
     const payload: JwtPayload = {
@@ -65,15 +66,16 @@ function tryVerifySpring(token: string): JwtPayload | null {
       shopId: num(decoded.shopId),
       shopRole: decoded.shopRole ? String(decoded.shopRole).toLowerCase() : (isEmployee ? 'employee' : 'admin'),
       // 관리자/직원별
-      loginId: decoded.loginId,
+      userId: decoded.sub,
+      empId:decoded.sub,
       empName: decoded.empName,
     };
 
-    if (isEmployee) {
-      payload.empId = num(decoded.empId) ?? num(decoded.sub);
-    } else {
-      payload.userId = num(decoded.userId) ?? num(decoded.sub);
-    }
+    // if (isEmployee) {
+    //   payload.empId = num(decoded.empId) ?? num(decoded.sub);
+    // } else {
+    //   payload.userId = num(decoded.userId) ?? num(decoded.sub);
+    // }
     return payload;
   } catch {
     return null;
@@ -109,6 +111,7 @@ export const authenticateJWT = (req: AuthRequest, res: Response, next: NextFunct
     return;
   }
   const token = authHeader.slice(7).trim();
+  console.log(tryVerifySpring(token))
 
   const decoded = tryVerifySpring(token) ?? tryVerifyLegacy(token);
   if (!decoded) {

@@ -136,7 +136,6 @@ export const myListShifts = async (req: AuthRequiredRequest, res: Response): Pro
 
   if (!parsed.success) { res.status(400).json({ error: 'Invalid query' }); return; }
   const { from, to, status } = parsed.data;
-
   const employeeId = asBigInt(req.user.userId, 'employeeId');
   const shopId     = asBigInt(req.user.shopId, 'shopId');
 
