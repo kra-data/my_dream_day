@@ -178,14 +178,20 @@ export const recordAttendance = async (req: AuthRequiredRequest, res: Response) 
   const { shopId, shiftId, type, memo, at } = parsed.data;
 
   if (req.user.shopId !== shopId) { res.status(403).json({ error: '다른 가게 QR입니다.' }); return; }
-  const employeeId = req.user.empId!!;
+  // 1) 직원 토큰인지, empId가 있는지 보장
+  console.log(req.user)
+  if (!req.user.userId) { res.status(403).json({ error: '직원 권한이 필요합니다.' }); return; }
+  const employeeId = req.user.userId;
+  // BigInt 변환 유틸 사용 (Prisma 모델이 BigInt이므로)
+  const shopIdBI = asBigInt(shopId);
+  const employeeIdBI = asBigInt(employeeId);
   const now = new Date();
   const effectiveAt = at ?? new Date();
   // 요청한 shift가 본인/해당 매장 소속인지 검증(shiftId가 있는 경우만)
   let shift: ShiftWithEmployee | null = null;
   if (shiftId) {
     shift = await prisma.workShift.findFirst({
-      where: { id: shiftId, shopId, employeeId },
+where: { id: asBigInt(shiftId), shopId: asBigInt(shopId), employeeId: asBigInt(employeeId) },
       include: { employee: { select: { pay: true, payUnit: true } } } // ← 단가/단위 필요
     });
     if (!shift && type === 'OUT') {
@@ -203,17 +209,18 @@ if (type === 'IN') {
 
   // 시프트 없으면 → 생성(startAt=at, actualInAt=now)
   if (!shift) {
+    // 2) 필수 관계는 connect로 명시 (v6 안전)
     const created = await prisma.workShift.create({
       data: {
-        shopId,
-        employeeId,
-        startAt: at,          // 계획 시작
-        endAt: null,          // 종료 미정(OUT 때 채움)
+        shop:     { connect: { id: shopIdBI } },
+        employee: { connect: { id: employeeIdBI } },
+        startAt: at,              // 계획 시작
+        endAt: null,              // 종료 미정(OUT 때 채움)
         status: 'IN_PROGRESS',
-        actualInAt: now,      // 실제 찍은 시각
-        late: null,           // 지각 로직 사용 안 함
+        actualInAt: now,          // 실제 찍은 시각
+        late: null,               // 지각 로직 사용 안 함
         memo: memo ?? undefined,
-      }
+      },
     });
     res.json(toJSONSafe({
       ok: true,
@@ -377,7 +384,8 @@ export const previewAttendanceTime = async (req: Request, res: Response) => {
 
 /** (직원) 내 실시간 상태 */
 export const getMyCurrentStatus = async (req: AuthRequiredRequest, res: Response) => {
-  const employeeId = req.user.userId;
+  if (!req.user.userId) { return res.json({ onDuty: false }); }
+  const employeeId = asBigInt(req.user.userId);
   const now = new Date();
 
   // 진행 중인 시프트(또는 IN만 찍힌 시프트)
@@ -408,7 +416,8 @@ export const getMyCurrentStatus = async (req: AuthRequiredRequest, res: Response
 
 /** (직원) 내 출퇴근 목록 */
 export const getMyAttendance = async (req: AuthRequiredRequest, res: Response) => {
-  const employeeId = req.user.userId;
+  if (!req.user.userId) { return res.json([]); }
+  const employeeId = asBigInt(req.user.userId);
   const now = new Date();
   const rows = await prisma.workShift.findMany({
     where: { employeeId, OR: [{ actualInAt: { not: null } }, { actualOutAt: { not: null } }] },
