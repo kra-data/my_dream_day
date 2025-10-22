@@ -812,55 +812,7 @@ SettleAllEmployeesCycleResponse: {
     }
   }
 },
-'/api/admin/shops/{shopId}/qr/poster': {
-  get: {
-    tags: ['QR'],
-    summary: '매장 QR 포스터(PDF, A4)',
-    description:
-      '상호명, 안내 문구(출퇴근 QR)와 함께 **A4 PDF**로 QR 포스터를 생성합니다.\n' +
-      '- 관리자/점주만 호출 가능\n' +
-      '- 브라우저에서는 기본 **inline** 표시, `download=1`일 경우 첨부 다운로드 헤더로 전송',
-    security: [{ bearerAuth: [] }],
-    parameters: [
-      { name: 'shopId', in: 'path', required: true, schema: { type: 'integer' } },
-      {
-        name: 'download',
-        in: 'query',
-        required: false,
-        schema: { type: 'integer', minimum: 0, maximum: 1, default: 0 },
-        description: '1이면 Content-Disposition: attachment 로 내려받기'
-      }
-    ],
-    responses: {
-      '200': {
-        description: 'PDF stream (A4 포스터)',
-        content: {
-          'application/pdf': {
-            schema: { type: 'string', format: 'binary' }
-          }
-        },
-        headers: {
-          'Content-Disposition': {
-            schema: { type: 'string' },
-            description: 'inline | attachment; filename="qr_poster_<shopId>.pdf"'
-          },
-          'Cache-Control': {
-            schema: { type: 'string', example: 'no-store, max-age=0' }
-          },
-          'Pragma': {
-            schema: { type: 'string', example: 'no-cache' }
-          },
-          'X-Content-Type-Options': {
-            schema: { type: 'string', example: 'nosniff' }
-          }
-        }
-      },
-      '401': { description: 'Unauthorized' },
-      '403': { description: 'Forbidden(관리자/점주만 허용)' },
-      '404': { description: 'Shop not found' }
-    }
-  }
-},
+
 // ── QR Scan (components.schemas) ──
 QrScanMode: {
   type: 'string',
@@ -2221,6 +2173,55 @@ examples: {
         }
       }
     },
+    '/api/admin/shops/{shopId}/qr/poster': {
+  get: {
+    tags: ['QR'],
+    summary: '매장 QR 포스터(PDF, A4)',
+    description:
+      '상호명, 안내 문구(출퇴근 QR)와 함께 **A4 PDF**로 QR 포스터를 생성합니다.\n' +
+      '- 관리자/점주만 호출 가능\n' +
+      '- 브라우저에서는 기본 **inline** 표시, `download=1`일 경우 첨부 다운로드 헤더로 전송',
+    security: [{ bearerAuth: [] }],
+    parameters: [
+      { name: 'shopId', in: 'path', required: true, schema: { type: 'integer' } },
+      {
+        name: 'download',
+        in: 'query',
+        required: false,
+        schema: { type: 'integer', minimum: 0, maximum: 1, default: 0 },
+        description: '1이면 Content-Disposition: attachment 로 내려받기'
+      }
+    ],
+    responses: {
+      '200': {
+        description: 'PDF stream (A4 포스터)',
+        content: {
+          'application/pdf': {
+            schema: { type: 'string', format: 'binary' }
+          }
+        },
+        headers: {
+          'Content-Disposition': {
+            schema: { type: 'string' },
+            description: 'inline | attachment; filename="qr_poster_<shopId>.pdf"'
+          },
+          'Cache-Control': {
+            schema: { type: 'string', example: 'no-store, max-age=0' }
+          },
+          'Pragma': {
+            schema: { type: 'string', example: 'no-cache' }
+          },
+          'X-Content-Type-Options': {
+            schema: { type: 'string', example: 'nosniff' }
+          }
+        }
+      },
+      '401': { description: 'Unauthorized' },
+      '403': { description: 'Forbidden(관리자/점주만 허용)' },
+      '404': { description: 'Shop not found' }
+    }
+  }
+},
 '/api/admin/shops/{shopId}/dashboard/active': {
   get: {
     tags: ['Dashboard'],
