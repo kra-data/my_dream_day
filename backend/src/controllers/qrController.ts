@@ -97,7 +97,7 @@ export const getShopQrPoster = async (req: AuthRequest, res: Response) => {
 
   // (선택) 한글 폰트 로드
   try {
-    const fontPath = path.resolve(__dirname, '../../assets/fonts/PyeojinGothic-SemiBold.ttf');
+    const fontPath = path.resolve(__dirname, '/opt/app/my_dream_day/backend/assets/fonts/PyeojinGothic-SemiBold.ttf');
     doc.font(fontPath);
   } catch {
     // 폰트 누락 시 기본 폰트 사용 (한글 깨질 수 있음)
@@ -111,7 +111,7 @@ export const getShopQrPoster = async (req: AuthRequest, res: Response) => {
 
   // 상단 로고 (있으면 중앙 배치)
   try {
-    const logoPath = path.resolve(__dirname, '../../assets/logo.png');
+    const logoPath = path.resolve(__dirname, '/opt/app/my_dream_day/backend/assets/logo.png');
     if (fs.existsSync(logoPath)) {
       const logoBuf = fs.readFileSync(logoPath);
       const logoWidth = Math.min(160, availWidth); // 최대 160pt
