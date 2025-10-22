@@ -95,12 +95,26 @@ export const getShopQrPoster = async (req: AuthRequest, res: Response) => {
   // res.setHeader('Content-Disposition', `inline; filename="qr_${shopId}.pdf"`);
   doc.pipe(res);
 
-  // (선택) 한글 폰트 로드
-  try {
-    const fontPath = path.resolve(__dirname, '/opt/app/my_dream_day/backend/assets/fonts/PyeojinGothic-SemiBold.ttf');
-    doc.font(fontPath);
-  } catch {
-    // 폰트 누락 시 기본 폰트 사용 (한글 깨질 수 있음)
+  // (선택) 자산 경로 해석(ASSETS_DIR → 소스상 assets → 서버 절대경로 폴백)
+  const resolveAssetLocal = (...segs: string[]): string | null => {
+    const absFallback = '/opt/app/my_dream_day/backend/assets';
+    const candidates = [
+      process.env.ASSETS_DIR ? path.join(process.env.ASSETS_DIR, ...segs) : null,
+      path.resolve(__dirname, '../../assets', ...segs),
+      path.join(absFallback, ...segs),
+    ].filter(Boolean) as string[];
+    for (const p of candidates) {
+      try {
+        if (fs.existsSync(p)) return p;
+      } catch {/* noop */}
+    }
+    return null;
+  };
+  // (선택) 한글 폰트 로드: 존재하는 첫 후보 사용
+  const fontPath =
+    resolveAssetLocal('fonts', 'PyeojinGothic-SemiBold.ttf')
+  if (fontPath) {
+    try { doc.font(fontPath); } catch { /* 실패 시 기본 폰트 사용 */ }
   }
 
   // 페이지/여백 치수 미리 계산
@@ -111,13 +125,12 @@ export const getShopQrPoster = async (req: AuthRequest, res: Response) => {
 
   // 상단 로고 (있으면 중앙 배치)
   try {
-    const logoPath = path.resolve(__dirname, '/opt/app/my_dream_day/backend/assets/logo.png');
-    if (fs.existsSync(logoPath)) {
-      const logoBuf = fs.readFileSync(logoPath);
+    const logoPath = resolveAssetLocal('logo.png');
+    if (logoPath && fs.existsSync(logoPath)) {
       const logoWidth = Math.min(160, availWidth); // 최대 160pt
       const logoX = marginLeft + (availWidth - logoWidth) / 2;
       const logoY = doc.y; // 현재 상단 여백 시작 위치
-      doc.image(logoBuf, logoX, logoY, { width: logoWidth });
+      doc.image(logoPath, logoX, logoY, { width: logoWidth });
       doc.moveDown(10); // 로고 아래 약간의 간격
     }
   } catch {
@@ -142,7 +155,7 @@ export const getShopQrPoster = async (req: AuthRequest, res: Response) => {
   // 하단 추가 안내 (선택)
   doc.moveDown(24);
   doc.fontSize(10).fillColor('#666').text(`매장ID: ${shopId}`, { align: 'center' });
-
+  doc.fillColor('black');
   doc.end();
 };
 

@@ -25,6 +25,7 @@ services:
       - ./.env
     environment:
       PORT: 3001
+      ASSETS_DIR: /app/assets
     restart: unless-stopped
     depends_on:
       postgres:
