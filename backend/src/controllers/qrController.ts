@@ -21,12 +21,27 @@ export const getShopQrPng = async (req: AuthRequest, res: Response) => {
     res.status(400).json({ error: 'invalid shopId' });
     return;
   }
+    // 상호명 조회
+  const shop = await prisma.shop.findUnique({
+    where: { id: BigInt(shopId) },
+    select: { name: true },
+  });
+  if (!shop) {
+    res.status(404).json({ error: 'shop not found' });
+    return;
+  }
+  const shopName = shop.name;
   // 스캔시 열릴 URL (프런트 경로로 고정)
   const base = (FRONTEND || API_BASE).replace(/\/$/, '');
 
   const loginUrl = `${base}/employee/qr/login`;
   // 영구 또는 TTL 설정 가능(?ttl=초)
-  const token = signQrToken(shopId, 'attendance', loginUrl);
+  const token = signQrToken(
+     shopId,
+     shopName,
+     'attendance',
+    loginUrl
+  );
   const url = `${base}/qr/scan?token=${encodeURIComponent(token)}`;
 
   res.setHeader('Content-Type', 'image/png');
