@@ -7,7 +7,7 @@ import {
   todaySummary
 } from '../controllers/dashboardController';
 import { exportPayrollXlsx, getEmployeeStatusDetail, getEmployeeStatusList, getSettlementSummary, payrollOverview, settleAllEmployeesCycle, settleEmployeeCycle } from '../controllers/payrollController';
-import { getShopQrPng } from '../controllers/qrController';
+import { getShopQrPng,getShopQrPoster } from '../controllers/qrController';
 import {selectShop,me} from '../controllers/authController';
 import {
   createEmployee,
@@ -67,6 +67,7 @@ router.put('/shops/:shopId/workshifts/:shiftId', withUser(adminUpdateShift));
 router.delete('/shops/:shopId/workshifts/:shiftId', withUser(adminDeleteShift));
 router.post('/shops/:shopId/workshifts/:shiftId/review/resolve', withUser(resolveReviewShiftScheduleOnly));
 router.get('/shops/:shopId/qr', getShopQrPng);
+router.get('/shops/:shopId/qr.pdf', getShopQrPoster);
 // router.get('/shops/:shopId/attendance/records', withUser(getAttendanceRecords));
 router.post('/auth/select-shop', withUser(selectShop));
 router.get('/auth/me', withUser(me));
