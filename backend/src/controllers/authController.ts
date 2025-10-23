@@ -115,18 +115,21 @@ const u = await prisma.user.findFirst({
   }
 
   const chosenShopId = chosen ? Number(chosen.id) : null;
+  const chosenShopName=chosen?chosen.name:"";
   const chosenShopRole = 'admin'
 
   const accessToken = signAdminAccessToken({
     userId: Number(u.id),
     loginId: u.loginId,
     shopId: chosenShopId ?? undefined,
+    shopName:chosenShopName,
     shopRole: chosenShopRole
   });
   const refreshToken = signAdminRefreshToken({
     userId: Number(u.id),
     loginId: u.loginId,
     shopId: chosenShopId ?? undefined,
+        shopName:chosenShopName,
     shopRole: chosenShopRole
   });
 
@@ -161,12 +164,14 @@ export const selectShop = async (req: AuthRequiredRequest, res: Response) : Prom
     userId: Number(u.id),
     loginId: u.loginId,
     shopId: Number(shop.id),
+    shopName:shop.name,
     shopRole: 'admin',
   });
   const refreshToken = signAdminRefreshToken({
     userId: Number(u.id),
     loginId: u.loginId,
     shopId: Number(shop.id),
+        shopName:shop.name,
     shopRole: 'admin',
   });
 
@@ -190,10 +195,11 @@ export const refresh = async (req: Request, res: Response) : Promise<void>=> {
     const userId = Number(decoded.userId);
     const loginId = decoded.loginId as string;
     const shopId = decoded.shopId as number | undefined;
+    const shopName=decoded.shopNmae as string;
     const shopRole = decoded.shopRole as string | undefined;
 
-    const accessToken = signAdminAccessToken({ userId, loginId, shopId, shopRole });
-    const refreshToken = signAdminRefreshToken({ userId, loginId, shopId, shopRole });
+    const accessToken = signAdminAccessToken({ userId, loginId, shopId, shopName,shopRole });
+    const refreshToken = signAdminRefreshToken({ userId, loginId, shopId,shopName, shopRole });
 
 
     res.json({

@@ -43,15 +43,20 @@ export const employeeLogin = async (req: Request, res: Response): Promise<void> 
     res.status(401).json({ message: '로그인 정보가 올바르지 않습니다.' }); return;
   }
 
+  const shop = await prisma.shop.findUnique({ where: { id: BigInt(emp.shopId) } });
+  if (!shop) {res.status(404).json({ message: '존재하지 않는 가게' }); return;}
+
   const accessToken = signEmployeeAccessToken({
     empId: Number(emp.id),
     shopId: Number(emp.shopId),
+    shopName:shop.name,
     empName: emp.name,
     shopRole: emp.shopRole ?? 'employee',
   });
   const refreshToken = signEmployeeRefreshToken({
     empId: Number(emp.id),
     shopId: Number(emp.shopId),
+        shopName:shop.name,
     empName: emp.name,
     shopRole: emp.shopRole ?? 'employee',
   });

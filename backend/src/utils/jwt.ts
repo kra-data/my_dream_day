@@ -37,14 +37,16 @@ export function signAdminAccessToken(args: {
   userId: number;
   loginId: string;
   shopId?: number | null;
+  shopName:string|null;
   shopRole?: string | null; // 'admin'
 }) {
-  const { userId, loginId, shopId, shopRole } = args;
+  const { userId, loginId, shopId,shopName, shopRole } = args;
   return signToken(
     {
       userId,
       loginId,
-      role: 'ADMIN',                // Spring: Role.ADMIN
+      role: 'admin',                // Spring: Role.ADMIN
+      shopName:shopName,
       ...(shopId != null ? { shopId } : {}),
       ...(shopRole ? { shopRole } : {}),
       typ: 'access',                // Spring admin 토큰에 존재
@@ -62,14 +64,16 @@ export function signAdminRefreshToken(args: {
   userId: number;
   loginId: string;
   shopId?: number | null;
+    shopName:string|null;
   shopRole?: string | null;
 }) {
-  const { userId, loginId, shopId, shopRole } = args;
+  const { userId, loginId, shopId, shopName,shopRole } = args;
   return signToken(
     {
       userId,
       loginId,
-      role: 'ADMIN',
+      role: 'admin',
+      shopName:shopName,
       ...(shopId != null ? { shopId } : {}),
       ...(shopRole ? { shopRole } : {}),
       typ: 'refresh',               // Spring admin 토큰에 존재
@@ -88,13 +92,15 @@ export function signEmployeeAccessToken(args: {
   empId: number;
   shopId: number;
   empName: string;
+  shopName:string|null;
   shopRole?: string | null; // e.g. 'employee'
 }) {
-  const { empId, shopId, empName, shopRole } = args;
+  const { empId, shopId,shopName, empName, shopRole } = args;
   return signToken(
     {
-      role: 'EMPLOYEE',            // Spring: Role.EMPLOYEE
+      role: 'employee',            // Spring: Role.EMPLOYEE
       shopId,
+      shopName,
       empName,
       userId: empId,               // Spring이 employee에도 userId=employeeId 넣음
       ...(shopRole ? { shopRole } : {}),
@@ -113,13 +119,15 @@ export function signEmployeeRefreshToken(args: {
   empId: number;
   shopId: number;
   empName: string;
+    shopName:string|null;
   shopRole?: string | null;
 }) {
-  const { empId, shopId, empName, shopRole } = args;
+  const { empId, shopId, shopName,empName, shopRole } = args;
   return signToken(
     {
-      role: 'EMPLOYEE',
+      role: 'employee',
       shopId,
+      shopName,
       empName,
       userId: empId,
       ...(shopRole ? { shopRole } : {}),
