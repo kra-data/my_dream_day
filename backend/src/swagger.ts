@@ -718,6 +718,23 @@ EmployeeLoginResponse: {
     refreshToken:{ type: 'string' }
   }
 },
+AiChatRequest: {
+  type: 'object',
+  required: ['message'],
+  properties: {
+    message: {
+      type: 'string',
+      minLength: 1,
+      description: '사용자 메시지',
+      example: '안녕.'
+    },
+    'shop_id': {
+      type: ['integer','null'],
+      description: '연결할 가게 ID',
+      example: 3
+    }
+  }
+},
 
 SettleEmployeeCycleRequest: {
   type: 'object',
@@ -1404,6 +1421,33 @@ PayrollOverviewResponse: {
       content: { 'application/json': { schema: { $ref: '#/components/schemas/LogoutRequestV2' } } }
     },
     responses: { '200': { description: 'OK' } }
+  }
+},
+'/api/ai/chat': {
+  post: {
+    tags: ['9. AI Chat'],
+    summary: 'AI 챗 서버로 메시지 프록시',
+    description: '프런트엔드 요청을 받아 AI 챗 서버로 전달하고 응답을 그대로 반환합니다.',
+    security: [{ bearerAuth: [] }],
+    requestBody: {
+      required: true,
+      content: {
+        'application/json': { schema: { $ref: '#/components/schemas/AiChatRequest' } }
+      }
+    },
+    responses: {
+      '200': {
+        description: 'OK',
+        content: {
+          'application/json': {
+            schema: {
+              type: 'string',
+              description: 'AI 챗 서버 응답(JSON 문자열 그대로 반환)'
+            }
+          }
+        }
+      }
+    }
   }
 },
 
