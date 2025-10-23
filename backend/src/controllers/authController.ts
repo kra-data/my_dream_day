@@ -5,6 +5,8 @@ import { prisma } from '../db/prisma';
 import {
   signAdminAccessToken,
   signAdminRefreshToken,
+  signEmployeeAccessToken,
+  signEmployeeRefreshToken,
   verifyRefreshToken
 } from '../utils/jwt';
 import bcrypt from 'bcryptjs';
@@ -192,14 +194,57 @@ export const refresh = async (req: Request, res: Response) : Promise<void>=> {
 
   try {
     const decoded = verifyRefreshToken(parsed.data.refreshToken) as any;
+    const role = decoded.role as string | undefined;
+
+    if (role === 'employee') {
+      const empId = Number(decoded.userId);
+      const shopId = Number(decoded.shopId);
+      const empName = decoded.empName as string | undefined;
+      const shopName = (decoded.shopName as string | undefined) ?? null;
+      const shopRole = decoded.shopRole as string | undefined;
+
+      if (!Number.isFinite(empId) || !Number.isFinite(shopId) || !empName) {
+        res.status(401).json({ message: 'Invalid refresh token' });
+        return;
+      }
+
+      const accessToken = signEmployeeAccessToken({
+        empId,
+        shopId,
+        empName,
+        shopName,
+        shopRole,
+      });
+      const refreshToken = signEmployeeRefreshToken({
+        empId,
+        shopId,
+        empName,
+        shopName,
+        shopRole,
+      });
+
+      res.json({
+        accessToken,
+        refreshToken,
+        shopId,
+        shopRole: shopRole ?? null,
+      });
+      return;
+    }
+
     const userId = Number(decoded.userId);
     const loginId = decoded.loginId as string;
     const shopId = decoded.shopId as number | undefined;
-    const shopName=decoded.shopNmae as string;
+    const shopName = (decoded.shopName as string | undefined) ?? null;
     const shopRole = decoded.shopRole as string | undefined;
 
-    const accessToken = signAdminAccessToken({ userId, loginId, shopId, shopName,shopRole });
-    const refreshToken = signAdminRefreshToken({ userId, loginId, shopId,shopName, shopRole });
+    if (!loginId) {
+      res.status(401).json({ message: 'Invalid refresh token' });
+      return;
+    }
+
+    const accessToken = signAdminAccessToken({ userId, loginId, shopId, shopName, shopRole });
+    const refreshToken = signAdminRefreshToken({ userId, loginId, shopId, shopName, shopRole });
 
 
     res.json({

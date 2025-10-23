@@ -672,10 +672,17 @@ RefreshRequestV2: {
 RefreshResponseV2: {
   type: 'object',
   properties: {
-    accessToken: { type: 'string' },
-    refreshToken:{ type: 'string' },
-    shopId:      { type: ['integer','null'] },
-    shopRole:    { type: ['string','null'], enum: ['admin', 'employee', null] }
+    accessToken: { type: 'string', description: '역할에 맞는 새 액세스 토큰' },
+    refreshToken:{ type: 'string', description: '역할에 맞는 새 리프레시 토큰' },
+    shopId:      {
+      type: ['integer','null'],
+      description: '사장님은 선택된 매장 ID, 직원은 근무 매장 ID'
+    },
+    shopRole:    {
+      type: ['string','null'],
+      enum: ['admin', 'employee', null],
+      description: '토큰이 발급된 역할 (admin 또는 employee)'
+    }
   }
 },
 
@@ -1374,7 +1381,8 @@ PayrollOverviewResponse: {
 '/api/auth/token/refresh': {
   post: {
     tags: ['0. Auth - Common'],
-    summary: '리프레시 토큰으로 재발급',
+    summary: '리프레시 토큰으로 재발급 (역할 자동 분기)',
+    description: '관리자/직원 리프레시 토큰을 입력하면 역할을 판별해 해당 역할의 토큰 쌍을 다시 발급합니다.',
     requestBody: {
       required: true,
       content: { 'application/json': { schema: { $ref: '#/components/schemas/RefreshRequestV2' } } }
@@ -3073,4 +3081,3 @@ export const swaggerSetup = swaggerUi.setup(swaggerDocument, {
     persistAuthorization: true, // 🔐 브라우저 새로고침해도 Authorization 유지
   },
 });
-
