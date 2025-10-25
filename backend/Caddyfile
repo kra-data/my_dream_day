@@ -48,4 +48,4 @@ https://api.mydreamday.shop {
     output stdout
     format json
   }
-}spring-api
+}
