@@ -34,6 +34,7 @@ services:
     networks: [mdd_net]
   spring-api:
       image: jifrozen0110/attendance-spring:stage
+      container_name: spring-api
       environment:
         SPRING_PROFILES_ACTIVE: stage
         # DB는 compose 네트워크에서 서비스명으로 접근
