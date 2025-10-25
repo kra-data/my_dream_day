@@ -18,6 +18,7 @@ services:
       retries: 20
       start_period: 10s
     restart: unless-stopped
+    networks: [mdd_net]
   backend:
     build: .
     container_name: employee_backend
@@ -30,6 +31,7 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    networks: [mdd_net]
   spring_api:
       image: jifrozen0110/attendance-spring:stage
       environment:
@@ -56,6 +58,7 @@ services:
         - ./.env
       expose:
         - "8080"    # 내부에서만 사용 (Caddy가 붙음)
+      networks: [mdd_net]
   caddy:
     image: caddy:2-alpine
     container_name: employee_caddy
@@ -68,6 +71,7 @@ services:
       - caddy_config:/config
     depends_on:
       - backend
+    networks: [mdd_net]
     restart: unless-stopped
 
 
@@ -77,6 +81,5 @@ volumes:
   caddy_config:
 
 networks:
-  app_net:
-    external: true      # 이미 만들어둔 외부 네트워크를 사용
-    name: mdd_net       # 1단계에서 만든 네트워크 이름
+  mdd_net:
+    external: true
