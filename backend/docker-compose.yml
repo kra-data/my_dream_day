@@ -32,7 +32,7 @@ services:
       postgres:
         condition: service_healthy
     networks: [mdd_net]
-  spring_api:
+  spring-api:
       image: jifrozen0110/attendance-spring:stage
       environment:
         SPRING_PROFILES_ACTIVE: stage
