@@ -2702,40 +2702,46 @@ examples: {
         content: {
           'application/json': {
             schema: {
-              type: 'object',
-              properties: {
-                items: {
-                  type: 'array',
-                  items: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  id: { type: 'integer' },
+                  shopId: { type: 'integer' },
+                  employeeId: { type: 'integer' },
+                  startAt: { type: 'string', format: 'date-time' },
+                  endAt: { type: 'string', format: 'date-time', nullable: true  },
+                  actualInAt: { type: 'string', format: 'date-time', nullable: true },
+                  actualOutAt: { type: 'string', format: 'date-time', nullable: true },
+                  late: { type: 'boolean', nullable: true },
+                  earlyOut: { type: 'boolean', nullable: true },
+                  extended: { type: 'boolean' },
+                  settlementId: { type: 'integer', nullable: true },
+                  workedMinutes: { type: 'integer', nullable: true },
+                  status: { $ref: '#/components/schemas/WorkShiftStatus' },
+                  reviewReason: { $ref: '#/components/schemas/ShiftReviewReason' },
+                  reviewResolvedAt: { type: 'string', format: 'date-time', nullable: true },
+                  reviewedBy: { type: 'integer', nullable: true },
+                  finalPayAmount: { type: 'integer', nullable: true },
+                  isSettled: { type: 'boolean' },
+                  memo: { type: 'string', nullable: true },
+                  adminChecked: { type: 'boolean' },
+                  createdByUserId: { type: 'integer', nullable: true },
+                  createdByEmployeeId: { type: 'integer', nullable: true },
+                  updatedByUserId: { type: 'integer', nullable: true },
+                  updatedByEmployeeId: { type: 'integer', nullable: true },
+                  createdAt: { type: 'string', format: 'date-time' },
+                  updatedAt: { type: 'string', format: 'date-time' },
+                  employee: {
                     type: 'object',
                     properties: {
-                      id: { type: 'integer' },
-                      shopId: { type: 'integer' },
-                      employeeId: { type: 'integer' },
-                      startAt: { type: 'string', format: 'date-time' },
-                      endAt: { type: 'string', format: 'date-time', nullable: true  },
-                      status: { $ref: '#/components/schemas/WorkShiftStatus' },
-                      reviewReason: { $ref: '#/components/schemas/ShiftReviewReason' },
-                      memo: { type: 'string', nullable: true },
-                      reviewResolvedAt:{ type: 'string', format: 'date-time', nullable: true },
-                      actualInAt: { type: 'string', format: 'date-time', nullable: true },
-                      actualOutAt:{ type: 'string', format: 'date-time', nullable: true },
-                      late: { type: 'boolean', nullable: true },
-                      leftEarly: { type: 'boolean', nullable: true },
-                      workedMinutes: { type: 'integer', nullable: true },
-                      employee: {
-                        type: 'object',
-                        properties: {
-                          name: { type: 'string' },
-                          position: { type: 'string' },
-                          section: { type: 'string' },
-                          personalColor: { type: 'string', nullable: true, pattern: '^#[0-9A-Fa-f]{6}$' }
-                        }
-                      }
+                      name: { type: 'string' },
+                      position: { type: 'string' },
+                      section: { type: 'string' },
+                      personalColor: { type: 'string', nullable: true, pattern: '^#[0-9A-Fa-f]{6}$' }
                     }
                   }
-                },
-                nextCursor: { type: 'integer', nullable: true }
+                }
               }
             }
           }

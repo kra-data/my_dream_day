@@ -28,9 +28,6 @@ const kstYesterdayRange = () => {
   const end   = endOfKstDay(yesterday);
   return { start, end };
 };
-const OPEN_END = new Date('9999-12-31T23:59:59.999Z');
-
-const endOrMax = (d: Date | null) => d ?? OPEN_END;
 const endOfKstDay = (base: Date) => {
   const k = toKst(base);
   return fromKstParts(k.getUTCFullYear(), k.getUTCMonth(), k.getUTCDate(), 23, 59, 59, 999);
@@ -95,11 +92,20 @@ function resolveRangeKst(body: z.infer<typeof createShiftSchema>) {
 }
 
 // ───────── 중복(겹침) 검사 where ─────────
-const overlapWhere = (employeeId: bigint, shopId: bigint, startAt: Date, endAt: Date, excludeId?: bigint) => ({
+const overlapWhere = (
+  employeeId: bigint,
+  shopId: bigint,
+  startAt: Date,
+  endAt: Date | null,
+  excludeId?: bigint
+) => ({
   employeeId,
   shopId,
-  startAt: { lt: endAt },   // 기존시작 < 새끝
-  endAt:   { gt: startAt }, // 기존끝 > 새시작
+  ...(endAt ? { startAt: { lt: endAt } } : {}),
+  OR: [
+    { endAt: { equals: null } },
+    { endAt: { gt: startAt } },
+  ],
   ...(excludeId ? { NOT: { id: excludeId } } : {}),
 });
 const LATE_GRACE_MIN_FOR_PAYABLE = Number(process.env.LATE_GRACE_MIN_FOR_PAYABLE ?? '10'); // ≤10 지각 인정(정산 삭감 없음)
@@ -255,11 +261,15 @@ export const resolveReviewShiftScheduleOnly = async (req: AuthRequiredRequest, r
   }
   const { startAt, endAt,memo } = parsed.data;
 
+  console.log(shiftId)
+  console.log(shopId)
+
   // REVIEW 상태의 시프트만 대상으로 함
   const shift = await prisma.workShift.findFirst({
-    where: { id: shiftId, shopId, status: 'REVIEW' as any },
+    where: { id: shiftId, shopId, status: 'REVIEW'},
     include: { employee: { select: { pay: true, payUnit: true } } }
   });
+  console.log(shift)
   if (!shift) { res.status(404).json({ error: 'REVIEW 상태의 시프트를 찾을 수 없습니다.' }); return; }
 
   const nextStartAt = new Date(startAt);
@@ -318,7 +328,7 @@ export const resolveReviewShiftScheduleOnly = async (req: AuthRequiredRequest, r
     },
   });
 
-  res.json({
+  res.json(toJSONSafe({
     ok: true,
     shift: updated,
     summary: {
@@ -326,7 +336,7 @@ export const resolveReviewShiftScheduleOnly = async (req: AuthRequiredRequest, r
       workedMinutes: computedWorkedMinutes,
       finalPayAmount: nextFinalPayAmount,
     }
-  });
+  }));
 };
 /* ───────────────── 관리자/점주: 특정 직원 일정 생성 ───────────────── */
  export const adminCreateShift = async (req: AuthRequiredRequest, res: Response): Promise<void> => {
@@ -405,33 +415,7 @@ if (unresolved) where.reviewResolvedAt = null;
     take: limit,
   });
 
-  const items = rows.map(r => ({
-    id: r.id,
-    shopId: r.shopId,
-    employeeId: r.employeeId,
-    startAt: r.startAt,
-    endAt: r.endAt,
-    status: r.status,              // 'REVIEW'
-    reviewReason: r.reviewReason,  // 'LATE_IN' | 'EARLY_OUT' | 'LATE_OUT' | 'EXTENDED' | 'EARLY_IN'
-    memo: r.memo ?? null,
-    reviewResolvedAt: r.reviewResolvedAt ?? null,
-    actualInAt: r.actualInAt ?? null,
-    actualOutAt: r.actualOutAt ?? null,
-    late: r.late ?? null,
-    earlyOut: r.earlyOut ?? null,
-    workedMinutes: r.workedMinutes ?? null,
-    employee: {
-      name: r.employee.name,
-      position: r.employee.position,
-      section: r.employee.section,
-      personalColor: r.employee.personalColor,
-    }
-  }));
-
-  res.json(toJSONSafe({
-    items,
-    nextCursor: rows.length === (limit ?? 20) ? rows[rows.length - 1].id : null
-  }));
+  res.json(toJSONSafe(rows));
 };
 /* ───────────────── 관리자/점주: 일정 수정 ───────────────── */
  export const adminUpdateShift = async (req: AuthRequiredRequest, res: Response): Promise<void> => {
@@ -448,17 +432,21 @@ if (unresolved) where.reviewResolvedAt = null;
     include: { employee: { select: { pay: true, payUnit: true } } }
   });
   if (!shift || shift.shopId !== shopId) { res.status(404).json({ error: '일정을 찾을 수 없습니다.' }); return; }
-
+  console.log(shift)
   const nextStart = startAt ? new Date(startAt) : shift.startAt;
   const nextEnd   = endAt   ? new Date(endAt)   : shift.endAt;
   if (nextEnd && !(nextStart < nextEnd)) {
     res.status(400).json({ error: 'endAt must be after startAt' });
     return;
   }
+  console.log(nextStart)
+  console.log(nextEnd)
 
   const overlap = await prisma.workShift.findFirst({
-     where: overlapWhere(shift.employeeId, shopId, nextStart, endOrMax(nextEnd), shiftId)
+    where: overlapWhere(shift.employeeId, shopId, nextStart, nextEnd, shiftId)
   });
+
+  console.log(overlap)
   if (overlap) { res.status(409).json({ error: '이미 겹치는 근무일정이 있습니다.' }); return; }
 
   // 다음 상태 결정(넘겨주면 반영, 없으면 기존 유지)
@@ -467,7 +455,7 @@ if (unresolved) where.reviewResolvedAt = null;
   // ✅ 실제 기록이 있는 경우에만 payable(교집합) 재산출
   let nextWorkedMinutes: number | null = shift.workedMinutes ?? null;
   if (startAt || endAt) {
-nextWorkedMinutes = nextEnd ? diffMin(nextStart, nextEnd) : null;
+    nextWorkedMinutes = nextEnd ? diffMin(nextStart, nextEnd) : null;
   }
 
   // ✅ finalPayAmount: COMPLETED이고 HOURLY이며 workedMinutes가 있을 때만 산출
@@ -600,7 +588,7 @@ export const myUpdateShift = async (req: AuthRequiredRequest, res: Response): Pr
 
   // 동일 직원/매장 내 겹침 방지
   const overlap = await prisma.workShift.findFirst({
-   where: overlapWhere(employeeId, shopId, nextStart, endOrMax(nextEnd), shiftId),
+    where: overlapWhere(employeeId, shopId, nextStart, nextEnd, shiftId),
     select: { id: true }
   });
   if (overlap) {
