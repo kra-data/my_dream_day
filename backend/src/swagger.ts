@@ -2128,7 +2128,7 @@ examples: {
     },
     '/api/admin/shops/{shopId}/workshifts/{shiftId}/review/resolve': {
   post: {
-    tags: ['Shifts (Admin)'],
+    tags: ['6. WorkShift - Admin'],
     summary: 'REVIEW 해소(스케줄만 보정)',
     description:
       'REVIEW 상태의 근무일정에 대해 **실제 in/out(actual\*)은 그대로 두고** 계획 시간(startAt/endAt)만 수정하여 REVIEW를 해소합니다.\n' +
@@ -2572,7 +2572,7 @@ examples: {
 
     '/api/admin/shops/{shopId}/workshifts': {
       get: {
-        tags: ['Shifts (Admin)'],
+        tags: ['6. WorkShift - Admin'],
         summary: '가게 전체 근무일정 목록',
         security: [{ bearerAuth: [] }],
         parameters: [
@@ -2683,7 +2683,7 @@ examples: {
     }},
     '/api/admin/shops/{shopId}/workshifts/review': {
   get: {
-    tags: ['Shifts (Admin)'],
+    tags: ['6. WorkShift - Admin'],
     summary: 'REVIEW 상태 근무일정 목록',
     security: [{ bearerAuth: [] }],
     parameters: [
@@ -2776,7 +2776,7 @@ examples: {
     },
     '/api/admin/shops/{shopId}/employees/{employeeId}/workshifts': {
       post: {
-        tags: ['Shifts (Admin)'],
+        tags: ['6. WorkShift - Admin'],
         summary: '특정 직원 근무일정 생성',
         security: [{ bearerAuth: [] }],
         parameters: [
@@ -2869,7 +2869,7 @@ examples: {
     },
     '/api/admin/shops/{shopId}/workshifts/{shiftId}': {
       put: {
-        tags: ['Shifts (Admin)'],
+        tags: ['6. WorkShift - Admin'],
         summary: '근무일정/출퇴근 수정(관리자 보정)',
         security: [{ bearerAuth: [] }],
         parameters: [
@@ -2922,7 +2922,7 @@ examples: {
 }
       },
       delete: {
-        tags: ['Shifts (Admin)'],
+        tags: ['6. WorkShift - Admin'],
         summary: '근무일정 삭제',
         security: [{ bearerAuth: [] }],
         parameters: [
@@ -2937,7 +2937,7 @@ examples: {
         }
       },
       get:{
- tags: ['Shifts (Admin)'],
+ tags: ['6. WorkShift - Admin'],
     summary: '근무일정 상세 조회',
     security: [{ bearerAuth: [] }],
     parameters: [
@@ -3009,112 +3009,7 @@ examples: {
     }
   }
       },
-          '/api/admin/shops/{shopId}/shifts/yesterday/unchecked': {
-      get: {
-        tags: ['Shifts (Admin)'],
-        summary: '어제(KST) 완료됐지만 미체크인 근무일정 목록',
-        description: '조건: status=COMPLETED & adminChecked=false, 그리고 어제(KST)의 00:00~24:00과 시간 교집합이 있는 시프트만 반환합니다.',
-        security: [{ bearerAuth: [] }],
-        parameters: [
-          { name: 'shopId', in: 'path', required: true, schema: { type: 'integer' } }
-        ],
-        responses: {
-          '200': {
-            description: 'OK',
-            content: {
-              'application/json': {
-                schema: {
-                  type: 'object',
-                  properties: {
-                    ok: { type: 'boolean', example: true },
-                    range: {
-                      type: 'object',
-                      properties: {
-                        start: { type: 'string', format: 'date-time', example: '2025-09-13T00:00:00.000Z' },
-                        end:   { type: 'string', format: 'date-time', example: '2025-09-13T23:59:59.999Z' }
-                      }
-                    },
-                    items: {
-                      type: 'array',
-                      items: { $ref: '#/components/schemas/WorkShiftWithEmployee' }
-                    }
-                  }
-                },
-                examples: {
-                  sample: {
-                    value: {
-                      ok: true,
-                      range: { start: '2025-09-13T00:00:00.000Z', end: '2025-09-13T23:59:59.999Z' },
-                      items: [
-                        {
-                          id: 321, employeeId: 42,
-                          startAt: '2025-09-13T02:00:00.000Z',
-                          endAt:   '2025-09-13T10:00:00.000Z',
-                          status: 'COMPLETED',
-                          adminChecked: false,
-                          workedMinutes: 480,
-                          finalPayAmount: 96000,
-                          employee: { name: '김직원', position: 'STAFF', section: 'HALL', pay: 20000, payUnit: 'HOURLY', personalColor: '#1F6FEB' }
-                        }
-                      ]
-                    }
-                  }
-                }
-              }
-            }
-          },
-          '401': { description: 'Unauthorized' },
-          '403': { description: 'Forbidden' }
-        }
-      }
-    },
 
-    '/api/admin/shops/{shopId}/shifts/{shiftId}/admin-check': {
-      put: {
-        tags: ['Shifts (Admin)'],
-        summary: '근무일정 관리자 체크 처리',
-        description: '`adminChecked`를 `true`로 설정합니다.',
-        security: [{ bearerAuth: [] }],
-        parameters: [
-          { name: 'shopId',  in: 'path', required: true, schema: { type: 'integer' } },
-          { name: 'shiftId', in: 'path', required: true, schema: { type: 'integer' } }
-        ],
-        responses: {
-          '200': {
-            description: 'OK',
-            content: {
-              'application/json': {
-                schema: {
-                  type: 'object',
-                  properties: {
-                    ok: { type: 'boolean', example: true },
-                    shift: { $ref: '#/components/schemas/WorkShift' }
-                  }
-                },
-                examples: {
-                  sample: {
-                    value: {
-                      ok: true,
-                      shift: {
-                        id: 321, shopId: 1, employeeId: 42,
-                        startAt: '2025-09-13T02:00:00.000Z',
-                        endAt:   '2025-09-13T10:00:00.000Z',
-                        status: 'COMPLETED',
-                        adminChecked: true,
-                        updatedAt: '2025-09-14T01:23:45.000Z'
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          },
-          '401': { description: 'Unauthorized' },
-          '403': { description: 'Forbidden' },
-          '404': { description: 'Not Found' }
-        }
-      }
-    },
   }
 };
 
