@@ -84,7 +84,7 @@ export const swaggerDocument: any = {
         }
       },
       // ───────────────────────────────
-      // Shifts (근무일정) 스키마 추가
+      // 7. WorkShift - Employee (근무일정) 스키마 추가
       // ───────────────────────────────
       WorkShiftStatus: {
         type: 'string',
@@ -973,7 +973,7 @@ ShopListResponse: {
   }
 },
 
-// ───────────────── Payroll Overview (프리랜서 3.3% 반영) ─────────────────
+// ───────────────── Payroll - Admin Overview (프리랜서 3.3% 반영) ─────────────────
 PayrollCycleLite: {
   type: 'object',
   properties: {
@@ -1490,7 +1490,7 @@ PayrollOverviewResponse: {
     },
 '/api/admin/shops/{shopId}/payroll/overview': {
   get: {
-    tags: ['Payroll'],
+    tags: ['8. Payroll - Admin'],
     summary: '급여 개요(사이클 기준 확정 합계)',
     description:
       'COMPLETED & finalPayAmount가 설정된 시급 시프트만 합산합니다(REVIEW/미확정 제외). ' +
@@ -1561,7 +1561,7 @@ PayrollOverviewResponse: {
 },
     '/api/admin/shops/{shopId}/payroll/summary': {
       get: {
-        tags: ['Payroll'],
+        tags: ['8. Payroll - Admin'],
         summary: '정산관리 대시보드 요약',
         description:
           '선택한 연/월과 급여 사이클 기준으로 정산 요약 정보를 반환합니다.\n' +
@@ -1916,7 +1916,7 @@ examples: {
 
 '/api/admin/shops/{shopId}/payroll/export-xlsx': {
   get: {
-    tags: ['Payroll'],
+    tags: ['8. Payroll - Admin'],
     summary: '급여 엑셀 다운로드(XLSX)',
     description:
       '사이클(년/월/시작일) 기준으로 확정된 시급 근로의 정산 내역을 엑셀로 다운로드합니다. ' +
@@ -2034,7 +2034,7 @@ examples: {
 
 '/api/admin/shops/{shopId}/payroll/settlements': {
   post: {
-    tags: ['Payroll'],
+    tags: ['8. Payroll - Admin'],
     summary: '사이클 전체 일괄 정산',
     description:
       '선택한 연/월 및 사이클 시작일 기준으로 **해당 매장 모든 직원**의 정산 스냅샷을 생성합니다.\n' +
@@ -2366,7 +2366,7 @@ examples: {
     // 직원별 급여 현황 - 목록(추가근무/연장급액 제거)
 '/api/admin/shops/{shopId}/payroll/employees': {
   get: {
-    tags: ['Payroll'],
+    tags: ['8. Payroll - Admin'],
     summary: '직원별 급여 현황(목록) - 기본급만',
     description:
       '선택한 급여 사이클 기준으로 직원별 금액/근무시간/정산상태를 집계합니다.\n' +
@@ -2436,7 +2436,7 @@ examples: {
 // 직원별 급여 현황 - 상세(추가근무/연장급액 제거)
 '/api/admin/shops/{shopId}/payroll/employees/{employeeId}': {
   get: {
-    tags: ['Payroll'],
+    tags: ['8. Payroll - Admin'],
     summary: '직원별 급여 현황(상세) - 기본급만',
     description:
       '선택한 사이클에서 특정 직원의 합계 및 시프트 로그를 반환합니다.\n' +
@@ -2464,7 +2464,7 @@ examples: {
     }
   },
   post: {
-  tags: ['Payroll'],
+  tags: ['8. Payroll - Admin'],
   summary: '지난 사이클 정산(스냅샷 저장)',
   description: '선택 연/월 + 사이클 시작일 기준으로 특정 직원의 직전 사이클을 정산합니다.',
   security: [{ bearerAuth: [] }],
@@ -2509,9 +2509,9 @@ examples: {
 },
 },
 
-    '/api/my/workshifts': {
+    '/api/shops/{shopId}/me/workshifts': {
       get: {
-        tags: ['Shifts'],
+        tags: ['7. WorkShift - Employee'],
         summary: '내 근무일정 목록',
         security: [{ bearerAuth: [] }],
         parameters: [
@@ -2539,7 +2539,7 @@ examples: {
         }
       },
       post: {
-        tags: ['Shifts'],
+        tags: ['7. WorkShift - Employee'],
         summary: '내 근무일정 생성',
         security: [{ bearerAuth: [] }],
         requestBody: {
@@ -2752,9 +2752,9 @@ examples: {
     }
   }
 },
-    '/api/my/workshifts/today': {
+    '/api/shops/{shopId}/me/workshifts/today': {
       get: {
-        tags: ['Shifts'],
+        tags: ['7. WorkShift - Employee'],
         summary: '오늘 내 근무일정',
         description: 'KST 기준 오늘과 교집합이 있는 내 근무일정을 조회합니다. activeOnly=1|true 이면 COMPLETED/CANCELED 제외.',
         security: [{ bearerAuth: [] }],
@@ -2816,9 +2816,9 @@ examples: {
         }
       }
     },
-        '/api/my/workshifts/{shiftId}': {
+        '/api/shops/{shopId}/me/workshifts/{shiftId}': {
       put: {
-        tags: ['Shifts'],
+        tags: ['7. WorkShift - Employee'],
         summary: '내 근무일정 수정 (항상 REVIEW 전환)',
         security: [{ bearerAuth: [] }],
         parameters: [
@@ -2856,7 +2856,7 @@ examples: {
         }
       },
             delete: {
-       tags: ['Shifts'],
+       tags: ['7. WorkShift - Employee'],
        summary: '내 근무일정 삭제',
        description: '직원이 자신의 시프트를 삭제합니다. 이미 시작되었거나 완료/취소되었거나 정산 연결된 시프트는 삭제할 수 없습니다.',
        security: [{ bearerAuth: [] }],

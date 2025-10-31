@@ -567,8 +567,8 @@ export const myUpdateShift = async (req: AuthRequiredRequest, res: Response): Pr
     return;
   }
   const { startAt, endAt, memo } = parsed.data;
-  const employeeId  = asBigInt(req.params.shopId, 'employeeId');
-  const shopId = asBigInt(req.params.shiftId, 'shopId');
+  const employeeId  = asBigInt(req.user.empId, 'employeeId');
+  const shopId = asBigInt(req.user.shopId, 'shopId');
 
   const shift = await prisma.workShift.findFirst({ where: { id: shiftId, shopId, employeeId } });
   if (!shift) { res.status(404).json({ error: '내 근무일정이 아니거나 존재하지 않습니다.' }); return; }
