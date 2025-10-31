@@ -14,6 +14,7 @@ https://api.mydreamday.shop {
   @springAuthEmp    path_regexp empLogin ^/api/employee/auth/login/([0-9]+)$
   @springsAdminWorkshifts path /api/admin/shops/*/workshifts*
   @springPayroll path /api/admin/shops/*/payroll*
+  @springEmployeeWorkShifts path /api/shops/*/me/workshifts*
 
 
   route {
@@ -36,6 +37,9 @@ https://api.mydreamday.shop {
       header_down X-Upstream "spring"
     }
     reverse_proxy @springPayroll spring-api:8080 {
+      header_down X-Upstream "spring"
+    }
+    reverse_proxy @springEmployeeWorkShifts spring-api:8080 {
       header_down X-Upstream "spring"
     }
 
