@@ -458,10 +458,11 @@ const shopId = asBigInt(req.params.shopId, 'shopId');
 /* ───────────────────────────────── 개별 정산 ───────────────────────────────── */
 export const settleEmployeeCycle: (req: AuthRequiredRequest, res: Response) => Promise<void> =
   async (req, res) => {
-const shopId = asBigInt(req.params.shopId, 'shopId');
-const employeeId = asBigInt(req.params.employeeId, 'employeeId');
+  const shopId = asBigInt(req.params.shopId, 'shopId');
+  const employeeId = asBigInt(req.params.employeeId, 'employeeId');
 
-    if (asBigInt(req.user.shopId) !== shopId) {
+  console.log(req.user.shopId)
+  if (asBigInt(req.user.shopId, 'shopId') !== shopId) {
       res.status(403).json({ error: '다른 가게는 처리할 수 없습니다.' });
       return;
     }
@@ -589,13 +590,13 @@ const employeeId = asBigInt(req.params.employeeId, 'employeeId');
       return { settlement: updated, appliedShiftCount };
     });
 
-    res.status(201).json({
+    res.status(201).json(toJSONSafe({
       ok: true,
       cycle: { start: cycle.start, end: cycle.end, startDay },
       employee: { id: emp.id, name: emp.name, payUnit: emp.payUnit },
       appliedShiftCount: result.appliedShiftCount,
       settlement: result.settlement
-    });
+    }));
   };
 
 /* ───────────────────────────────── 전체 정산 ───────────────────────────────── */

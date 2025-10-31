@@ -69,6 +69,7 @@ function tryVerifySpring(token: string): JwtPayload | null {
       userId: decoded.sub,
       empId:decoded.sub,
       empName: decoded.empName,
+      loginId:decoded.loginId,
     };
 
     // if (isEmployee) {
