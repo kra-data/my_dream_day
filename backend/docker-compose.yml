@@ -36,7 +36,7 @@ services:
       image: jifrozen0110/attendance-spring:prod
       container_name: spring-api
       environment:
-        SPRING_PROFILES_ACTIVE: prod
+        SPRING_PROFILES_ACTIVE: stage
         # DB는 compose 네트워크에서 서비스명으로 접근
         SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${DB_NAME}?currentSchema=mdd_v2
         SPRING_DATASOURCE_USERNAME: ${DB_USER}
