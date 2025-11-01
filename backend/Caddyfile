@@ -1,83 +1,127 @@
+# ---- HTTP → HTTPS 리다이렉트 ----
 http://api.mydreamday.shop {
   redir https://{host}{uri}
 }
+http://api-stage.mydreamday.shop {
+  redir https://{host}{uri}
+}
 
+# ================================
+# STAGE: 모든 /api/* 은 stage 스프링으로
+# ================================
 https://api-stage.mydreamday.shop {
   encode gzip
-  @api path /api/*
 
-  # ★ 스테이지는 spring-api-stage만 역프록시
-  reverse_proxy @api spring-api-stage:8080
-
-  # 헬스/액추에이터는 그대로 노출(필요 시 제한)
-  handle_path /api/actuator/* {
-    reverse_proxy spring-api-stage:8080
+  # ✅ actuator는 최우선 매칭: 무조건 stage 스프링
+  @actuator path /api/actuator/*
+  handle @actuator {
+    reverse_proxy spring-api-stage:8080 {
+      header_up   X-Request-Id {http.request.id}
+      header_down X-Request-Id {http.request.id}
+      header_down X-Upstream    "spring-stage"
+    }
   }
 
-  # 기본 보안 헤더(선택)
+  # ✅ 나머지 /api/* 도 stage 스프링
+  @api path /api/*
+  handle @api {
+    reverse_proxy spring-api-stage:8080 {
+      header_up   X-Request-Id {http.request.id}
+      header_down X-Request-Id {http.request.id}
+      header_down X-Upstream    "spring-stage"
+    }
+  }
+
+  # 공통 보안 헤더
   header {
     Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
     X-Content-Type-Options "nosniff"
     X-Frame-Options "DENY"
     Referrer-Policy "strict-origin-when-cross-origin"
   }
+
+  # 액세스 로그 (Loki용 JSON)
+  log {
+    output stdout
+    format json
+  }
 }
 
-# API 오리진
+# ================================
+# PROD: 일부 경로 Spring, 기본은 Node(Express)
+# ================================
 https://api.mydreamday.shop {
   encode gzip
 
-  # ── Spring으로 넘길 라우트 (/api 프리픽스)
-  @springActuator   path /api/actuator* /api/actuator/*
-  @springAuthCommon path /api/auth/token/refresh /api/auth/logout
-  @springAuthAdmin  path /api/admin/auth/select-shop /api/admin/auth/register /api/admin/auth/login
-  @springAi         path /api/ai/chat
-  @springAuthEmp    path_regexp empLogin ^/api/employee/auth/login/([0-9]+)$
-  @springsAdminWorkshifts path /api/admin/shops/*/workshifts*
-  @springPayroll path /api/admin/shops/*/payroll*
-  @springEmployeeWorkShifts path /api/shops/*/me/workshifts*
-
+  # ── Spring으로 넘길 라우트 (이미 이관된 API들)
+  @springActuator              path /api/actuator* /api/actuator/*
+  @springAuthCommon            path /api/auth/token/refresh /api/auth/logout
+  @springAuthAdmin             path /api/admin/auth/select-shop /api/admin/auth/register /api/admin/auth/login
+  @springAi                    path /api/ai/chat
+  @springAuthEmp               path_regexp empLogin ^/api/employee/auth/login/([0-9]+)$
+  @springsAdminWorkshifts      path /api/admin/shops/*/workshifts*
+  @springPayroll               path /api/admin/shops/*/payroll*
+  @springEmployeeWorkShifts    path /api/shops/*/me/workshifts*
 
   route {
     reverse_proxy @springActuator spring-api:8080 {
-      header_down X-Upstream "spring"
+      header_up   X-Request-Id {http.request.id}
+      header_down X-Request-Id {http.request.id}
+      header_down X-Upstream    "spring"
     }
     reverse_proxy @springAuthCommon spring-api:8080 {
-      header_down X-Upstream "spring"
+      header_up   X-Request-Id {http.request.id}
+      header_down X-Request-Id {http.request.id}
+      header_down X-Upstream    "spring"
     }
     reverse_proxy @springAuthAdmin spring-api:8080 {
-      header_down X-Upstream "spring"
+      header_up   X-Request-Id {http.request.id}
+      header_down X-Request-Id {http.request.id}
+      header_down X-Upstream    "spring"
     }
     reverse_proxy @springAuthEmp spring-api:8080 {
-      header_down X-Upstream "spring"
+      header_up   X-Request-Id {http.request.id}
+      header_down X-Request-Id {http.request.id}
+      header_down X-Upstream    "spring"
     }
     reverse_proxy @springAi spring-api:8080 {
-      header_down X-Upstream "spring"
+      header_up   X-Request-Id {http.request.id}
+      header_down X-Request-Id {http.request.id}
+      header_down X-Upstream    "spring"
     }
     reverse_proxy @springsAdminWorkshifts spring-api:8080 {
-      header_down X-Upstream "spring"
+      header_up   X-Request-Id {http.request.id}
+      header_down X-Request-Id {http.request.id}
+      header_down X-Upstream    "spring"
     }
     reverse_proxy @springPayroll spring-api:8080 {
-      header_down X-Upstream "spring"
+      header_up   X-Request-Id {http.request.id}
+      header_down X-Request-Id {http.request.id}
+      header_down X-Upstream    "spring"
     }
     reverse_proxy @springEmployeeWorkShifts spring-api:8080 {
-      header_down X-Upstream "spring"
+      header_up   X-Request-Id {http.request.id}
+      header_down X-Request-Id {http.request.id}
+      header_down X-Upstream    "spring"
     }
 
-
-    # 나머지 /api/* → Node(Express)
+    # ── 기본: Node(Express)
     @nodeAPI path /api/*
     reverse_proxy @nodeAPI employee_backend:3001 {
-      header_down X-Upstream "node"
+      header_up   X-Request-Id {http.request.id}
+      header_down X-Request-Id {http.request.id}
+      header_down X-Upstream    "node"
     }
   }
 
+  # 공통 보안 헤더
   header {
     Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
     X-Content-Type-Options "nosniff"
     Referrer-Policy "no-referrer-when-downgrade"
   }
 
+  # 액세스 로그 (Loki용 JSON)
   log {
     output stdout
     format json
