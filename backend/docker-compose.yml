@@ -74,6 +74,26 @@ services:
       - backend
     networks: [mdd_net]
     restart: unless-stopped
+  spring-api-stage:
+    image: jifrozen0110/attendance-spring:stage
+    container_name: spring-api-stage
+    env_file:
+      - ./.env.stage
+    environment:
+      SPRING_PROFILES_ACTIVE: stage
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/api/actuator/health || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 20s
+    expose:
+      - "8080"
+    restart: unless-stopped
+    networks: [mdd_net]
 
 
 volumes:

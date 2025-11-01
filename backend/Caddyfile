@@ -2,6 +2,27 @@ http://api.mydreamday.shop {
   redir https://{host}{uri}
 }
 
+https://api-stage.mydreamday.shop {
+  encode gzip
+  @api path /api/*
+
+  # ★ 스테이지는 spring-api-stage만 역프록시
+  reverse_proxy @api spring-api-stage:8080
+
+  # 헬스/액추에이터는 그대로 노출(필요 시 제한)
+  handle_path /api/actuator/* {
+    reverse_proxy spring-api-stage:8080
+  }
+
+  # 기본 보안 헤더(선택)
+  header {
+    Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+    X-Content-Type-Options "nosniff"
+    X-Frame-Options "DENY"
+    Referrer-Policy "strict-origin-when-cross-origin"
+  }
+}
+
 # API 오리진
 https://api.mydreamday.shop {
   encode gzip
