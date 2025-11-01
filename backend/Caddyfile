@@ -62,7 +62,7 @@ https://api.mydreamday.shop {
   @springsAdminWorkshifts      path /api/admin/shops/*/workshifts*
   @springPayroll               path /api/admin/shops/*/payroll*
   @springEmployeeWorkShifts    path /api/shops/*/me/workshifts*
-  @springEmployees             path /api/shops/*/employees*
+  @springEmployees             path /api/admin/shops/*/employees*
   route {
     reverse_proxy @springActuator spring-api:8080 {
       header_up   X-Request-Id {http.request.id}
