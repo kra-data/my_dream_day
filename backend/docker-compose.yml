@@ -86,7 +86,6 @@ services:
     environment:
       SPRING_PROFILES_ACTIVE: stage
       SPRING_FLYWAY_ENABLED: "true"
-      SPRING_FLYWAY_BASELINE_ON_MIGRATE: "true"
       SPRING_FLYWAY_LOCATIONS: classpath:db/migration_mdd_v2
       SPRING_FLYWAY_SCHEMAS: mdd_v2
     depends_on:
