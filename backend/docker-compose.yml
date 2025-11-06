@@ -43,6 +43,10 @@ services:
         SPRING_DATASOURCE_PASSWORD: ${DB_PASS}
         # (권장) Dialect 명시해두면 연결 실패 시에도 에러로그가 깔끔
         SPRING_JPA_DATABASE_PLATFORM: org.hibernate.dialect.PostgreSQLDialect
+        SPRING_FLYWAY_ENABLED: "true"
+        SPRING_FLYWAY_BASELINE_ON_MIGRATE: "true"
+        SPRING_FLYWAY_LOCATIONS: classpath:db/migration_mdd_v2
+        SPRING_FLYWAY_SCHEMAS: mdd_v2
         # 필요시 JPA 설정
         # SPRING_JPA_HIBERNATE_DDL_AUTO: validate
       depends_on:
@@ -81,6 +85,10 @@ services:
       - ./.env.stage
     environment:
       SPRING_PROFILES_ACTIVE: stage
+      SPRING_FLYWAY_ENABLED: "true"
+      SPRING_FLYWAY_BASELINE_ON_MIGRATE: "true"
+      SPRING_FLYWAY_LOCATIONS: classpath:db/migration_mdd_v2
+      SPRING_FLYWAY_SCHEMAS: mdd_v2
     depends_on:
       postgres:
         condition: service_healthy
