@@ -59,7 +59,7 @@ https://api.mydreamday.shop {
   @springAuthAdmin             path /api/admin/auth/select-shop /api/admin/auth/register /api/admin/auth/login
   @springAi                    path /api/ai/chat
   @springAuthEmp               path_regexp empLogin ^/api/employee/auth/login/([0-9]+)$
-  @springsAdminWorkshifts      path /api/admin/shops/*/workshifts*
+  @springsAdminWorkshifts      path_regexp workdhifts ^/api/admin/shops/\d+/workshifts/.*
   @springPayroll               path /api/admin/shops/*/payroll*
   @springEmployeeWorkShifts    path /api/shops/*/me/workshifts*
   @springEmployees             path /api/admin/shops/*/employees*
