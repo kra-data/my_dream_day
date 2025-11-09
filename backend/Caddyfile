@@ -63,6 +63,11 @@ https://api.mydreamday.shop {
   @springPayroll               path /api/admin/shops/*/payroll*
   @springEmployeeWorkShifts    path /api/shops/*/me/workshifts*
   @springEmployees             path /api/admin/shops/*/employees*
+  @springSocial                path /api/auth/social/*
+  @springAdminShops            path /api/admin/shops*
+  @springJoinRequests          path /api/admin/shops/*/join-requests*
+  @springLaborLaw              path /api/admin/shops/*/law*
+
   route {
     reverse_proxy @springActuator spring-api:8080 {
       header_up   X-Request-Id {http.request.id}
@@ -105,6 +110,26 @@ https://api.mydreamday.shop {
       header_down X-Upstream    "spring"
     }
     reverse_proxy @springEmployees spring-api:8080 {
+      header_up   X-Request-Id {http.request.id}
+      header_down X-Request-Id {http.request.id}
+      header_down X-Upstream    "spring"
+    }
+    reverse_proxy @springAdminShops spring-api:8080 {
+      header_up   X-Request-Id {http.request.id}
+      header_down X-Request-Id {http.request.id}
+      header_down X-Upstream    "spring"
+    }
+    reverse_proxy @springSocial spring-api:8080 {
+      header_up   X-Request-Id {http.request.id}
+      header_down X-Request-Id {http.request.id}
+      header_down X-Upstream    "spring"
+    }
+    reverse_proxy @springJoinRequests spring-api:8080 {
+      header_up   X-Request-Id {http.request.id}
+      header_down X-Request-Id {http.request.id}
+      header_down X-Upstream    "spring"
+    }
+    reverse_proxy @springLaborLaw spring-api:8080 {
       header_up   X-Request-Id {http.request.id}
       header_down X-Request-Id {http.request.id}
       header_down X-Upstream    "spring"
