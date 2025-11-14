@@ -47,8 +47,9 @@ services:
         SPRING_FLYWAY_BASELINE_ON_MIGRATE: "true"
         SPRING_FLYWAY_LOCATIONS: classpath:db/migration_mdd_v2
         SPRING_FLYWAY_SCHEMAS: mdd_v2
-        # 필요시 JPA 설정
-        # SPRING_JPA_HIBERNATE_DDL_AUTO: validate
+        APP_ASSETS_DIR: /app/assets
+      volumes:
+        - ./assets:/app/assets:ro
       depends_on:
         postgres:
           condition: service_healthy
@@ -88,6 +89,9 @@ services:
       SPRING_FLYWAY_ENABLED: "true"
       SPRING_FLYWAY_LOCATIONS: classpath:db/migration_mdd_v2
       SPRING_FLYWAY_SCHEMAS: mdd_v2
+      APP_ASSETS_DIR: /app/assets
+    volumes:
+      - ./assets:/app/assets:ro
     depends_on:
       postgres:
         condition: service_healthy
