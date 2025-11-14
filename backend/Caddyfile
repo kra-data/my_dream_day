@@ -135,12 +135,11 @@ https://api.mydreamday.shop {
       header_down X-Upstream    "spring"
     }
 
-    # ── 기본: Node(Express)
-    @nodeAPI path /api/*
-    reverse_proxy @nodeAPI employee_backend:3001 {
+    @springAPI path /api/*
+    reverse_proxy @springAPI spring-api:8080 {
       header_up   X-Request-Id {http.request.id}
       header_down X-Request-Id {http.request.id}
-      header_down X-Upstream    "node"
+      header_down X-Upstream    "new"
     }
   }
 
